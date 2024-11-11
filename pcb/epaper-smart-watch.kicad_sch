@@ -2206,9 +2206,6 @@
   (junction (at 298.45 63.5) (diameter 0) (color 0 0 0 0)
     (uuid 000273f7-b41b-4c6b-843b-00805e7cd461)
   )
-  (junction (at 167.64 130.81) (diameter 0) (color 0 0 0 0)
-    (uuid 0102e5ed-e4d5-4321-91cb-23bad73a2e37)
-  )
   (junction (at 220.98 222.25) (diameter 0) (color 0 0 0 0)
     (uuid 06144c33-737f-4b43-9c55-3ab74b7388e2)
   )
@@ -2244,9 +2241,6 @@
   )
   (junction (at 93.98 129.54) (diameter 0) (color 0 0 0 0)
     (uuid 2aedaeb7-2f70-45fc-abd9-e6c63e7290eb)
-  )
-  (junction (at 167.64 148.59) (diameter 0) (color 0 0 0 0)
-    (uuid 2d79679a-46ed-46d8-a1f1-864a35ad551e)
   )
   (junction (at 71.12 39.37) (diameter 0) (color 0 0 0 0)
     (uuid 2d7cbab9-d65f-4698-8759-b69de2155fa6)
@@ -2383,9 +2377,6 @@
   (junction (at 182.88 62.23) (diameter 0) (color 0 0 0 0)
     (uuid 9b11cafa-5328-4555-a4be-437685d30051)
   )
-  (junction (at 167.64 184.15) (diameter 0) (color 0 0 0 0)
-    (uuid 9e88859d-1a9d-4833-9333-6393313ea575)
-  )
   (junction (at 190.5 35.56) (diameter 0) (color 0 0 0 0)
     (uuid a1debf68-4ead-4ba6-964e-29c509e840e8)
   )
@@ -2442,9 +2433,6 @@
   )
   (junction (at 55.88 62.23) (diameter 0) (color 0 0 0 0)
     (uuid c6352cb7-aa07-46e5-9bed-0f55e158e861)
-  )
-  (junction (at 167.64 166.37) (diameter 0) (color 0 0 0 0)
-    (uuid c6a0e9e2-880b-4d32-8011-9d68adb2bbdb)
   )
   (junction (at 68.58 129.54) (diameter 0) (color 0 0 0 0)
     (uuid c98b1964-371d-4dbe-b205-6b4d0ef3ef08)
@@ -2540,6 +2528,10 @@
     (stroke (width 0) (type default))
     (uuid 0251919c-a62b-4ad2-bf14-a76c8711e81e)
   )
+  (wire (pts (xy 185.42 130.81) (xy 186.69 130.81))
+    (stroke (width 0) (type default))
+    (uuid 02be4b07-c4b1-4e50-afb0-4281262823c4)
+  )
   (wire (pts (xy 186.69 35.56) (xy 190.5 35.56))
     (stroke (width 0) (type default))
     (uuid 03058574-5dff-4c65-a8ce-3e9410dcfa34)
@@ -2592,10 +2584,6 @@
     (stroke (width 0) (type default))
     (uuid 094ea08c-d4e0-4d51-9444-ea85728eb7b9)
   )
-  (wire (pts (xy 167.64 167.64) (xy 167.64 166.37))
-    (stroke (width 0) (type default))
-    (uuid 0a0c233a-219b-40a1-a513-8687b0b5881d)
-  )
   (wire (pts (xy 0 207.01) (xy 1.27 207.01))
     (stroke (width 0) (type default))
     (uuid 0a22458f-e8e1-4abe-bbfe-0d3ae597673c)
@@ -2639,14 +2627,6 @@
   (wire (pts (xy 120.65 143.51) (xy 120.65 146.05))
     (stroke (width 0) (type default))
     (uuid 1102e20b-d31a-4a95-bba6-2a20a2f0cc4e)
-  )
-  (wire (pts (xy 185.42 130.81) (xy 186.69 130.81))
-    (stroke (width 0) (type default))
-    (uuid 11b64f3e-d447-4931-89a2-80ed9f756b9f)
-  )
-  (wire (pts (xy 167.64 130.81) (xy 170.18 130.81))
-    (stroke (width 0) (type default))
-    (uuid 14895d48-4108-4aeb-97f3-b18a5d3478e1)
   )
   (wire (pts (xy 62.23 62.23) (xy 67.31 62.23))
     (stroke (width 0) (type default))
@@ -2708,6 +2688,10 @@
     (stroke (width 0) (type default))
     (uuid 1b015bf5-125d-4518-a6f4-a21ecf30a0a3)
   )
+  (wire (pts (xy 186.69 130.81) (xy 186.69 133.35))
+    (stroke (width 0) (type default))
+    (uuid 1c1755fd-2f5b-4dad-bf5e-98aaa90aa3ea)
+  )
   (wire (pts (xy 62.23 57.15) (xy 64.77 57.15))
     (stroke (width 0) (type default))
     (uuid 1c479bc4-db5b-451f-b198-aea6a77ded86)
@@ -2715,14 +2699,6 @@
   (wire (pts (xy 250.19 60.96) (xy 224.79 60.96))
     (stroke (width 0) (type default))
     (uuid 1ce3935f-6495-4ef8-a0e0-ce60c45d025a)
-  )
-  (wire (pts (xy 186.69 130.81) (xy 186.69 128.27))
-    (stroke (width 0) (type default))
-    (uuid 1d7dbc1e-f481-4790-a57f-e260b11373a1)
-  )
-  (wire (pts (xy 167.64 149.86) (xy 167.64 148.59))
-    (stroke (width 0) (type default))
-    (uuid 1e817fd1-3c4c-481c-93eb-0a472b441e97)
   )
   (wire (pts (xy 353.06 71.12) (xy 353.06 68.58))
     (stroke (width 0) (type default))
@@ -2735,10 +2711,6 @@
   (wire (pts (xy 337.82 68.58) (xy 337.82 77.47))
     (stroke (width 0) (type default))
     (uuid 22982729-cef0-4702-8781-cbe5904fc64a)
-  )
-  (wire (pts (xy 167.64 166.37) (xy 170.18 166.37))
-    (stroke (width 0) (type default))
-    (uuid 22a18968-13be-41e3-95ba-ff4843cd6b08)
   )
   (wire (pts (xy 191.77 57.15) (xy 189.23 57.15))
     (stroke (width 0) (type default))
@@ -2760,17 +2732,9 @@
     (stroke (width 0) (type default))
     (uuid 257563a0-8267-4cbd-9a27-5413e6018d40)
   )
-  (wire (pts (xy 167.64 193.04) (xy 167.64 194.31))
-    (stroke (width 0) (type default))
-    (uuid 28e8d873-a995-4d29-b04f-4d897757fc5d)
-  )
   (wire (pts (xy 189.23 54.61) (xy 191.77 54.61))
     (stroke (width 0) (type default))
     (uuid 29502d6c-bd0c-4f9a-8653-a42cc50a87c0)
-  )
-  (wire (pts (xy 186.69 184.15) (xy 186.69 181.61))
-    (stroke (width 0) (type default))
-    (uuid 29bdf2da-eb3a-4bcc-9f3f-01427cc2b3a3)
   )
   (wire (pts (xy 331.47 58.42) (xy 337.82 58.42))
     (stroke (width 0) (type default))
@@ -2896,6 +2860,10 @@
     (stroke (width 0) (type default))
     (uuid 489d8fd1-90ff-4edb-833a-6e3e3488be30)
   )
+  (wire (pts (xy 185.42 166.37) (xy 186.69 166.37))
+    (stroke (width 0) (type default))
+    (uuid 495ee5d1-0ba8-4ee3-b4a2-ca3e75c00060)
+  )
   (wire (pts (xy 46.99 180.34) (xy 46.99 185.42))
     (stroke (width 0) (type default))
     (uuid 49a96265-07e1-4e81-b55b-a2ba307ed565)
@@ -2924,13 +2892,21 @@
     (stroke (width 0) (type default))
     (uuid 4f92f714-7a78-4020-9a33-cdb92a46eab9)
   )
-  (wire (pts (xy 317.5 114.3) (xy 332.74 114.3))
+  (wire (pts (xy 317.5 114.3) (xy 334.01 114.3))
     (stroke (width 0) (type default))
     (uuid 4fa265f2-c9df-477a-ba6d-cea0d3bbb867)
+  )
+  (wire (pts (xy 186.69 184.15) (xy 186.69 187.96))
+    (stroke (width 0) (type default))
+    (uuid 50c122fa-2e1c-476b-babd-11bd71a0e771)
   )
   (wire (pts (xy 347.98 152.4) (xy 350.52 152.4))
     (stroke (width 0) (type default))
     (uuid 51b80cab-39a3-46fb-a704-efc9a8993369)
+  )
+  (wire (pts (xy 186.69 166.37) (xy 186.69 170.18))
+    (stroke (width 0) (type default))
+    (uuid 537d57e3-723e-44cd-bd27-418727292239)
   )
   (wire (pts (xy 109.22 129.54) (xy 111.76 129.54))
     (stroke (width 0) (type default))
@@ -2992,6 +2968,10 @@
     (stroke (width 0) (type default))
     (uuid 5e83ef02-f609-4a02-b5f4-42d7efe0c6bd)
   )
+  (wire (pts (xy 186.69 148.59) (xy 186.69 151.13))
+    (stroke (width 0) (type default))
+    (uuid 5ee47063-6ac4-4b5b-9ca2-f0317e723069)
+  )
   (wire (pts (xy 209.55 158.75) (xy 209.55 162.56))
     (stroke (width 0) (type default))
     (uuid 5f1844e4-371e-41ed-adef-e2f58a43e70d)
@@ -3020,11 +3000,11 @@
     (stroke (width 0) (type default))
     (uuid 63ba8d54-5303-4f27-8cc7-5ef684c60476)
   )
-  (wire (pts (xy 167.64 156.21) (xy 167.64 154.94))
+  (wire (pts (xy 337.82 119.38) (xy 337.82 120.65))
     (stroke (width 0) (type default))
-    (uuid 640be62a-a0f4-48c0-805b-9c5020561f3b)
+    (uuid 643073c7-3a79-4286-81ef-75cdbcd5513b)
   )
-  (wire (pts (xy 165.1 130.81) (xy 167.64 130.81))
+  (wire (pts (xy 165.1 130.81) (xy 170.18 130.81))
     (stroke (width 0) (type default))
     (uuid 64453468-8344-4663-9f18-0b4dae24087e)
   )
@@ -3091,10 +3071,6 @@
   (wire (pts (xy 96.52 49.53) (xy 100.33 49.53))
     (stroke (width 0) (type default))
     (uuid 6ee2b6b1-c778-4746-9cb6-69f1d06936b2)
-  )
-  (wire (pts (xy 167.64 173.99) (xy 167.64 172.72))
-    (stroke (width 0) (type default))
-    (uuid 701d5f80-8348-4db0-bf98-5425c257fadb)
   )
   (wire (pts (xy 73.66 80.01) (xy 86.36 80.01))
     (stroke (width 0) (type default))
@@ -3168,10 +3144,6 @@
     (stroke (width 0) (type default))
     (uuid 7c0b7ebc-5a02-4e5a-a244-333d5d1764ea)
   )
-  (wire (pts (xy 186.69 163.83) (xy 186.69 166.37))
-    (stroke (width 0) (type default))
-    (uuid 7c0c8b00-e9b7-4c73-a372-f020b80d1e5e)
-  )
   (wire (pts (xy 213.36 210.82) (xy 213.36 213.36))
     (stroke (width 0) (type default))
     (uuid 7d3fbb22-22c7-4557-8e0e-b24022005a74)
@@ -3211,10 +3183,6 @@
   (wire (pts (xy 120.65 148.59) (xy 120.65 151.13))
     (stroke (width 0) (type default))
     (uuid 86a115cf-83d9-49ef-9351-68bc12e60146)
-  )
-  (wire (pts (xy 344.17 114.3) (xy 342.9 114.3))
-    (stroke (width 0) (type default))
-    (uuid 87acc756-9320-4351-8394-5c315fcabe59)
   )
   (wire (pts (xy 68.58 129.54) (xy 71.12 129.54))
     (stroke (width 0) (type default))
@@ -3292,7 +3260,7 @@
     (stroke (width 0) (type default))
     (uuid 991b87e2-7863-4f83-bbad-b1d25f288df4)
   )
-  (wire (pts (xy 165.1 166.37) (xy 167.64 166.37))
+  (wire (pts (xy 165.1 166.37) (xy 170.18 166.37))
     (stroke (width 0) (type default))
     (uuid 995e74cd-f98f-4e22-9dce-208c3f2b41fb)
   )
@@ -3355,10 +3323,6 @@
   (wire (pts (xy 203.2 168.91) (xy 203.2 173.99))
     (stroke (width 0) (type default))
     (uuid a41c45fe-8074-4666-ae87-b6ea2faecef9)
-  )
-  (wire (pts (xy 167.64 132.08) (xy 167.64 130.81))
-    (stroke (width 0) (type default))
-    (uuid a668ba39-4273-484f-9e43-7d7eb167af76)
   )
   (wire (pts (xy 317.5 96.52) (xy 320.04 96.52))
     (stroke (width 0) (type default))
@@ -3424,10 +3388,6 @@
     (stroke (width 0) (type default))
     (uuid adb53eec-7296-4797-953c-f36cf4a95eb7)
   )
-  (wire (pts (xy 167.64 148.59) (xy 170.18 148.59))
-    (stroke (width 0) (type default))
-    (uuid b258bbfc-3270-4714-b3ca-2dee967af446)
-  )
   (wire (pts (xy 60.96 52.07) (xy 63.5 52.07))
     (stroke (width 0) (type default))
     (uuid b27731dc-1a48-415e-9551-693509367b17)
@@ -3480,7 +3440,7 @@
     (stroke (width 0) (type default))
     (uuid b9bf7536-0298-4ac0-97a3-f5238e66f2ad)
   )
-  (wire (pts (xy 165.1 184.15) (xy 167.64 184.15))
+  (wire (pts (xy 165.1 184.15) (xy 170.18 184.15))
     (stroke (width 0) (type default))
     (uuid ba361034-59db-4adf-b2a5-9dc0463ba60e)
   )
@@ -3592,7 +3552,7 @@
     (stroke (width 0) (type default))
     (uuid cfac47a1-2f9d-4d43-9c2a-da3ce1068fca)
   )
-  (wire (pts (xy 165.1 148.59) (xy 167.64 148.59))
+  (wire (pts (xy 165.1 148.59) (xy 170.18 148.59))
     (stroke (width 0) (type default))
     (uuid cfb3f190-f582-475b-92eb-05be228ba25b)
   )
@@ -3624,10 +3584,6 @@
     (stroke (width 0) (type default))
     (uuid d6294c30-a700-481a-b295-f94857c3c37c)
   )
-  (wire (pts (xy 167.64 184.15) (xy 167.64 187.96))
-    (stroke (width 0) (type default))
-    (uuid d6ffa3bd-1599-4e0e-b43b-beeedc8a91f0)
-  )
   (wire (pts (xy 35.56 182.88) (xy 41.91 182.88))
     (stroke (width 0) (type default))
     (uuid d75534e2-1949-4bfe-b66c-407bbcc54f6b)
@@ -3636,17 +3592,9 @@
     (stroke (width 0) (type default))
     (uuid d7bbd23e-09cd-45c3-bbd9-3abb082137a3)
   )
-  (wire (pts (xy 167.64 184.15) (xy 170.18 184.15))
-    (stroke (width 0) (type default))
-    (uuid d970e32a-f632-4282-9178-6a64049c477a)
-  )
   (wire (pts (xy 55.88 62.23) (xy 62.23 62.23))
     (stroke (width 0) (type default))
     (uuid da12f1de-5496-433d-a751-2a1176239aea)
-  )
-  (wire (pts (xy 186.69 148.59) (xy 186.69 146.05))
-    (stroke (width 0) (type default))
-    (uuid da8d31be-fb7a-44f8-b4e1-528bfa038cb8)
   )
   (wire (pts (xy 45.72 166.37) (xy 49.53 166.37))
     (stroke (width 0) (type default))
@@ -3672,7 +3620,7 @@
     (stroke (width 0) (type default))
     (uuid ddbece42-fa50-4829-bcdb-9c75eb1be3be)
   )
-  (wire (pts (xy 344.17 111.76) (xy 344.17 114.3))
+  (wire (pts (xy 337.82 106.68) (xy 337.82 109.22))
     (stroke (width 0) (type default))
     (uuid dde9a3b3-2288-4faa-934e-9e72f7120cb6)
   )
@@ -3699,10 +3647,6 @@
   (wire (pts (xy 66.04 129.54) (xy 68.58 129.54))
     (stroke (width 0) (type default))
     (uuid e08790b0-5cb0-4e4a-adc4-7cdc6a65fe6e)
-  )
-  (wire (pts (xy 337.82 118.11) (xy 337.82 120.65))
-    (stroke (width 0) (type default))
-    (uuid e17eda33-a294-4f7d-9e65-f3c07e255b7d)
   )
   (wire (pts (xy 120.65 153.67) (xy 120.65 156.21))
     (stroke (width 0) (type default))
@@ -3735,10 +3679,6 @@
   (wire (pts (xy 76.2 129.54) (xy 78.74 129.54))
     (stroke (width 0) (type default))
     (uuid e90f49d2-867c-4d05-8f48-fd32a70f51dd)
-  )
-  (wire (pts (xy 167.64 138.43) (xy 167.64 137.16))
-    (stroke (width 0) (type default))
-    (uuid e9cd9d56-42e9-4a31-8984-e64b0c7bccf3)
   )
   (wire (pts (xy 191.77 54.61) (xy 191.77 57.15))
     (stroke (width 0) (type default))
@@ -3795,10 +3735,6 @@
   (wire (pts (xy 99.06 129.54) (xy 101.6 129.54))
     (stroke (width 0) (type default))
     (uuid f3366bd3-7795-4682-a7a9-266449dc8f73)
-  )
-  (wire (pts (xy 186.69 166.37) (xy 185.42 166.37))
-    (stroke (width 0) (type default))
-    (uuid f34ce811-c074-4538-8f5c-cf17d79740d2)
   )
   (wire (pts (xy 34.29 184.15) (xy 34.29 182.88))
     (stroke (width 0) (type default))
@@ -3943,10 +3879,6 @@
       (effects (font (size 1.27 1.27)) (justify left) hide)
     )
   )
-  (label "VDD" (at 186.69 146.05 0) (fields_autoplaced)
-    (effects (font (size 1.27 1.27)) (justify left bottom))
-    (uuid 099f6cab-a67c-45cb-bd4e-d14e15ec6879)
-  )
   (label "RXD" (at 127 60.96 90) (fields_autoplaced)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 14d0704b-c3e2-40f5-9dbe-b4f85b82e5a5)
@@ -3957,10 +3889,6 @@
   (label "DC" (at 321.31 121.92 0) (fields_autoplaced)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 1505b6d5-cbbf-46e7-aa85-b8e6f4ff744d)
-  )
-  (label "VDD" (at 186.69 181.61 0) (fields_autoplaced)
-    (effects (font (size 1.27 1.27)) (justify left bottom))
-    (uuid 18f9fd93-22c1-4790-a694-01a032669970)
   )
   (label "VBUS" (at 58.42 44.45 0) (fields_autoplaced)
     (effects (font (size 1.27 1.27)) (justify left))
@@ -4001,10 +3929,6 @@
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 2ff6f0c9-df9c-4473-b1ce-a29754c9192b)
   )
-  (label "VDD" (at 186.69 128.27 0) (fields_autoplaced)
-    (effects (font (size 1.27 1.27)) (justify left bottom))
-    (uuid 34698ae9-fa39-458f-a47f-b051fe2aca37)
-  )
   (label "BATMS" (at 229.87 66.04 0) (fields_autoplaced)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 354add30-1ebd-4358-827d-22655221358f)
@@ -4027,7 +3951,7 @@
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 3b3a23a7-907b-4d1c-a9ca-9d86f520761a)
   )
-  (label "VDD" (at 344.17 111.76 0) (fields_autoplaced)
+  (label "VDD" (at 337.82 106.68 0) (fields_autoplaced)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 3e360bef-7cbb-46ab-9ea4-dee75ce50a7b)
   )
@@ -4220,10 +4144,6 @@
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid dc06b52f-1c1c-41a0-9d41-fecda0f205b9)
   )
-  (label "VDD" (at 186.69 163.83 0) (fields_autoplaced)
-    (effects (font (size 1.27 1.27)) (justify left bottom))
-    (uuid e4deac6c-9fae-4086-a683-47d83251ceb5)
-  )
   (label "VGL" (at 322.58 149.86 0) (fields_autoplaced)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid e5fe28aa-ed8e-4951-af9d-12c58955d77d)
@@ -4287,6 +4207,36 @@
     (uuid fcd8a4e6-cb98-409c-bcad-8f2674048cc8)
   )
 
+  (symbol (lib_id "power:GND") (at 186.69 133.35 0) (unit 1)
+    (in_bom yes) (on_board yes) (dnp no)
+    (uuid 010d6323-8b87-4485-ac2f-584ac8afe428)
+    (property "Reference" "#PWR030" (at 186.69 139.7 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Value" "GND" (at 186.69 137.16 0)
+      (effects (font (size 1.27 1.27)))
+    )
+    (property "Footprint" "" (at 186.69 133.35 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Datasheet" "" (at 186.69 133.35 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (pin "1" (uuid e9c2bcbb-450d-4dcc-b226-db049d9f8349))
+    (instances
+      (project "epaper-smart-watch"
+        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
+          (reference "#PWR030") (unit 1)
+        )
+      )
+      (project "Watchy"
+        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
+          (reference "#PWR022") (unit 1)
+        )
+      )
+    )
+  )
+
   (symbol (lib_id "power:GND") (at 229.87 82.55 0) (unit 1)
     (in_bom yes) (on_board yes) (dnp no) (fields_autoplaced)
     (uuid 0142e23c-7b7c-434f-b8dc-4ade19b30075)
@@ -4304,7 +4254,7 @@
     )
     (pin "1" (uuid 0c0e4111-109e-4641-9d22-8c1b32a9a40f))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR023") (unit 1)
         )
@@ -4335,7 +4285,7 @@
     (pin "1" (uuid 6d6df27f-9337-4e0b-8d57-92487d3c7361))
     (pin "2" (uuid 0d8c07a1-5541-46f9-9cac-a30aa31d362c))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C1") (unit 1)
         )
@@ -4360,7 +4310,7 @@
     )
     (pin "1" (uuid e07049e9-0477-4912-8ea0-8bd1118a7d97))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR05") (unit 1)
         )
@@ -4418,7 +4368,7 @@
     (pin "1" (uuid 4c6d8084-43ac-4f20-b091-d2d05342e057))
     (pin "2" (uuid 200c4575-ffcb-42d0-9130-766c6b658823))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "D4") (unit 1)
         )
@@ -4449,7 +4399,7 @@
     (pin "1" (uuid 847a9060-d6a5-4ea8-9e2f-a6034a463841))
     (pin "2" (uuid 011b20aa-fb9a-4c41-8bc1-e34aff8c3aaf))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "SW2") (unit 1)
         )
@@ -4480,7 +4430,7 @@
     (pin "1" (uuid 2738937a-aced-4bba-a99e-05f1f042a7b6))
     (pin "2" (uuid fd647603-c7d3-442c-bcca-e6fabbe752a5))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C11") (unit 1)
         )
@@ -4506,9 +4456,39 @@
     (pin "1" (uuid 778c0fd6-ebac-4ef8-a358-f63890237f08))
     (pin "2" (uuid 819834ea-56c3-460a-b8be-a227e33d6096))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C14") (unit 1)
+        )
+      )
+    )
+  )
+
+  (symbol (lib_id "power:GND") (at 186.69 170.18 0) (unit 1)
+    (in_bom yes) (on_board yes) (dnp no)
+    (uuid 1291cfc1-9dc0-4f9a-ba0f-1e83120a9153)
+    (property "Reference" "#PWR025" (at 186.69 176.53 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Value" "GND" (at 186.69 173.99 0)
+      (effects (font (size 1.27 1.27)))
+    )
+    (property "Footprint" "" (at 186.69 170.18 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Datasheet" "" (at 186.69 170.18 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (pin "1" (uuid 754a20dd-f473-468b-931d-84d3d3e11f22))
+    (instances
+      (project "epaper-smart-watch"
+        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
+          (reference "#PWR025") (unit 1)
+        )
+      )
+      (project "Watchy"
+        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
+          (reference "#PWR022") (unit 1)
         )
       )
     )
@@ -4531,7 +4511,7 @@
     )
     (pin "1" (uuid 1b8bdc0d-3ac7-4de5-a3c3-a1d3d01bbae9))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR04") (unit 1)
         )
@@ -4562,7 +4542,7 @@
     (pin "1" (uuid f4a0d93c-b96b-45fb-b74f-6d87a6795648))
     (pin "2" (uuid 44642331-4285-4015-8624-ef4dd3688a11))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C3") (unit 1)
         )
@@ -4588,7 +4568,7 @@
     (pin "1" (uuid 403dfc50-4261-40e5-89cb-fff86ea377cb))
     (pin "2" (uuid 843f2b15-e88b-484c-9afd-f2dd2b7f1834))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "R14") (unit 1)
         )
@@ -4619,7 +4599,7 @@
     (pin "1" (uuid 685f4df6-570e-433b-83f0-2988504d116b))
     (pin "2" (uuid 511139e2-0785-4205-bb9c-8e355ddbfe74))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C24") (unit 1)
         )
@@ -4645,7 +4625,7 @@
     (pin "1" (uuid 7f01dc5e-4782-46f3-8b25-99117cfe292d))
     (pin "2" (uuid ee189e43-96d6-4d20-9093-d668d4260963))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C7") (unit 1)
         )
@@ -4683,7 +4663,7 @@
     (pin "1" (uuid 6fa64219-b0c0-4eb0-a792-4dae7444f426))
     (pin "2" (uuid 0345c573-c992-47ae-aefb-64a183e4f62d))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C9") (unit 1)
         )
@@ -4726,7 +4706,7 @@
     (pin "1" (uuid 12988681-18b0-4a09-a7c4-8f5f79f5b451))
     (pin "2" (uuid 156615cd-9058-4f68-b77b-487182e917dc))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C19") (unit 1)
         )
@@ -4756,7 +4736,7 @@
     )
     (pin "1" (uuid 8716c7aa-59a1-4a8f-af52-37e74441e940))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR034") (unit 1)
         )
@@ -4799,7 +4779,7 @@
     (pin "1" (uuid fb0c74ab-8c91-4cb1-8b0f-b0d30ac2423b))
     (pin "2" (uuid 721618a2-c446-4bae-9d12-40eb86816b49))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C16") (unit 1)
         )
@@ -4830,7 +4810,7 @@
     (pin "1" (uuid a3b0a3c1-e6eb-426c-98dc-9ea466bd0fad))
     (pin "2" (uuid 7c89c0b5-00d8-4d8a-9fe9-6a6b724ef403))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C6") (unit 1)
         )
@@ -4868,7 +4848,7 @@
     (pin "1" (uuid 5312934f-aa70-4582-9710-68e65e9b4d30))
     (pin "2" (uuid e9194450-75f3-4b3f-a7f5-4e7185fec7a2))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C18") (unit 1)
         )
@@ -4911,7 +4891,7 @@
     (pin "1" (uuid 3350c0f3-abfc-4faf-bd7c-608de58eb575))
     (pin "2" (uuid baa5ac94-e2de-4ae8-8d81-175b09473d10))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C15") (unit 1)
         )
@@ -4950,7 +4930,7 @@
     (pin "8" (uuid aba5e8c7-ab13-4dbc-aa8a-9262a2777a99))
     (pin "9" (uuid bbfc7344-8a7a-43f7-a0cd-01e86537c27d))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "U1") (unit 1)
         )
@@ -4975,7 +4955,7 @@
     )
     (pin "1" (uuid b5562278-bcc2-477f-9e53-ef243384d08b))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR011") (unit 1)
         )
@@ -5005,7 +4985,7 @@
     )
     (pin "1" (uuid 6f1c4994-14dd-4e55-80b2-a256743fe749))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR08") (unit 1)
         )
@@ -5036,7 +5016,7 @@
     (pin "1" (uuid 6cb2efb8-a8d2-4372-9269-4bf45ac05885))
     (pin "2" (uuid 9f3d0c57-940e-457b-9143-6d735414173c))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C10") (unit 1)
         )
@@ -5062,7 +5042,7 @@
     (pin "1" (uuid 4c2d14da-5383-4e9a-8c49-28d5bd604364))
     (pin "2" (uuid 80208929-b0d2-463c-813f-d8b7c1408c69))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "D7") (unit 1)
         )
@@ -5088,7 +5068,7 @@
     (pin "1" (uuid 3428130d-3350-400a-a2a8-9f67f085b775))
     (pin "2" (uuid 12006cab-2af7-435c-aace-deb9c81005b6))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "R7") (unit 1)
         )
@@ -5119,7 +5099,7 @@
     (pin "1" (uuid c4421d1a-44aa-4fd9-8b08-84c02155edb3))
     (pin "2" (uuid 0a9ce369-cb1b-4914-8625-248eabd9e56f))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "R9") (unit 1)
         )
@@ -5163,7 +5143,7 @@
     (pin "5" (uuid 566634c4-ccf0-4f7a-8360-7fc39ace2c1e))
     (pin "6" (uuid 4911c72e-9d4e-4000-88fa-6eb23c1c063d))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "SWD1") (unit 1)
         )
@@ -5195,7 +5175,7 @@
     (pin "2" (uuid 8319704b-5603-4f25-81da-954d364ca4ac))
     (pin "3" (uuid ff17eed7-d8ed-4300-afaf-9b912d72bb2f))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "Q3") (unit 1)
         )
@@ -5227,9 +5207,39 @@
     (pin "2" (uuid 2231a0d0-efe6-48d6-b53b-c7034d3fe66b))
     (pin "3" (uuid bb07c73d-a6be-4244-88f2-e1498bfa782a))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "J3") (unit 1)
+        )
+      )
+    )
+  )
+
+  (symbol (lib_id "power:GND") (at 186.69 187.96 0) (unit 1)
+    (in_bom yes) (on_board yes) (dnp no)
+    (uuid 62780915-29d2-4d22-b2b4-ed4218667852)
+    (property "Reference" "#PWR037" (at 186.69 194.31 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Value" "GND" (at 186.69 191.77 0)
+      (effects (font (size 1.27 1.27)))
+    )
+    (property "Footprint" "" (at 186.69 187.96 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Datasheet" "" (at 186.69 187.96 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (pin "1" (uuid fd1549e9-fc45-4340-9c1f-8590c5dab909))
+    (instances
+      (project "epaper-smart-watch"
+        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
+          (reference "#PWR037") (unit 1)
+        )
+      )
+      (project "Watchy"
+        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
+          (reference "#PWR022") (unit 1)
         )
       )
     )
@@ -5252,7 +5262,7 @@
     )
     (pin "1" (uuid 0b31ed92-5557-45ca-94ab-ab6c56d34fde))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR027") (unit 1)
         )
@@ -5310,7 +5320,7 @@
     (pin "1" (uuid c530c8a3-9ebb-495f-a752-5f2c5cc65418))
     (pin "2" (uuid 2a667743-8828-4a81-8b89-1cbfc416e462))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "D3") (unit 1)
         )
@@ -5342,7 +5352,7 @@
     (pin "2" (uuid 90281cdf-cf1a-4482-8f12-a67a86af68cd))
     (pin "3" (uuid 9904e54a-0f9e-4d85-a87b-3585ac05986f))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "JP1") (unit 1)
         )
@@ -5368,7 +5378,7 @@
     (pin "1" (uuid 54db9d00-8906-4634-93b4-bebf9ea48224))
     (pin "2" (uuid 2e37ac27-b414-4dc9-8d1f-ffa44c7b6596))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "R3") (unit 1)
         )
@@ -5398,7 +5408,7 @@
     )
     (pin "1" (uuid dda6a9ef-431c-492d-9e3c-56ec1866b492))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR033") (unit 1)
         )
@@ -5429,7 +5439,7 @@
     (pin "1" (uuid 95f4bd62-475c-40f8-be10-564d84ac5c1b))
     (pin "2" (uuid 5b41a229-4cc3-40a1-bda8-a27cfee8f62f))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C13") (unit 1)
         )
@@ -5454,7 +5464,7 @@
     )
     (pin "1" (uuid 953bc585-465d-42bf-8a6d-753e090e44ed))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR014") (unit 1)
         )
@@ -5484,7 +5494,7 @@
     )
     (pin "1" (uuid 7a09686f-c12d-46aa-a989-e1c90ac16f23))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR031") (unit 1)
         )
@@ -5530,7 +5540,7 @@
     (pin "B9" (uuid 228aa2cd-a193-4286-9886-7f8fef968ef4))
     (pin "S1" (uuid baa76da5-c254-4c3d-b061-a4dbb66efaf1))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "P1") (unit 1)
         )
@@ -5639,7 +5649,7 @@
     (pin "8" (uuid ddaaeab3-00a8-437f-81e8-e6f3c301f832))
     (pin "9" (uuid adeff7de-5cbe-48ca-88dc-91573902cef2))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "U2") (unit 1)
         )
@@ -5665,7 +5675,7 @@
     (pin "1" (uuid d40b3298-23cf-4bfb-a3f7-a529d8bd1ca6))
     (pin "2" (uuid 7aba40d9-7bcf-44ee-aa07-dd22c814c2c4))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "R6") (unit 1)
         )
@@ -5673,67 +5683,6 @@
       (project "Watchy"
         (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
           (reference "R9") (unit 1)
-        )
-      )
-    )
-  )
-
-  (symbol (lib_id "Device:R_Small_US") (at 167.64 170.18 180) (unit 1)
-    (in_bom yes) (on_board yes) (dnp no)
-    (uuid 75802da8-f1cd-47bb-8aea-b4f046b276a9)
-    (property "Reference" "R10" (at 172.72 168.91 90)
-      (effects (font (size 1.27 1.27)) (justify left))
-    )
-    (property "Value" "10K" (at 170.18 168.91 90)
-      (effects (font (size 1.27 1.27)) (justify left))
-    )
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric" (at 167.64 170.18 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Datasheet" "~" (at 167.64 170.18 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (pin "1" (uuid 671ebff9-4f9d-43bd-af27-6448bcbd9ebd))
-    (pin "2" (uuid b9fb0812-ef38-42a2-9cd7-c83645884798))
-    (instances
-      (project "esp-smart-watch"
-        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
-          (reference "R10") (unit 1)
-        )
-      )
-      (project "Watchy"
-        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
-          (reference "R6") (unit 1)
-        )
-      )
-    )
-  )
-
-  (symbol (lib_id "power:GND") (at 167.64 173.99 0) (unit 1)
-    (in_bom yes) (on_board yes) (dnp no)
-    (uuid 77b4040f-1498-47e4-9ce4-8f844427d650)
-    (property "Reference" "#PWR025" (at 167.64 180.34 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Value" "GND" (at 167.64 177.8 0)
-      (effects (font (size 1.27 1.27)))
-    )
-    (property "Footprint" "" (at 167.64 173.99 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Datasheet" "" (at 167.64 173.99 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (pin "1" (uuid c56e9ee5-2f9a-42e6-9a11-397a178bb578))
-    (instances
-      (project "esp-smart-watch"
-        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
-          (reference "#PWR025") (unit 1)
-        )
-      )
-      (project "Watchy"
-        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
-          (reference "#PWR022") (unit 1)
         )
       )
     )
@@ -5757,7 +5706,7 @@
     (pin "1" (uuid 83b4338b-caaa-455d-b4d0-7df580dc0fd2))
     (pin "2" (uuid 33b4e5b9-d856-4bc1-9498-c5282c389814))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "M1") (unit 1)
         )
@@ -5783,7 +5732,7 @@
     (pin "1" (uuid 96137cac-518b-4f36-a182-e81661bd7aa4))
     (pin "2" (uuid 0c61f4b4-2442-4fbb-a956-7c9f52512228))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "R4") (unit 1)
         )
@@ -5791,36 +5740,6 @@
       (project "time-slider"
         (path "/72c8435a-1d1c-4c4f-9b66-bdfeadd9c47a"
           (reference "R2") (unit 1)
-        )
-      )
-    )
-  )
-
-  (symbol (lib_id "power:GND") (at 167.64 138.43 0) (unit 1)
-    (in_bom yes) (on_board yes) (dnp no)
-    (uuid 7f257d77-dea0-41b4-b617-4de528081eac)
-    (property "Reference" "#PWR013" (at 167.64 144.78 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Value" "GND" (at 167.64 142.24 0)
-      (effects (font (size 1.27 1.27)))
-    )
-    (property "Footprint" "" (at 167.64 138.43 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Datasheet" "" (at 167.64 138.43 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (pin "1" (uuid 5c4a58d7-e75d-40f9-9bda-d5e1a611ff41))
-    (instances
-      (project "esp-smart-watch"
-        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
-          (reference "#PWR013") (unit 1)
-        )
-      )
-      (project "Watchy"
-        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
-          (reference "#PWR022") (unit 1)
         )
       )
     )
@@ -5844,7 +5763,7 @@
     (pin "1" (uuid 6f3befa8-eb26-45e1-aff7-ed938559368c))
     (pin "2" (uuid 6e1c8f1c-81e9-4e4e-8208-3eeb93874bd0))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C12") (unit 1)
         )
@@ -5869,7 +5788,7 @@
     )
     (pin "1" (uuid fcbe7f66-0c5f-45d4-b68f-cb4132395d4e))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR024") (unit 1)
         )
@@ -5899,7 +5818,7 @@
     )
     (pin "1" (uuid 748060e0-9b1f-4da9-8b64-42e81fd1e5d4))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR010") (unit 1)
         )
@@ -5930,7 +5849,7 @@
     (pin "1" (uuid a4911f12-469c-4a26-b278-29db8de8287f))
     (pin "2" (uuid afdffc2c-8472-4f97-b9e6-71526fb016eb))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "SW3") (unit 1)
         )
@@ -5961,7 +5880,7 @@
     (pin "1" (uuid 0d6f6a14-d531-4e23-986d-d10c0c1481c5))
     (pin "2" (uuid 38d579f5-1859-4c91-9ed5-c093b739d59f))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C8") (unit 1)
         )
@@ -5986,7 +5905,7 @@
     )
     (pin "1" (uuid 1eff5702-71c8-4eb3-91ad-a7bc10d92b3d))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR036") (unit 1)
         )
@@ -6016,7 +5935,7 @@
     )
     (pin "1" (uuid 70fa787e-1f2a-4a26-a1bf-9bcda444d7b4))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR021") (unit 1)
         )
@@ -6029,13 +5948,13 @@
     )
   )
 
-  (symbol (lib_id "Jumper:SolderJumper_3_Bridged12") (at 337.82 114.3 0) (unit 1)
+  (symbol (lib_id "Jumper:SolderJumper_3_Bridged12") (at 337.82 114.3 270) (mirror x) (unit 1)
     (in_bom yes) (on_board yes) (dnp no)
     (uuid 85f425a8-330b-48f1-9319-79fb203c1d01)
-    (property "Reference" "JP3" (at 337.82 110.49 0)
+    (property "Reference" "JP3" (at 341.63 114.3 0)
       (effects (font (size 1.27 1.27)))
     )
-    (property "Value" "SolderJumper_3_Bridged12" (at 337.82 110.49 0)
+    (property "Value" "SolderJumper_3_Bridged12" (at 341.63 114.3 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Footprint" "Jumper:SolderJumper-3_P1.3mm_Bridged12_RoundedPad1.0x1.5mm_NumberLabels" (at 337.82 114.3 0)
@@ -6048,7 +5967,7 @@
     (pin "2" (uuid a0a348bd-69de-4710-b36f-9c79a6223e97))
     (pin "3" (uuid 8a7c33c3-d964-468e-ba64-add83b997420))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "JP3") (unit 1)
         )
@@ -6089,7 +6008,7 @@
     (pin "8" (uuid 04d9b616-fc80-482a-a7b1-b6cdf49f3034))
     (pin "9" (uuid d0b5fc9d-7d17-41c0-8e59-5aea80d60060))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "U3") (unit 1)
         )
@@ -6115,7 +6034,7 @@
     (pin "1" (uuid c172b46d-c49a-4d95-ba4e-da4c2a64a26e))
     (pin "2" (uuid f079adce-df94-49a5-8834-f6b0b9ac52fb))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C4") (unit 1)
         )
@@ -6176,7 +6095,7 @@
     (pin "8" (uuid 5681c198-5566-4b80-9ac0-e7c8582fd36d))
     (pin "9" (uuid 0fa9127f-39cd-4e2d-be66-c32e21d30162))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "PS1") (unit 1)
         )
@@ -6203,7 +6122,7 @@
     (pin "2" (uuid 8c9571c3-5752-4a7d-816c-7ded7a8a84dc))
     (pin "3" (uuid e0e7a46d-0803-482e-86a2-87666066b7ca))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "JP2") (unit 1)
         )
@@ -6228,7 +6147,7 @@
     )
     (pin "1" (uuid 6ca8e494-1262-4f28-91c1-c6eb878626e5))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR01") (unit 1)
         )
@@ -6258,7 +6177,7 @@
     )
     (pin "1" (uuid baab4fd4-8fc2-44ca-812f-9a2b092db2b3))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR022") (unit 1)
         )
@@ -6289,7 +6208,7 @@
     (pin "1" (uuid f8ea1035-e9cd-4a8f-997c-683552dc6efb))
     (pin "2" (uuid 00f654e8-aca8-41c0-86cf-7c1aa010ee52))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "SW4") (unit 1)
         )
@@ -6319,7 +6238,7 @@
     )
     (pin "1" (uuid c28610ac-23ef-4b59-b77d-9fe2181ca29a))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR03") (unit 1)
         )
@@ -6349,7 +6268,7 @@
     )
     (pin "1" (uuid 6a43d000-a0ca-465e-b4c4-3108ff69c3f0))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR019") (unit 1)
         )
@@ -6380,7 +6299,7 @@
     (pin "1" (uuid 2286cd90-017b-42c1-ab1b-ca98412b08bc))
     (pin "2" (uuid 6fea0d7b-7ad2-473a-ac20-e2ae1ed549e8))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "L1") (unit 1)
         )
@@ -6433,7 +6352,7 @@
     (pin "1" (uuid 1fb9dedb-dc4e-4005-a6e9-0beaeae5d929))
     (pin "2" (uuid d451369b-3b14-462f-b4e2-5f3c5f65bbd0))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "D1") (unit 1)
         )
@@ -6464,7 +6383,7 @@
     (pin "1" (uuid a287a23f-756c-49c1-b05d-7553ae8a511a))
     (pin "2" (uuid 171b7445-a2ae-4003-827f-a964fa04326e))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C22") (unit 1)
         )
@@ -6490,70 +6409,9 @@
     (pin "1" (uuid 75ba9d73-f35e-4e05-aed3-4baf655cf5c0))
     (pin "2" (uuid 3fe215cf-e0fc-4d42-985b-553b354cf1ed))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "D2") (unit 1)
-        )
-      )
-    )
-  )
-
-  (symbol (lib_id "Device:R_Small_US") (at 167.64 190.5 180) (unit 1)
-    (in_bom yes) (on_board yes) (dnp no)
-    (uuid 9da063a9-e6c0-4573-aca2-a54c30ca8a12)
-    (property "Reference" "R11" (at 172.72 189.23 90)
-      (effects (font (size 1.27 1.27)) (justify left))
-    )
-    (property "Value" "10K" (at 170.18 189.23 90)
-      (effects (font (size 1.27 1.27)) (justify left))
-    )
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric" (at 167.64 190.5 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Datasheet" "~" (at 167.64 190.5 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (pin "1" (uuid 939c8228-453d-4e9c-9db4-cb2330e7f8df))
-    (pin "2" (uuid a5121b99-3d12-4027-9ec8-ff931340b04a))
-    (instances
-      (project "esp-smart-watch"
-        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
-          (reference "R11") (unit 1)
-        )
-      )
-      (project "Watchy"
-        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
-          (reference "R10") (unit 1)
-        )
-      )
-    )
-  )
-
-  (symbol (lib_id "power:GND") (at 167.64 194.31 0) (unit 1)
-    (in_bom yes) (on_board yes) (dnp no)
-    (uuid 9f33077a-d914-4b65-bf6c-4c0d45ff6592)
-    (property "Reference" "#PWR026" (at 167.64 200.66 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Value" "GND" (at 167.64 198.12 0)
-      (effects (font (size 1.27 1.27)))
-    )
-    (property "Footprint" "" (at 167.64 194.31 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Datasheet" "" (at 167.64 194.31 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (pin "1" (uuid 68fe00f2-a080-4edc-b3b4-155da4172e71))
-    (instances
-      (project "esp-smart-watch"
-        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
-          (reference "#PWR026") (unit 1)
-        )
-      )
-      (project "Watchy"
-        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
-          (reference "#PWR033") (unit 1)
         )
       )
     )
@@ -6577,40 +6435,9 @@
     (pin "1" (uuid 40e7cd7e-41d7-4386-960a-b2f36a96ee2d))
     (pin "2" (uuid 1cc6f8e3-0bfb-47fd-966c-094be0d228ac))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C25") (unit 1)
-        )
-      )
-    )
-  )
-
-  (symbol (lib_id "Device:R_Small_US") (at 167.64 134.62 180) (unit 1)
-    (in_bom yes) (on_board yes) (dnp no)
-    (uuid aa8e87c5-2d96-4512-b00e-596ff2b99e00)
-    (property "Reference" "R2" (at 172.72 133.35 90)
-      (effects (font (size 1.27 1.27)) (justify left))
-    )
-    (property "Value" "10K" (at 170.18 132.08 90)
-      (effects (font (size 1.27 1.27)) (justify left))
-    )
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric" (at 167.64 134.62 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Datasheet" "~" (at 167.64 134.62 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (pin "1" (uuid d7a257ed-78b0-4241-8369-2f632a7eb0d8))
-    (pin "2" (uuid 4bd3e311-987e-4b6a-b133-0d686e0f2846))
-    (instances
-      (project "esp-smart-watch"
-        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
-          (reference "R2") (unit 1)
-        )
-      )
-      (project "Watchy"
-        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
-          (reference "R6") (unit 1)
         )
       )
     )
@@ -6634,7 +6461,7 @@
     (pin "1" (uuid 8473d1f7-6b11-41ec-aaf2-25eb6464f1fd))
     (pin "2" (uuid da062707-825f-4913-b9fb-666353170346))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C23") (unit 1)
         )
@@ -6660,7 +6487,7 @@
     (pin "1" (uuid 50589a16-2f12-4987-a429-24409c377525))
     (pin "2" (uuid a930201c-d425-41cc-9868-528c9ed7481c))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "R15") (unit 1)
         )
@@ -6690,7 +6517,7 @@
     )
     (pin "1" (uuid 7bde00f0-b4bb-472d-8793-3df898f3b5aa))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR020") (unit 1)
         )
@@ -6720,7 +6547,7 @@
     )
     (pin "1" (uuid f906f5d7-9197-41cb-9716-21aebe36d332))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR017") (unit 1)
         )
@@ -6751,7 +6578,7 @@
     (pin "1" (uuid ec1dc07a-f77d-4319-9d36-662d5e207d41))
     (pin "2" (uuid 59d5cb70-fa26-461c-8946-14ff3caed3f4))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "D5") (unit 1)
         )
@@ -6777,40 +6604,9 @@
     (pin "1" (uuid f886a1cb-65a0-4360-9682-6f06f8cfe300))
     (pin "2" (uuid 1bedbc06-fa7c-44b8-812e-84407f48cd00))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "D6") (unit 1)
-        )
-      )
-    )
-  )
-
-  (symbol (lib_id "Device:R_Small_US") (at 167.64 152.4 180) (unit 1)
-    (in_bom yes) (on_board yes) (dnp no)
-    (uuid c442e533-2fae-418c-8763-5094240e541a)
-    (property "Reference" "R1" (at 172.72 151.13 90)
-      (effects (font (size 1.27 1.27)) (justify left))
-    )
-    (property "Value" "10K" (at 170.18 151.13 90)
-      (effects (font (size 1.27 1.27)) (justify left))
-    )
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric" (at 167.64 152.4 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Datasheet" "~" (at 167.64 152.4 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (pin "1" (uuid b3f4f865-5233-407b-aeca-f3485160d101))
-    (pin "2" (uuid 1dfc6812-4bb0-4cec-a729-1bccc78febb3))
-    (instances
-      (project "esp-smart-watch"
-        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
-          (reference "R1") (unit 1)
-        )
-      )
-      (project "Watchy"
-        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
-          (reference "R6") (unit 1)
         )
       )
     )
@@ -6840,7 +6636,7 @@
     (pin "1" (uuid 2422eb87-fccf-4ddc-87a3-d4de191c11c8))
     (pin "2" (uuid 4129b182-866e-4fc1-aa89-355195e273ef))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "D9") (unit 1)
         )
@@ -6865,7 +6661,7 @@
     )
     (pin "1" (uuid 8a0db754-a529-4caa-94bb-e4398ff038a6))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR016") (unit 1)
         )
@@ -6896,7 +6692,7 @@
     (pin "1" (uuid 0e153fe2-5742-48a0-a501-bee26c5e3ac9))
     (pin "2" (uuid 1622ec65-4a43-4d24-bb2b-aa4ef212281e))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "SW1") (unit 1)
         )
@@ -6926,7 +6722,7 @@
     )
     (pin "1" (uuid 969cd044-a464-43cd-bd7c-381c5c9ffa76))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR032") (unit 1)
         )
@@ -6956,7 +6752,7 @@
     )
     (pin "1" (uuid 496fde03-8e35-442a-9888-b54c3a20dbb0))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR07") (unit 1)
         )
@@ -7009,7 +6805,7 @@
     (pin "8" (uuid ddc55926-e2b4-4444-80cc-a277c3699e75))
     (pin "9" (uuid a5c6b43b-ab01-4d02-bad7-9474b85d4750))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "J1") (unit 1)
         )
@@ -7039,7 +6835,7 @@
     )
     (pin "1" (uuid fc92063e-1598-450e-b792-4245ccf803de))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR09") (unit 1)
         )
@@ -7069,7 +6865,7 @@
     )
     (pin "1" (uuid 72e79b1e-caef-4b7d-b053-947db4776151))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR02") (unit 1)
         )
@@ -7100,7 +6896,7 @@
     (pin "1" (uuid 350bbe61-caee-49cd-86bd-27707f096ce3))
     (pin "2" (uuid e7b972a6-c29d-4cf8-8f5f-1b45ffbdfee1))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "R8") (unit 1)
         )
@@ -7130,7 +6926,7 @@
     )
     (pin "1" (uuid 00cfad3e-b2bc-42f8-9606-264827059f6c))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR015") (unit 1)
         )
@@ -7160,7 +6956,7 @@
     )
     (pin "1" (uuid 82424944-c73e-4d0e-be68-c5aa3eca21f8))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR028") (unit 1)
         )
@@ -7203,7 +6999,7 @@
     (pin "1" (uuid 0953c509-0059-435a-9f80-fcc57e6276b4))
     (pin "2" (uuid e111b94a-e009-4d05-af59-b7acac1d2867))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C21") (unit 1)
         )
@@ -7233,7 +7029,7 @@
     )
     (pin "1" (uuid 8a220524-1661-4d59-aa1e-49fa104db3ce))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR06") (unit 1)
         )
@@ -7276,7 +7072,7 @@
     (pin "1" (uuid e83cb523-4a99-4899-85f9-475d548684a8))
     (pin "2" (uuid 6cf3d266-658f-4e6c-8575-6a3bc3fa78b2))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C20") (unit 1)
         )
@@ -7284,36 +7080,6 @@
       (project "nrf51x22_qfax_dcdc"
         (path "/e6bcadc9-bad3-4485-a9bd-1664e59268b4"
           (reference "C9") (unit 1)
-        )
-      )
-    )
-  )
-
-  (symbol (lib_id "power:GND") (at 167.64 156.21 0) (unit 1)
-    (in_bom yes) (on_board yes) (dnp no)
-    (uuid e2f3fb7f-5775-4388-a5bc-7b355ffc4a7b)
-    (property "Reference" "#PWR012" (at 167.64 162.56 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Value" "GND" (at 167.64 160.02 0)
-      (effects (font (size 1.27 1.27)))
-    )
-    (property "Footprint" "" (at 167.64 156.21 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (property "Datasheet" "" (at 167.64 156.21 0)
-      (effects (font (size 1.27 1.27)) hide)
-    )
-    (pin "1" (uuid 218a85fa-9a1a-4b7f-a9a2-e115df8f4474))
-    (instances
-      (project "esp-smart-watch"
-        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
-          (reference "#PWR012") (unit 1)
-        )
-      )
-      (project "Watchy"
-        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
-          (reference "#PWR022") (unit 1)
         )
       )
     )
@@ -7337,7 +7103,7 @@
     (pin "1" (uuid 72047b12-7a35-484a-8d77-e11e9f18a602))
     (pin "2" (uuid bfefefd5-40da-478e-a61a-b5cfecc80dc1))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "R5") (unit 1)
         )
@@ -7368,7 +7134,7 @@
     (pin "1" (uuid 4d68bab6-8097-482f-b4d8-182a96bb9a21))
     (pin "2" (uuid 27f5fb99-beef-474d-8587-946e9c7a5acd))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C5") (unit 1)
         )
@@ -7393,7 +7159,7 @@
     )
     (pin "1" (uuid 5e3f748f-e63c-450f-bdaf-55c6192cdd38))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR018") (unit 1)
         )
@@ -7401,6 +7167,36 @@
       (project "nrf51x22_qfax_dcdc"
         (path "/e6bcadc9-bad3-4485-a9bd-1664e59268b4"
           (reference "#PWR03") (unit 1)
+        )
+      )
+    )
+  )
+
+  (symbol (lib_id "power:GND") (at 186.69 151.13 0) (unit 1)
+    (in_bom yes) (on_board yes) (dnp no)
+    (uuid ec9de0ba-f827-4a1c-84c0-6193208ebf0d)
+    (property "Reference" "#PWR029" (at 186.69 157.48 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Value" "GND" (at 186.69 154.94 0)
+      (effects (font (size 1.27 1.27)))
+    )
+    (property "Footprint" "" (at 186.69 151.13 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Datasheet" "" (at 186.69 151.13 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (pin "1" (uuid 19f2c0ab-78a7-4926-a3ac-6212fcbf9366))
+    (instances
+      (project "epaper-smart-watch"
+        (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
+          (reference "#PWR029") (unit 1)
+        )
+      )
+      (project "Watchy"
+        (path "/8ad70251-11ac-41a3-966d-b51302d696a2"
+          (reference "#PWR022") (unit 1)
         )
       )
     )
@@ -7424,7 +7220,7 @@
     (pin "1" (uuid dfbd105d-0575-44ca-b4cb-68243c14f260))
     (pin "2" (uuid 2921624e-fc77-42d0-b995-723e11c09f76))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C2") (unit 1)
         )
@@ -7451,7 +7247,7 @@
     (pin "2" (uuid ea61e3fb-57df-4002-a567-5657e20d3900))
     (pin "3" (uuid 8d96d624-c112-4129-8845-59be3b9a0547))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "Q1") (unit 1)
         )
@@ -7477,7 +7273,7 @@
     (pin "1" (uuid 9e3d106e-d3c1-470a-87d4-5b9f973685f8))
     (pin "2" (uuid 7e8d8aee-7c1d-4deb-9f05-79b077b8ab7e))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "D8") (unit 1)
         )
@@ -7515,7 +7311,7 @@
     (pin "1" (uuid 83cc9e5c-f788-4c55-b855-31a142a3b36e))
     (pin "2" (uuid 8c0bb92f-ca41-48eb-8aa9-5331d783fdb6))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "C17") (unit 1)
         )
@@ -7545,7 +7341,7 @@
     )
     (pin "1" (uuid e009c0cf-9b8b-449f-b1d3-f3e33da2f478))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "#PWR035") (unit 1)
         )
@@ -7576,7 +7372,7 @@
     (pin "1" (uuid 96ee4907-a5ee-454b-9fff-5da79d6fd4ce))
     (pin "2" (uuid 8736edd8-c78c-4b5b-a1bd-b8f3705b1618))
     (instances
-      (project "esp-smart-watch"
+      (project "epaper-smart-watch"
         (path "/559888a2-c9ee-4fa0-946e-29e0d1e7b86b"
           (reference "R16") (unit 1)
         )
