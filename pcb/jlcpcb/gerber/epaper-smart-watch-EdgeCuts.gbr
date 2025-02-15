@@ -1,0 +1,28 @@
+%TF.GenerationSoftware,KiCad,Pcbnew,8.0.7*%
+%TF.CreationDate,2025-01-11T23:39:27+09:00*%
+%TF.ProjectId,epaper-smart-watch,65706170-6572-42d7-936d-6172742d7761,rev?*%
+%TF.SameCoordinates,Original*%
+%TF.FileFunction,Profile,NP*%
+%FSLAX46Y46*%
+G04 Gerber Fmt 4.6, Leading zero omitted, Abs format (unit mm)*
+G04 Created by KiCad (PCBNEW 8.0.7) date 2025-01-11 23:39:27*
+%MOMM*%
+%LPD*%
+G01*
+G04 APERTURE LIST*
+%TA.AperFunction,Profile*%
+%ADD10C,0.200000*%
+%TD*%
+G04 APERTURE END LIST*
+D10*
+X158400000Y-96000000D02*
+G75*
+G02*
+X129200000Y-96000000I-14600000J0D01*
+G01*
+X129200000Y-96000000D02*
+G75*
+G02*
+X158400000Y-96000000I14600000J0D01*
+G01*
+M02*
