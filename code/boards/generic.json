@@ -1,0 +1,33 @@
+{
+  "build": {
+    "core": "stm32",
+    "cpu": "cortex-m4",
+    "extra_flags": "-DSTM32WB -DSTM32WBXX -DSTM32WB15xx -DARDUINO_GENERIC_WB1MMCHX",
+    "f_cpu": "640000000L",
+    "mcu": "stm32wb1mmch",
+    "product_line": "STM32WB1xx",
+    "variant": "STM32WBxx/WB1MMCH"
+  },
+  "debug": {
+    "jlink_device": "STM32WB1",
+    "openocd_target": "stm32wb1",
+    "svd_path": "STM32WB1.svd"
+  },
+  "frameworks": [
+    "arduino"
+  ],
+  "name": "Generic STM32WB1MMCH",
+  "upload": {
+    "maximum_ram_size": 49152,
+    "maximum_size": 327680,
+    "protocol": "stlink",
+    "protocols": [
+      "jlink",
+      "cmsis-dap",
+      "stlink",
+      "blackmagic"
+    ]
+  },
+  "url": "https://www.st.com/resource/en/datasheet/stm32wb1mmc.pdf",
+  "vendor": "Generic"
+}
