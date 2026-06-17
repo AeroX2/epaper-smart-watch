@@ -40,3 +40,7 @@ usbc*
 .clang_complete
 .gcc-flags.json
 .pio
+
+# KiCad lock & tilde temp files
+*.lck
+~*
