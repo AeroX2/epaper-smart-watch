@@ -28,6 +28,9 @@ fp-info-cache
 *.xml
 *.csv
 
+# PDFs - datasheets, schematic/gerber exports, render outputs (kept locally, not tracked)
+*.pdf
+
 production
 nppBackup
 FPC.pretty

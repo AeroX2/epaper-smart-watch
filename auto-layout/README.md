@@ -75,7 +75,7 @@ Constraints enforced throughout:
 Result on this board: 0 courtyard overlaps, 0 edge violations, every part placed. Cohesion is
 ~8–9 mm average, which is near the geometric floor here — two clusters have 17 members each
 (display-bias network on `J6`, MCU support on `U3`), and you can't pack 17 parts within a few mm
-of one point. See `examples/` for rendered top/bottom.
+of one point. (Render top/bottom with `kicad-cli pcb export pdf` — PDFs aren't tracked in git.)
 
 ## Notes / caveats
 
