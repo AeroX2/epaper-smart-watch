@@ -23424,7 +23424,7 @@
 				)
 			)
 		)
-		(property "Footprint" "ProjectLibrary:USB-C-SMD_TYPE-C-16P-CB0.8-073"
+		(property "Footprint" "ProjectLibrary:USB-C-SMD_SHOU_TYPE-C-16P-CB1.6"
 			(at 48.26 63.5 0)
 			(hide yes)
 			(show_name no)

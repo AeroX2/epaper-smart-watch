@@ -1,0 +1,48 @@
+# ============================================================
+#  JLCPCB manufacturing design rules — epaper-smart-watch
+#
+#  Assumed process (matches this board's stackup):
+#    * 4 layers (multilayer)
+#    * 1 oz copper on all layers
+#    * 0.8 mm finished thickness
+#    * Plated THROUGH-hole vias only (economical tier, no HDI)
+#
+#  Source:  https://jlcpcb.com/capabilities/pcb-capabilities
+#  Applied: 2026-07-12
+#
+#  These custom rules complement Board Setup > Constraints (which
+#  holds the flat minimums: 0.09 mm track/clearance, 0.2 mm copper
+#  to edge, 0.45/0.20/0.10 via, 0.1 mm mask dam, 1.0/0.15 silk).
+#  Everything here is a JLCPCB capability floor unless marked
+#  "recommended".
+# ============================================================
+
+(version 1)
+
+# --- Component through-hole pad annular ring --------------------
+# JLCPCB requires >= 0.20 mm annular ring on 1 oz PTH pads
+# (vias are allowed a thinner ring — handled by Board Setup).
+(rule "JLC PTH annular ring"
+	(constraint annular_width (min 0.2mm))
+	(condition "A.Pad_Type == 'Through-hole'")
+	(severity error))
+
+# --- Silkscreen keep-out from exposed copper / pads -------------
+# Gerber plotting subtracts the solder mask from silkscreen, preserving the
+# complete editor artwork while keeping manufactured silk off exposed pads.
+(rule "JLC silk to pad clearance"
+	(constraint silk_clearance (min 0.15mm))
+	(condition "A.Type == 'Pad' || B.Type == 'Pad' || A.Type == 'Via' || B.Type == 'Via'")
+	(severity ignore))
+
+# --- Via type restriction ---------------------------------------
+# The economical 4-layer service supports plated THROUGH vias only.
+# Blind/buried and laser microvias are a separate (costly) HDI order.
+# Delete these two rules if you switch to the HDI service.
+(rule "JLC no microvias"
+	(constraint disallow micro_via)
+	(severity error))
+
+(rule "JLC no blind/buried vias"
+	(constraint disallow buried_via)
+	(severity error))
