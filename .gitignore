@@ -47,3 +47,6 @@ usbc*
 # KiCad lock & tilde temp files
 *.lck
 ~*
+
+# KiCad DRC/ERC report files
+*.rpt
