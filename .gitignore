@@ -30,6 +30,7 @@ fp-info-cache
 
 # PDFs - datasheets, schematic/gerber exports, render outputs (kept locally, not tracked)
 *.pdf
+tmp/
 
 production
 nppBackup
