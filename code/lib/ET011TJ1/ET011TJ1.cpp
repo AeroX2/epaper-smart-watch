@@ -1,420 +1,440 @@
 #include "ET011TJ1.h"
 
-ET011TJ1::ET011TJ1(int sck_pin, int mosi_pin, int cs_pin, int dc_pin, int rst_pin, int busy_pin) {
-    _sck_pin = sck_pin;
-    _mosi_pin = mosi_pin;
-    _cs_pin = cs_pin;
-    _dc_pin = dc_pin;
-    _rst_pin = rst_pin;
-    _busy_pin = busy_pin;
-    
-    // Use hardware SPI with 4MHz, MSB first, SPI mode 0
-    _spi_settings = SPISettings(4000000, MSBFIRST, SPI_MODE0);
-    _spi = &SPI;
+namespace {
+
+constexpr uint8_t CMD_PSR = 0x00;
+constexpr uint8_t CMD_PWR = 0x01;
+constexpr uint8_t CMD_POF = 0x02;
+constexpr uint8_t CMD_PFS = 0x03;
+constexpr uint8_t CMD_PON = 0x04;
+constexpr uint8_t CMD_BTST = 0x06;
+constexpr uint8_t CMD_DTM1 = 0x10;
+constexpr uint8_t CMD_DRF = 0x12;
+constexpr uint8_t CMD_DTM2 = 0x13;
+constexpr uint8_t CMD_DTMW = 0x14;
+constexpr uint8_t CMD_LUT_20 = 0x20;
+constexpr uint8_t CMD_LUT_22 = 0x22;
+constexpr uint8_t CMD_LUT_26 = 0x26;
+constexpr uint8_t CMD_LPRD = 0x30;
+constexpr uint8_t CMD_TSE = 0x41;
+constexpr uint8_t CMD_CDI = 0x50;
+constexpr uint8_t CMD_TRES = 0x61;
+constexpr uint8_t CMD_GDS = 0x62;
+constexpr uint8_t CMD_GBS = 0x63;
+constexpr uint8_t CMD_GSS = 0x64;
+constexpr uint8_t CMD_VDCS = 0x82;
+constexpr uint8_t CMD_VBDS = 0x84;
+constexpr uint8_t CMD_LVSEL = 0xE4;
+
+// Values transcribed from the ET011TJ1 vendor bring-up notes.
+constexpr uint8_t POWER_SETTINGS[] = {0x03, 0x01, 0x2B, 0x2B, 0x00};
+constexpr uint8_t BOOSTER_SOFT_START[] = {0x17, 0x97, 0x20};
+constexpr uint8_t PANEL_SETTINGS[] = {0x0F, 0x86, 0x89};
+constexpr uint8_t POWER_OFF_SEQUENCE = 0x00;
+constexpr uint8_t LINE_PERIOD = 0x4F;
+constexpr uint8_t INTERNAL_TEMPERATURE_SENSOR = 0x00;
+constexpr uint8_t VCOM_DATA_INTERVAL[] = {0xA0, 0x20, 0x10};
+constexpr uint8_t RESOLUTION[] = {0xEF, 0x00, 0xEF};
+constexpr uint8_t GATE_DRIVER_SETTINGS[] = {0x89, 0x89, 0xCB, 0xCB, 0x03};
+// VDCS (R82H) sets VCOM_DC; 0x25 = -1.95 V.
+constexpr uint8_t VCOM_DC_LEVEL = 0x25;
+constexpr uint8_t BORDER_DRIVER_VOLTAGE = 0x25;
+constexpr uint8_t LEVEL_SELECT = 0x02;
+constexpr uint8_t GATE_BIAS_START[] = {0x02, 0x02};
+constexpr uint8_t GATE_BIAS_STOP[] = {0x02, 0x02};
+
+// Room-temperature KW waveform transcribed from the vendor bring-up notes.
+// Unspecified elements are zero-initialized to preserve the noted repeat runs.
+constexpr uint8_t LUT_20[32] = {
+    0x00, 0x00, 0x00, 0x30,
+};
+
+constexpr uint8_t LUT_22[512] = {
+    0x01, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00,
+    0x02, 0x00, 0x00, 0x80,
+    0x02, 0x00, 0x00, 0x40,
+    0x02, 0x00, 0x00, 0x04,
+    0x02, 0x00, 0x00, 0x40,
+    0x02, 0x00, 0x00, 0x40,
+    0x02, 0x00, 0x00, 0x40,
+    0x02, 0x00, 0x00, 0x40,
+    0x02, 0x00, 0x00, 0x40,
+    0x02, 0x00, 0x00, 0x40,
+    0x00, 0x00, 0x00, 0x00,
+    0xFF, 0xFF, 0xFF, 0xFF,
+};
+
+constexpr uint8_t LUT_26[128] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x05, 0x0A, 0x0A, 0x00, 0xFF,
+};
+
+constexpr uint8_t FULL_WINDOW[] = {
+    0x00,        // X start
+    0x00, 0x00,  // Y start
+    0xEF,        // X end = 239
+    0x00, 0xEF,  // Y end = 239
+};
+
+constexpr uint8_t FULL_REFRESH[] = {
+    // Mode 0x00 (KWG) selects the R20/R22/R26 register waveform and the 2-bpp
+    // DTM1/DTM2 planes this driver writes; partial scan and REGAL disabled.
+    // Mode 0x01 (KW) reads the 1-bpp DTM3/DTM4 planes instead and leaves every
+    // update displaying the previous frame.
+    0x00,
+    0x00,        // X start
+    0x00, 0x00,  // Y start
+    0xEF,        // X end = 239
+    0x00, 0xEF,  // Y end = 239
+};
+
+}  // namespace
+
+ET011TJ1::ET011TJ1(SPIClass& spi, uint32_t cs_pin, uint32_t dc_pin,
+                   uint32_t reset_pin, uint32_t busy_pin)
+    : spi_(spi),
+      spi_settings_(SPI_HZ, MSBFIRST, SPI_MODE0),
+      cs_pin_(cs_pin),
+      dc_pin_(dc_pin),
+      reset_pin_(reset_pin),
+      busy_pin_(busy_pin) {}
+
+void ET011TJ1::prepare() {
+  if (prepared_) {
+    return;
+  }
+
+  digitalWrite(cs_pin_, HIGH);
+  pinMode(cs_pin_, OUTPUT);
+  digitalWrite(dc_pin_, LOW);
+  pinMode(dc_pin_, OUTPUT);
+  digitalWrite(reset_pin_, LOW);
+  pinMode(reset_pin_, OUTPUT);
+  // A weak pull-down makes a disconnected BUSY_N fail the logic probe instead
+  // of looking spuriously ready. A connected controller actively drives high.
+  pinMode(busy_pin_, INPUT_PULLDOWN);
+  spi_.begin();
+  prepared_ = true;
+  controller_awake_ = false;
+  booster_on_ = false;
+  initialized_ = false;
 }
 
-void ET011TJ1::begin() {
-    // Initialize pins
-    if (_cs_pin >= 0) {
-        pinMode(_cs_pin, OUTPUT);
-        digitalWrite(_cs_pin, HIGH);
-    }
-    
-    if (_dc_pin >= 0) {
-        pinMode(_dc_pin, OUTPUT);
-        digitalWrite(_dc_pin, LOW);
-    }
-    
-    if (_rst_pin >= 0) {
-        pinMode(_rst_pin, OUTPUT);
-        digitalWrite(_rst_pin, HIGH);
-    }
-    
-    if (_busy_pin >= 0) {
-        pinMode(_busy_pin, INPUT);
-    }
-    
-    // Initialize SPI
-    _spi->begin();
-    
-    // Hardware reset
-    reset();
-    
-    // Wait for ready
-    waitWhileBusy();
-    
-    // Basic initialization sequence
-    setPanelSettings();
-    setPowerSettings();
-    setBoosterSoftStart();
-    setPLLControl();
-    powerOn();
-    
-    // Wait for power-on
-    waitWhileBusy();
-    
-    Serial.println("ET011TJ1 initialized");
+bool ET011TJ1::logicProbe(Print& out) {
+  prepare();
+
+  out.print(F("ET011TJ1 BUSY_N before reset = "));
+  out.println(busyLevel());
+  const int busy_during_reset = hardwareReset();
+  const bool ready = waitReady(1000);
+  const int ready_level = busyLevel();
+  const bool passed = busy_during_reset == LOW && ready;
+
+  out.print(passed ? F("[PASS] ") : F("[FAIL] "));
+  out.print(F("ET011TJ1 reset/logic probe; BUSY_N reset/ready = "));
+  out.print(busy_during_reset);
+  out.print('/');
+  out.println(ready_level);
+  if (!passed) {
+    out.println(F("Check the display FPC, 3.0 V rail, RST_N, and BUSY_N."));
+  }
+  holdInReset();
+  out.println(F("ET011TJ1 returned to reset; booster was not enabled"));
+  return passed;
 }
 
-void ET011TJ1::end() {
-    powerOff();
-    sleep();
-    _spi->end();
+bool ET011TJ1::show(ET011TJ1Pattern pattern, Print& out) {
+  prepare();
+  out.println(F("Display test: high-voltage booster will be enabled."));
+
+  if (!initialized_ && !initialize(out)) {
+    safeShutdown(out);
+    return false;
+  }
+
+  // ET011TJ1 sections 14 and 15-1 specify this normal standby update:
+  // DTMW -> DTM2 -> PON -> DRF -> POF.
+  out.println(F("DTMW -> DTM2: writing 240x240 current frame..."));
+  writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
+  writePattern(CMD_DTM2, pattern);
+
+  if (!powerOn(out)) {
+    safeShutdown(out);
+    return false;
+  }
+  if (!refresh(out)) {
+    safeShutdown(out);
+    return false;
+  }
+  if (!powerOff(out)) {
+    safeShutdown(out);
+    return false;
+  }
+
+  out.println(F("[PASS] ET011TJ1 full refresh completed"));
+  last_pattern_ = pattern;
+  out.println(F("ET011TJ1 is in standby; booster is off"));
+  return true;
 }
 
-void ET011TJ1::reset() {
-    if (_rst_pin >= 0) {
-        digitalWrite(_rst_pin, LOW);
-        delay(200);
-        digitalWrite(_rst_pin, HIGH);
-        delay(200);
-    } else {
-        // Software reset if no reset pin
-        Serial.println("Warning: No reset pin defined");
-    }
+int ET011TJ1::busyLevel() const {
+  return digitalRead(busy_pin_);
 }
 
-void ET011TJ1::waitWhileBusy() {
-    if (_busy_pin >= 0) {
-        unsigned long timeout = millis() + 5000; // 5 second timeout
-        while (digitalRead(_busy_pin) == HIGH) {
-            delay(10);
-            if (millis() > timeout) {
-                Serial.println("Warning: Busy timeout");
-                break;
-            }
-        }
-    } else {
-        // Fixed delay if no busy pin
-        delay(500);
-    }
+int ET011TJ1::hardwareReset() {
+  digitalWrite(cs_pin_, HIGH);
+  // The normal idle state holds RST_N low. First release it so the following
+  // low pulse is a real reset edge rather than LOW -> LOW -> HIGH.
+  digitalWrite(reset_pin_, HIGH);
+  delay(20);
+  digitalWrite(reset_pin_, LOW);
+  delay(10);
+  const int busy_during_reset = busyLevel();
+  digitalWrite(reset_pin_, HIGH);
+  delay(100);
+  controller_awake_ = true;
+  return busy_during_reset;
+}
+
+bool ET011TJ1::initialize(Print& out) {
+  out.println(F("Initializing ET011TJ1 controller..."));
+  hardwareReset();
+  if (!waitReady(1000)) {
+    out.println(F("[FAIL] BUSY_N stayed low after hardware reset"));
+    return false;
+  }
+
+  // Follow the datasheet's Initial Registers flow: configure the power and
+  // soft-start registers, start the booster, then load the remaining
+  // controller registers and initialize both frame SRAM planes.
+  writeCommandData(CMD_PWR, POWER_SETTINGS, sizeof(POWER_SETTINGS));
+  writeCommandData(CMD_BTST, BOOSTER_SOFT_START,
+                   sizeof(BOOSTER_SOFT_START));
+  if (!powerOn(out)) {
+    return false;
+  }
+
+  if (!configureController(out)) {
+    return false;
+  }
+
+  // Initialize the previous/current 2-bpp SRAM planes to the same known image.
+  // With CDI.DDX=0, 00 is white and 11 is black.
+  out.println(F("Initializing DTM1/DTM2 frame history..."));
+  writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
+  writePattern(CMD_DTM1, last_pattern_);
+  writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
+  writePattern(CMD_DTM2, last_pattern_);
+
+  if (!powerOff(out)) {
+    return false;
+  }
+  initialized_ = true;
+  return true;
+}
+
+bool ET011TJ1::configureController(Print& out) {
+  writeCommandData(CMD_PSR, PANEL_SETTINGS, sizeof(PANEL_SETTINGS));
+  writeCommandData(CMD_PFS, &POWER_OFF_SEQUENCE, 1);
+  writeCommandData(CMD_LPRD, &LINE_PERIOD, 1);
+  writeCommandData(CMD_TSE, &INTERNAL_TEMPERATURE_SENSOR, 1);
+  writeCommandData(CMD_CDI, VCOM_DATA_INTERVAL,
+                   sizeof(VCOM_DATA_INTERVAL));
+  writeCommandData(CMD_TRES, RESOLUTION, sizeof(RESOLUTION));
+  writeCommandData(CMD_GDS, GATE_DRIVER_SETTINGS,
+                   sizeof(GATE_DRIVER_SETTINGS));
+  writeCommandData(CMD_VDCS, &VCOM_DC_LEVEL, 1);
+  writeCommandData(CMD_VBDS, &BORDER_DRIVER_VOLTAGE, 1);
+  writeCommandData(CMD_LVSEL, &LEVEL_SELECT, 1);
+  writeCommandData(CMD_GBS, GATE_BIAS_START, sizeof(GATE_BIAS_START));
+  writeCommandData(CMD_GSS, GATE_BIAS_STOP, sizeof(GATE_BIAS_STOP));
+  writeCommandData(CMD_LUT_20, LUT_20, sizeof(LUT_20));
+  writeCommandData(CMD_LUT_22, LUT_22, sizeof(LUT_22));
+  writeCommandData(CMD_LUT_26, LUT_26, sizeof(LUT_26));
+
+  out.println(F("Controller registers and waveform loaded"));
+  return true;
+}
+
+bool ET011TJ1::powerOn(Print& out) {
+  if (!waitReady(1000)) {
+    out.println(F("[FAIL] BUSY_N was low before PON"));
+    return false;
+  }
+
+  writeCommand(CMD_PON);
+  booster_on_ = true;
+  if (!waitBusyCycle(1000, 5000)) {
+    out.print(F("[FAIL] PON BUSY_N cycle timed out; level = "));
+    out.println(busyLevel());
+    return false;
+  }
+
+  out.println(F("Booster power-on complete"));
+  return true;
+}
+
+bool ET011TJ1::powerOff(Print& out) {
+  if (!waitReady(1000)) {
+    out.println(F("[FAIL] BUSY_N was low before POF"));
+    return false;
+  }
+
+  writeCommand(CMD_POF);
+  if (!waitBusyCycle(1000, 5000)) {
+    out.print(F("[FAIL] POF BUSY_N cycle timed out; level = "));
+    out.println(busyLevel());
+    return false;
+  }
+
+  booster_on_ = false;
+  out.println(F("Booster power-off complete"));
+  return true;
+}
+
+bool ET011TJ1::refresh(Print& out) {
+  writeCommandData(CMD_DRF, FULL_REFRESH, sizeof(FULL_REFRESH));
+  out.println(F("Refresh started; this may take several seconds..."));
+  if (!waitBusyCycle(1000, 20000)) {
+    out.print(F("[FAIL] DRF BUSY_N cycle timed out; level = "));
+    out.println(busyLevel());
+    return false;
+  }
+  return true;
+}
+
+void ET011TJ1::safeShutdown(Print& out) {
+  if (controller_awake_) {
+    // Attempt POF even when BUSY_N behaved unexpectedly. Reset is asserted
+    // immediately afterwards, so a failed BUSY handshake cannot leave the
+    // controller active in application firmware.
+    writeCommand(CMD_POF);
+    delay(50);
+  }
+  booster_on_ = false;
+  holdInReset();
+  out.println(F("Safety shutdown: POF sent and ET011TJ1 held in reset"));
+}
+
+void ET011TJ1::holdInReset() {
+  digitalWrite(cs_pin_, HIGH);
+  digitalWrite(dc_pin_, LOW);
+  digitalWrite(reset_pin_, LOW);
+  if (prepared_) {
+    spi_.end();
+    prepared_ = false;
+  }
+  controller_awake_ = false;
+  booster_on_ = false;
+  initialized_ = false;
 }
 
 void ET011TJ1::writeCommand(uint8_t command) {
-    if (_cs_pin >= 0) digitalWrite(_cs_pin, LOW);
-    if (_dc_pin >= 0) digitalWrite(_dc_pin, LOW);  // Command mode
-    
-    _spi->beginTransaction(_spi_settings);
-    _spi->transfer(command);
-    _spi->endTransaction();
-    
-    if (_cs_pin >= 0) digitalWrite(_cs_pin, HIGH);
+  spi_.beginTransaction(spi_settings_);
+  digitalWrite(dc_pin_, LOW);
+  digitalWrite(cs_pin_, LOW);
+  spi_.transfer(command, SPI_TRANSMITONLY);
+  digitalWrite(cs_pin_, HIGH);
+  spi_.endTransaction();
 }
 
-void ET011TJ1::writeData(uint8_t data) {
-    if (_cs_pin >= 0) digitalWrite(_cs_pin, LOW);
-    if (_dc_pin >= 0) digitalWrite(_dc_pin, HIGH);  // Data mode
-    
-    _spi->beginTransaction(_spi_settings);
-    _spi->transfer(data);
-    _spi->endTransaction();
-    
-    if (_cs_pin >= 0) digitalWrite(_cs_pin, HIGH);
+void ET011TJ1::writeCommandData(uint8_t command, const uint8_t* data,
+                               size_t length) {
+  spi_.beginTransaction(spi_settings_);
+
+  // The ET011TJ1 samples DC for an entire CSB assertion. Command and data
+  // therefore require separate CSB pulses; changing DC while CSB is low makes
+  // the following parameter bytes decode as commands.
+  digitalWrite(dc_pin_, LOW);
+  digitalWrite(cs_pin_, LOW);
+  spi_.transfer(command, SPI_TRANSMITONLY);
+  digitalWrite(cs_pin_, HIGH);
+
+  digitalWrite(dc_pin_, HIGH);
+  digitalWrite(cs_pin_, LOW);
+  for (size_t i = 0; i < length; ++i) {
+    spi_.transfer(data[i], SPI_TRANSMITONLY);
+  }
+  digitalWrite(cs_pin_, HIGH);
+  spi_.endTransaction();
 }
 
-void ET011TJ1::writeDataBuffer(const uint8_t* data, uint32_t length) {
-    if (_cs_pin >= 0) digitalWrite(_cs_pin, LOW);
-    if (_dc_pin >= 0) digitalWrite(_dc_pin, HIGH);  // Data mode
-    
-    _spi->beginTransaction(_spi_settings);
-    for (uint32_t i = 0; i < length; i++) {
-        _spi->transfer(data[i]);
+void ET011TJ1::writePattern(uint8_t command, ET011TJ1Pattern pattern) {
+  spi_.beginTransaction(spi_settings_);
+  digitalWrite(dc_pin_, LOW);
+  digitalWrite(cs_pin_, LOW);
+  spi_.transfer(command, SPI_TRANSMITONLY);
+  digitalWrite(cs_pin_, HIGH);
+
+  digitalWrite(dc_pin_, HIGH);
+  digitalWrite(cs_pin_, LOW);
+
+  for (uint16_t y = 0; y < HEIGHT; ++y) {
+    for (uint16_t x = 0; x < WIDTH; x += 4) {
+      spi_.transfer(packed2BppPatternByte(pattern, x, y), SPI_TRANSMITONLY);
     }
-    _spi->endTransaction();
-    
-    if (_cs_pin >= 0) digitalWrite(_cs_pin, HIGH);
+  }
+
+  digitalWrite(cs_pin_, HIGH);
+  spi_.endTransaction();
 }
 
-uint8_t ET011TJ1::readData() {
-    uint8_t data = 0;
-    
-    if (_cs_pin >= 0) digitalWrite(_cs_pin, LOW);
-    if (_dc_pin >= 0) digitalWrite(_dc_pin, HIGH);  // Data mode
-    
-    _spi->beginTransaction(_spi_settings);
-    data = _spi->transfer(0x00);  // Send dummy byte to read
-    _spi->endTransaction();
-    
-    if (_cs_pin >= 0) digitalWrite(_cs_pin, HIGH);
-    
-    return data;
-}
-
-void ET011TJ1::powerOn() {
-    writeCommand(ET011TJ1_PON);
-}
-
-void ET011TJ1::powerOff() {
-    writeCommand(ET011TJ1_POF);
-}
-
-void ET011TJ1::sleep() {
-    writeCommand(ET011TJ1_SLP);
-    writeData(0x01);  // Check code
-}
-
-void ET011TJ1::deepSleep() {
-    writeCommand(ET011TJ1_DSLP);
-    writeData(0x01);  // Check code
-}
-
-void ET011TJ1::setPanelSettings(uint8_t resolution, uint8_t lut_selection, uint8_t booster_switch, uint8_t reset_setting, uint8_t reg_enable) {
-    writeCommand(ET011TJ1_PSR);
-    
-    uint8_t reg_data = 0;
-    reg_data |= (resolution & 0x03) << 6;      // D7-D6: Resolution
-    reg_data |= (lut_selection & 0x01) << 5;   // D5: LUT selection
-    reg_data |= (booster_switch & 0x01) << 4;  // D4: Booster switch
-    reg_data |= (reset_setting & 0x01) << 1;   // D1: Reset setting
-    reg_data |= (reg_enable & 0x01);           // D0: Register enable
-    
-    writeData(reg_data);
-}
-
-void ET011TJ1::setPowerSettings(uint8_t vs_enable, uint8_t vg_enable) {
-    writeCommand(ET011TJ1_PWR);
-    
-    uint8_t reg_data = 0;
-    reg_data |= (vs_enable & 0x01) << 1;  // D1: VS_EN
-    reg_data |= (vg_enable & 0x01);       // D0: VG_EN
-    
-    writeData(reg_data);
-}
-
-void ET011TJ1::setBoosterSoftStart(uint8_t phase_a_strength, uint8_t phase_a_time, uint8_t phase_b_strength, uint8_t phase_b_time, uint8_t phase_c_strength, uint8_t phase_c_time) {
-    writeCommand(ET011TJ1_BTST);
-    
-    // Phase A
-    uint8_t btpha = ((phase_a_time & 0x03) << 6) | ((phase_a_strength & 0x07) << 3);
-    writeData(btpha);
-    
-    // Phase B  
-    uint8_t btphb = ((phase_b_time & 0x03) << 6) | ((phase_b_strength & 0x07) << 3);
-    writeData(btphb);
-    
-    // Phase C
-    uint8_t btphc = ((phase_c_time & 0x03) << 6) | ((phase_c_strength & 0x07) << 3);
-    writeData(btphc);
-}
-
-void ET011TJ1::setPLLControl(uint8_t lclk_setting) {
-    writeCommand(ET011TJ1_LPRD);
-    writeData(lclk_setting & 0x7F);
-}
-
-void ET011TJ1::setWindow(uint16_t x_start, uint16_t y_start, uint16_t width, uint16_t height) {
-    writeCommand(ET011TJ1_DTMW);
-    
-    // X start position
-    writeData((x_start >> 8) & 0xFF);
-    writeData(x_start & 0xFF);
-    
-    // Y start position  
-    writeData((y_start >> 8) & 0xFF);
-    writeData(y_start & 0xFF);
-    
-    // Width
-    writeData((width >> 8) & 0xFF);
-    writeData(width & 0xFF);
-    
-    // Height
-    writeData((height >> 8) & 0xFF);
-    writeData(height & 0xFF);
-}
-
-void ET011TJ1::writeImageDataOld(const uint8_t* image_data, uint32_t length) {
-    writeCommand(ET011TJ1_DTM1);
-    writeDataBuffer(image_data, length);
-}
-
-void ET011TJ1::writeImageDataNew(const uint8_t* image_data, uint32_t length) {
-    writeCommand(ET011TJ1_DTM2);
-    writeDataBuffer(image_data, length);
-}
-
-void ET011TJ1::writeImageDataKW(const uint8_t* image_data, uint32_t length) {
-    writeCommand(ET011TJ1_DTM3);
-    writeDataBuffer(image_data, length);
-}
-
-void ET011TJ1::refreshDisplay(uint8_t pscan_enable, uint8_t regal_enable, ET011TJ1_Mode mode, uint16_t x_start, uint16_t y_start, uint16_t width, uint16_t height) {
-    writeCommand(ET011TJ1_DRF);
-    
-    // Control byte
-    uint8_t control = 0;
-    control |= (pscan_enable & 0x01) << 7;  // PSCAN
-    control |= (regal_enable & 0x01) << 6;  // REGAL_EN
-    control |= (mode & 0x03);               // MODE
-    writeData(control);
-    
-    // X start position
-    writeData((x_start >> 8) & 0xFF);
-    writeData(x_start & 0xFF);
-    
-    // Y start position
-    writeData((y_start >> 8) & 0xFF);
-    writeData(y_start & 0xFF);
-    
-    // Width
-    writeData((width >> 8) & 0xFF);
-    writeData(width & 0xFF);
-    
-    // Height  
-    writeData((height >> 8) & 0xFF);
-    writeData(height & 0xFF);
-}
-
-int16_t ET011TJ1::readTemperature() {
-    writeCommand(ET011TJ1_TSC);
-    
-    uint8_t temp_high = readData();
-    uint8_t temp_low = readData();
-    
-    // Convert to temperature value based on lookup table
-    uint16_t temp_raw = (temp_high << 8) | temp_low;
-    
-    // Temperature conversion (simplified - refer to datasheet table for exact mapping)
-    if (temp_raw >= 0x0000 && temp_raw <= 0x0FFF) {
-        return (int16_t)((temp_raw * 100) / 0x0FFF);  // Scale to 0-100°C range
+bool ET011TJ1::waitReady(uint32_t timeout_ms) {
+  const uint32_t started = millis();
+  while (busyLevel() == LOW) {
+    if (millis() - started >= timeout_ms) {
+      return false;
     }
-    
-    return -999;  // Error value
+    delay(1);
+  }
+  return true;
 }
 
-void ET011TJ1::enableTemperatureSensor(bool enable, uint8_t offset) {
-    writeCommand(ET011TJ1_TSE);
-    
-    uint8_t tse_byte = enable ? 0x00 : 0x01;  // 0: Enable, 1: Disable
-    writeData(tse_byte);
-    writeData(offset & 0x0F);
-}
-
-void ET011TJ1::writeTemperatureSensor(uint8_t wattr, uint8_t wmsb, uint8_t wlsb) {
-    writeCommand(ET011TJ1_TSW);
-    writeData(wattr);
-    writeData(wmsb);
-    writeData(wlsb);
-}
-
-void ET011TJ1::clearDisplay(ET011TJ1_Color color) {
-    // Create buffer filled with specified color
-    uint32_t buffer_size = (ET011TJ1_WIDTH * ET011TJ1_HEIGHT) / 4;  // 2 bits per pixel, 4 pixels per byte
-    uint8_t* buffer = (uint8_t*)malloc(buffer_size);
-    
-    if (buffer) {
-        // Pack 4 pixels per byte
-        uint8_t packed_color = (color << 6) | (color << 4) | (color << 2) | color;
-        memset(buffer, packed_color, buffer_size);
-        
-        writeImageDataNew(buffer, buffer_size);
-        refreshDisplay();
-        waitWhileBusy();
-        
-        free(buffer);
-        Serial.println("Display cleared");
-    } else {
-        Serial.println("Error: Could not allocate memory for clear buffer");
+bool ET011TJ1::waitBusyCycle(uint32_t assert_timeout_ms,
+                            uint32_t ready_timeout_ms) {
+  // PON/POF/DRF assert BUSY_N low for milliseconds, so the 1 ms poll normally
+  // observes the pulse. If the deadline passes with BUSY_N still high, the
+  // operation most likely completed between samples; treat ready as success
+  // rather than failing the whole test. A genuinely stuck BUSY_N is caught by
+  // logicProbe.
+  const uint32_t started = millis();
+  while (busyLevel() == HIGH) {
+    if (millis() - started >= assert_timeout_ms) {
+      return true;
     }
+    delay(1);
+  }
+  return waitReady(ready_timeout_ms);
 }
 
-void ET011TJ1::displayFullImage(const uint8_t* image_data) {
-    // Convert and write image data to new SRAM
-    uint32_t buffer_size = (ET011TJ1_WIDTH * ET011TJ1_HEIGHT) / 4;
-    uint8_t* converted_buffer = (uint8_t*)malloc(buffer_size);
-    
-    if (converted_buffer) {
-        convertImage2Bit(image_data, converted_buffer, ET011TJ1_WIDTH * ET011TJ1_HEIGHT);
-        
-        writeImageDataNew(converted_buffer, buffer_size);
-        refreshDisplay();
-        waitWhileBusy();
-        
-        free(converted_buffer);
-        Serial.println("Full image displayed");
-    } else {
-        Serial.println("Error: Could not allocate memory for image buffer");
+uint8_t ET011TJ1::packed2BppPatternByte(ET011TJ1Pattern pattern, uint16_t x,
+                                       uint16_t y) const {
+  uint8_t packed = 0;
+  for (uint8_t pixel = 0; pixel < 4; ++pixel) {
+    bool black = false;
+    if (pattern == ET011TJ1Pattern::Black ||
+        (pattern == ET011TJ1Pattern::Diagnostic &&
+         diagnosticPixel(x + pixel, y))) {
+      black = true;
     }
+    if (black) {
+      packed |= static_cast<uint8_t>(0x03U << (6 - 2 * pixel));
+    }
+  }
+  return packed;
 }
 
-void ET011TJ1::displayPartialImage(const uint8_t* image_data, uint16_t x, uint16_t y, uint16_t width, uint16_t height) {
-    // Set window for partial update
-    setWindow(x, y, width, height);
-    
-    // Convert and write image data
-    uint32_t pixel_count = width * height;
-    uint32_t buffer_size = (pixel_count + 3) / 4;  // Round up for partial pixels
-    uint8_t* converted_buffer = (uint8_t*)malloc(buffer_size);
-    
-    if (converted_buffer) {
-        convertImage2Bit(image_data, converted_buffer, pixel_count);
-        
-        writeImageDataNew(converted_buffer, buffer_size);
-        refreshDisplay(0, 0, ET011TJ1_MODE_KWG, x, y, width, height);
-        waitWhileBusy();
-        
-        free(converted_buffer);
-        Serial.println("Partial image displayed");
-    } else {
-        Serial.println("Error: Could not allocate memory for partial image buffer");
-    }
-}
-
-void ET011TJ1::convertImage2Bit(const uint8_t* src_image, uint8_t* dst_buffer, uint32_t pixel_count) {
-    for (uint32_t i = 0; i < pixel_count; i += 4) {
-        uint8_t packed_byte = 0;
-        
-        // Pack 4 pixels (2 bits each) into one byte
-        for (int j = 0; j < 4 && (i + j) < pixel_count; j++) {
-            uint8_t pixel = src_image[i + j] & 0x03;  // Mask to 2 bits
-            packed_byte |= (pixel << (6 - j * 2));
-        }
-        
-        dst_buffer[i / 4] = packed_byte;
-    }
-}
-
-void ET011TJ1::createTestPattern(uint8_t* image_buffer, uint8_t pattern_type) {
-    for (int y = 0; y < ET011TJ1_HEIGHT; y++) {
-        for (int x = 0; x < ET011TJ1_WIDTH; x++) {
-            int pixel_index = y * ET011TJ1_WIDTH + x;
-            
-            switch (pattern_type) {
-                case 0: // Gradient pattern
-                    if (x < ET011TJ1_WIDTH / 4) {
-                        image_buffer[pixel_index] = ET011TJ1_BLACK;
-                    } else if (x < ET011TJ1_WIDTH / 2) {
-                        image_buffer[pixel_index] = ET011TJ1_GRAY1;
-                    } else if (x < 3 * ET011TJ1_WIDTH / 4) {
-                        image_buffer[pixel_index] = ET011TJ1_GRAY2;
-                    } else {
-                        image_buffer[pixel_index] = ET011TJ1_WHITE;
-                    }
-                    break;
-                    
-                case 1: // Checkerboard pattern
-                    {
-                        int check_x = x / 20;
-                        int check_y = y / 20;
-                        if ((check_x + check_y) % 2 == 0) {
-                            image_buffer[pixel_index] = ET011TJ1_BLACK;
-                        } else {
-                            image_buffer[pixel_index] = ET011TJ1_WHITE;
-                        }
-                    }
-                    break;
-                    
-                case 2: // Border test
-                    if (x < 10 || x >= ET011TJ1_WIDTH - 10 || y < 10 || y >= ET011TJ1_HEIGHT - 10) {
-                        image_buffer[pixel_index] = ET011TJ1_BLACK;
-                    } else {
-                        image_buffer[pixel_index] = ET011TJ1_WHITE;
-                    }
-                    break;
-                    
-                default: // Solid color
-                    image_buffer[pixel_index] = ET011TJ1_WHITE;
-                    break;
-            }
-        }
-    }
+bool ET011TJ1::diagnosticPixel(uint16_t x, uint16_t y) const {
+  const bool border = x < 4 || x >= WIDTH - 4 || y < 4 || y >= HEIGHT - 4;
+  const bool center_cross =
+      (x >= WIDTH / 2 - 2 && x < WIDTH / 2 + 2) ||
+      (y >= HEIGHT / 2 - 2 && y < HEIGHT / 2 + 2);
+  const bool diagonals = (x > y ? x - y : y - x) < 2 ||
+                         (x + y > WIDTH - 1 ? x + y - (WIDTH - 1)
+                                           : (WIDTH - 1) - (x + y)) < 2;
+  const bool corner_checks =
+      ((x < 64 && y < 64) || (x >= WIDTH - 64 && y >= HEIGHT - 64)) &&
+      (((x / 8) + (y / 8)) % 2 == 0);
+  return border || center_cross || diagonals || corner_checks;
 }

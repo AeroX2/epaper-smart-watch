@@ -1,0 +1,53 @@
+{
+  "build": {
+    "arduino": {
+      "variant_h": "variant_generic.h"
+    },
+    "core": "stm32",
+    "cpu": "cortex-m4",
+    "extra_flags": "-DSTM32WB -DSTM32WB5Mxx -DARDUINO_GENERIC_WB5MMGHX",
+    "f_cpu": "64000000L",
+    "hwids": [
+      [
+        "0x0483",
+        "0x5740"
+      ],
+      [
+        "0x0483",
+        "0xDF11"
+      ]
+    ],
+    "mcu": "stm32wb5mmg",
+    "product_line": "STM32WB5Mxx",
+    "variant": "STM32WBxx/WB5MMGH"
+  },
+  "connectivity": [
+    "bluetooth"
+  ],
+  "debug": {
+    "default_tools": [
+      "stlink"
+    ],
+    "jlink_device": "STM32WB55xx",
+    "openocd_target": "stm32wbx",
+    "svd_path": "STM32WB55_CM4.svd"
+  },
+  "frameworks": [
+    "arduino"
+  ],
+  "name": "E-paper Smart Watch (STM32WB5MMG)",
+  "upload": {
+    "maximum_ram_size": 196608,
+    "maximum_size": 827392,
+    "protocol": "dfu",
+    "protocols": [
+      "dfu",
+      "stlink",
+      "jlink",
+      "cmsis-dap",
+      "blackmagic"
+    ]
+  },
+  "url": "https://www.st.com/en/modules/stm32wb5mmg.html",
+  "vendor": "OpenEPaperLink"
+}
