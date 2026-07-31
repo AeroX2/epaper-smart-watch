@@ -28,6 +28,10 @@ fp-info-cache
 *.xml
 *.csv
 
+# Android source XML is required to build the companion app.
+!companion/app/src/main/AndroidManifest.xml
+!companion/app/src/main/res/**/*.xml
+
 # PDFs - datasheets, schematic/gerber exports, render outputs (kept locally, not tracked)
 *.pdf
 tmp/
