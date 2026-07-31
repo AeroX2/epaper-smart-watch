@@ -178,6 +178,43 @@ bool ET011TJ1::show(ET011TJ1Pattern pattern, Print& out) {
   return true;
 }
 
+bool ET011TJ1::showFrame(const uint8_t* framebuffer, size_t stride_bytes,
+                        Print& out) {
+  if (framebuffer == nullptr || stride_bytes < WIDTH / 8) {
+    out.println(F("[FAIL] Invalid ET011TJ1 framebuffer"));
+    return false;
+  }
+
+  prepare();
+  out.println(F("Display UI: high-voltage booster will be enabled."));
+
+  if (!initialized_ && !initialize(out)) {
+    safeShutdown(out);
+    return false;
+  }
+
+  out.println(F("DTMW -> DTM2: streaming 240x240 UI framebuffer..."));
+  writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
+  writeFramebuffer(CMD_DTM2, framebuffer, stride_bytes);
+
+  if (!powerOn(out)) {
+    safeShutdown(out);
+    return false;
+  }
+  if (!refresh(out)) {
+    safeShutdown(out);
+    return false;
+  }
+  if (!powerOff(out)) {
+    safeShutdown(out);
+    return false;
+  }
+
+  out.println(F("[PASS] ET011TJ1 UI refresh completed"));
+  out.println(F("ET011TJ1 is in standby; booster is off"));
+  return true;
+}
+
 int ET011TJ1::busyLevel() const {
   return digitalRead(busy_pin_);
 }
@@ -373,6 +410,36 @@ void ET011TJ1::writePattern(uint8_t command, ET011TJ1Pattern pattern) {
   for (uint16_t y = 0; y < HEIGHT; ++y) {
     for (uint16_t x = 0; x < WIDTH; x += 4) {
       spi_.transfer(packed2BppPatternByte(pattern, x, y), SPI_TRANSMITONLY);
+    }
+  }
+
+  digitalWrite(cs_pin_, HIGH);
+  spi_.endTransaction();
+}
+
+void ET011TJ1::writeFramebuffer(uint8_t command, const uint8_t* framebuffer,
+                                size_t stride_bytes) {
+  spi_.beginTransaction(spi_settings_);
+  digitalWrite(dc_pin_, LOW);
+  digitalWrite(cs_pin_, LOW);
+  spi_.transfer(command, SPI_TRANSMITONLY);
+  digitalWrite(cs_pin_, HIGH);
+
+  digitalWrite(dc_pin_, HIGH);
+  digitalWrite(cs_pin_, LOW);
+  for (uint16_t y = 0; y < HEIGHT; ++y) {
+    const uint8_t* row = framebuffer + static_cast<size_t>(y) * stride_bytes;
+    for (uint16_t x = 0; x < WIDTH; x += 4) {
+      uint8_t packed_2bpp = 0;
+      for (uint8_t pixel = 0; pixel < 4; ++pixel) {
+        const uint16_t source_x = x + pixel;
+        const bool black =
+            (row[source_x / 8] & (0x80U >> (source_x & 7))) != 0;
+        if (black) {
+          packed_2bpp |= static_cast<uint8_t>(0x03U << (6 - 2 * pixel));
+        }
+      }
+      spi_.transfer(packed_2bpp, SPI_TRANSMITONLY);
     }
   }
 

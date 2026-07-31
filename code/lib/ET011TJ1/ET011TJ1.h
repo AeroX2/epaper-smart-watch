@@ -31,6 +31,11 @@ class ET011TJ1 {
   // standby, preserving its registers and frame history.
   bool show(ET011TJ1Pattern pattern, Print& out);
 
+  // Streams a 240x240 one-bit framebuffer, where a set bit is black. The
+  // framebuffer is converted to the controller's 2-bpp DTM format while it is
+  // transmitted, so no second full-frame allocation is needed.
+  bool showFrame(const uint8_t* framebuffer, size_t stride_bytes, Print& out);
+
   int busyLevel() const;
 
  private:
@@ -60,6 +65,8 @@ class ET011TJ1 {
   void writeCommand(uint8_t command);
   void writeCommandData(uint8_t command, const uint8_t* data, size_t length);
   void writePattern(uint8_t command, ET011TJ1Pattern pattern);
+  void writeFramebuffer(uint8_t command, const uint8_t* framebuffer,
+                        size_t stride_bytes);
 
   bool waitReady(uint32_t timeout_ms);
   bool waitBusyCycle(uint32_t assert_timeout_ms, uint32_t ready_timeout_ms);
