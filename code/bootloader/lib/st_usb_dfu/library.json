@@ -1,0 +1,9 @@
+{
+  "name": "ST USB Device DFU",
+  "version": "2.11.3-watch",
+  "build": {
+    "srcDir": "src",
+    "includeDir": "src",
+    "flags": ["-I $PROJECT_INCLUDE_DIR"]
+  }
+}

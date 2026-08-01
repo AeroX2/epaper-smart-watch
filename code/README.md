@@ -5,10 +5,8 @@ non-destructive peripheral checks, explicit ET011TJ1 display bring-up tests, and
 on-device watch interface for:
 
 - BMA400 accelerometer over I2C
-- BME280/BMP280 environmental sensor over I2C
+- BME280 environmental sensor over I2C
 - MAX17048 fuel gauge over I2C
-- XT25F32 32-Mbit external flash over hardware Quad-SPI
-- three capacitive-touch electrodes through the STM32 TSC
 - four active-low buttons and the accelerometer/fuel-gauge interrupt lines
 - vibration motor and buzzer, on explicit commands only
 - ET011TJ1 reset/BUSY logic and 240x240 full-refresh patterns
@@ -30,42 +28,118 @@ current limit.
 | USB D- / D+ | PA11 / PA12 |
 | QSPI CLK / CS | PA3 / PD3 |
 | QSPI IO0–IO3 | PD4, PD5, PD6, PD7 |
-| Touch sample capacitor | PB12 |
-| Touch electrodes 1–3 | PB13, PB14, PB15 |
 | Vibration motor | PA15 |
 | Buzzer | PE0 |
 | Display SPI SCK / MOSI / CS | PA5 / PA7 / PA4 |
 | Display DC / RST_N / BUSY_N | PA8 / PA6 / PA2 |
 | Display frontlight control | PC3 |
 
-## Build and flash
+The external 32-Mbit XT25F32 QSPI flash is not used by the current firmware.
+Firmware updates go directly from USB DFU into the STM32 application slot, so
+the external flash and QSPI peripheral remain off.
 
-The default environment uploads through the STM32 ROM USB DFU bootloader:
+## Build, bootstrap, and update over USB
+
+The resident bootloader occupies `0x08000000`-`0x0800FFFF`; the normal watch
+application is linked at `0x08010000`. The loader is based on ST's official
+STM32CubeWB `DFU_Standalone` example, enumerates as `0483:DF11`, and exposes only
+the application slot. Its flash callbacks also reject access outside
+`0x08010000`-`0x080C9FFF`, protecting both the loader and the STM32WB wireless
+stack reservation.
+
+Build the loader, relocated application, and combined one-time factory image:
 
 ```text
-pio run
-pio run --target upload
-pio device monitor
+cd bootloader
+pio run --environment watch_dfu_bootloader
+cd ..
+pio run --environment watch
+python tools/make_factory_image.py bootloader/.pio/build/watch_dfu_bootloader/firmware.bin .pio/build/watch/firmware.bin .pio/build/factory/epaper-watch-factory.bin
 ```
 
-Windows should show `STM32 Bootloader` before the upload. If the application is
-already programmed, BOOT0 must be asserted while resetting to re-enter the ROM
-bootloader.
+Program `epaper-watch-factory.bin` once at `0x08000000`, using BOOT0 plus
+STM32CubeProgrammer or an ST-Link. This one physical bootstrap is unavoidable:
+the resident loader must exist before the running application can request it.
+The default `watch_direct` environment remains a known-safe address-zero
+recovery build. BOOT0 and SWD continue to work as recovery paths.
 
-For SWD upload or debugging with a connected ST-Link probe, use:
+After the factory image is installed, close any serial monitor, build the
+relocated application, and update directly over USB:
 
 ```text
-pio run --environment watch_stlink --target upload
+pio run --environment watch
+python tools/usb_dfu_update.py COM26 .pio/build/watch/firmware.bin
 ```
+
+The updater validates that the image is linked for `0x08010000`, sends `f` to
+the watch over USB CDC, waits for the resident ST DFU device, then uses
+STM32CubeProgrammer to erase, program, verify, and start the application. No
+external-flash staging or custom host/device transfer protocol is involved.
+Holding PCB button 1 (bottom-left) during reset also enters resident DFU if an
+application update is interrupted or the application vector table is invalid.
+
+This prototype does not authenticate firmware. Anyone with physical USB access
+can install a correctly linked application; signed-image verification is a
+separate production-hardening task.
+
+For one-time SWD installation or debugging with a connected ST-Link probe, use
+`watch_dfu_bootloader_stlink`, `watch_stlink`, or `watch_direct_stlink` as
+appropriate. Never program only `watch` at address zero: it is deliberately
+linked for `0x08010000`.
 
 The watch exposes its logs and command prompt as a native USB serial device. The baud setting is
 ignored by USB CDC, though the monitor is configured for 115200 baud for consistency.
 
+## Firmware structure
+
+`main.cpp` is only the Arduino entry point. `WatchApplication` owns and coordinates the hardware
+and feature modules, while step/sleep sampling and alarm/timer output live in `WatchActivity` and
+`WatchAlarm`. `WatchPower` owns the MCU sleep and wake policy. Display refresh policy, UI drawing,
+buttons, BLE, RTC, diagnostics, sensors, and the ET011 controller each remain in their own driver
+or controller files.
+
+## Power and wake model
+
+Normal operation is interrupt-driven. After servicing any queued work, CPU1 enters STM32 Sleep
+mode through STM32LowPower; SysTick is suspended while asleep and the hardware RTC restores the
+elapsed `millis()` time after wake. The application no longer runs a continuously polling loop.
+
+The current wake sources are:
+
+| Source | Wake reason |
+| --- | --- |
+| Four button EXTI lines | Start/continue debounce, hold, or navigation handling |
+| BMA400 INT1 | Hardware step event; data-ready samples only during active sleep tracking |
+| MAX17048 ALERT | Refresh the fuel-gauge state |
+| STM32 RTC | Minute/alarm/timer progress and a one-second safety deadline |
+| USB interrupt | Serial console input |
+| STM32WB IPCC/radio interrupt | Pending BLE controller traffic |
+
+Buttons are sampled at 10 ms only while a debounce, press, hold, or chord is in progress. Alarm
+outputs also use the 10 ms deadline while active. At all other times the core sleeps until an
+external interrupt or the one-second RTC deadline. `BLE.poll()` only drains controller events after
+a wake; it is no longer called by a free-running busy loop.
+
+The BMA400's internal step engine replaces the old 20 Hz software step detector. Its data-ready
+interrupt is normally disabled and is enabled only for a Sleep as Android tracking session, where
+movement samples are required. The BME280 is left in its library's forced-measurement mode and is
+read only when live UI sensor data is rendered. The fuel gauge is read for UI data or in response
+to its ALERT line. The display booster and frontlight remain off between explicit refreshes.
+
+Sleep mode is intentional at this stage: it preserves USB CDC and the STM32WB radio/IPCC path while
+still stopping CPU instruction execution and SysTick between events. STOP2 can reduce current
+further, but should be introduced only with explicit clock, USB, and BLE resume testing on hardware.
+
 ## Console commands
 
-`a` runs every safe automatic test, `s` prints sensor values, `i` scans I2C, `f` reads the flash
-JEDEC ID, `t` prints touch counts, and `g` prints GPIO states. Use `v` for a short vibration pulse
+`a` runs every safe automatic test, `s` prints sensor values, `i` scans I2C, and `g` prints GPIO
+states. Use `v` for a short vibration pulse
 and `b` for a buzzer chirp. Press `h` to print the command list on the device.
+
+Press `f` to shut down the display booster, LED ring, vibration, buzzer, and BLE,
+then reboot into resident STM32 USB DFU. Ordinarily `tools/usb_dfu_update.py`
+sends this command and invokes STM32CubeProgrammer automatically. The direct
+recovery build deliberately refuses `f` because it has no resident loader.
 
 Pattern tests never run automatically. Start with `e`, which only resets the controller and checks
 that active-low `BUSY_N` returns high; it leaves the high-voltage booster off. Then press `x`
@@ -73,10 +147,19 @@ immediately before `d` for a bordered diagnostic pattern, `w` for white, or `k` 
 `l` to toggle the AP3032-driven display LED ring; it remains off at boot. The driver uses
 four-wire SPI mode 0 at 4 MHz.
 
+All pattern and watch-UI updates now use the driver ported from
+`Ardiuno_ET011TJ2_hspi_01.zip`. The archive is internally named ET011TT6. The port uses the supplied
+registers, 672-byte LUT, and DRF mode `0x08`, while retaining the board's known-good `0x25` VCOM
+value and correcting the source sketch's one-byte DTM overflow. Display transmission converts the
+firmware framebuffer to the supplied sketch's polarity (`0xFF` white and `0x00` black). Pattern
+commands still require `x` before every high-voltage update.
+
 ## Watch UI prototype
 
-The watch UI remains dormant at boot so a bad or disconnected display cannot interfere with USB
-DFU recovery. Press `u` in the console or press any watch button to render it for the first time.
+At normal boot the watch clears the panel to white and renders the clock face. Press `u` in the
+console to redraw the current screen using the ordinary UI refresh policy.
+Press uppercase `U` to force a cleaning full refresh of the current UI (`white -> UI`) immediately;
+the same cleaning sequence also runs automatically after ten ordinary UI updates.
 Once active on the clock screen, it refreshes at minute boundaries. Every refresh returns the
 ET011TJ1 to booster-off standby.
 
@@ -110,12 +193,14 @@ Use `j` to inspect it or enter `@YYYY-MM-DDTHH:MM:SS` followed by Enter to set i
 
 The timer is adjusted in one-minute steps on its screen. Scheduled weekday/weekend alarms,
 five-minute snooze, quiet mode, vibration, and alarm overrides for the buttons are active.
-The step counter samples the BMA400 and uses a refractory peak detector; it is intentionally an
-initial algorithm to calibrate against real walking tests, not a finished activity metric.
+The step counter uses the BMA400's hardware step engine and interrupt rather than periodic raw
+acceleration sampling. Resetting steps records a new sensor-counter baseline without resetting the
+accelerometer itself.
 
 ## Bluetooth and companion app
 
-BLE starts only when explicitly requested, which preserves the known-safe boot/DFU recovery path.
+BLE starts only when explicitly requested, preserving the lowest-power default and the USB/SWD
+recovery path.
 Press `r` in the serial console or select Bluetooth in Settings. The watch advertises as
 `E-Paper Watch`. STM32WB requires a compatible wireless coprocessor image; if startup fails,
 install the matching `stm32wbxx_BLE_HCILayer_fw.bin` on CPU2/FUS.
@@ -151,11 +236,9 @@ the GDR/RESE booster circuit and generated rails. The current schematic uses a 2
 ET011TJ1 reference circuit in `spooky.pdf` specifies 10 uH, so L1 is the first component value to
 verify if the controller logic works but the booster does not.
 
-The external-flash test only reads its JEDEC identity. It never programs or erases the chip.
-
 ## First hardware test sequence
 
-1. Flash `code/.pio/build/watch/firmware.bin` through the normal DFU flow.
+1. Install the combined factory image once, then use `tools/usb_dfu_update.py` for later application builds.
 2. Confirm the automatic peripheral test completes and `j` reports a plausible retained time.
 3. Press `u` once. Use the top buttons (PCB 2/3) to browse the eight cards; bottom-left (PCB 1)
    returns to the clock.
@@ -169,5 +252,5 @@ The external-flash test only reads its JEDEC identity. It never programs or eras
    controls in that order.
 9. Start the companion's test tracking and watch serial for a movement sample every ten seconds.
 
-Do not judge battery life from this build. It still polls the accelerometer at 20 Hz and has not
-yet moved the MCU/radio into the final low-power state machine.
+Power behavior should still be measured on the assembled watch, particularly with BLE connected
+and during Sleep as Android tracking. Those modes naturally wake more often than the idle clock.
