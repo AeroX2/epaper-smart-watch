@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include "watch_assets.h"
+
 enum class WatchScreen : uint8_t {
   Clock,
   Notifications,
@@ -92,17 +94,24 @@ class MonochromeCanvas {
                 bool black = true);
   void circle(int16_t center_x, int16_t center_y, int16_t radius,
               bool black = true);
-  void triangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2,
-                int16_t y2, bool black = true);
 
   int16_t textWidth(const char* value, uint8_t scale = 1) const;
   void text(const char* value, int16_t x, int16_t y, uint8_t scale = 1,
             bool black = true);
   void centeredText(const char* value, int16_t center_x, int16_t y,
                     uint8_t scale = 1, bool black = true);
+  int16_t fontTextWidth(const BitmapFont& font, const char* value) const;
+  void fontText(const BitmapFont& font, const char* value, int16_t x,
+                int16_t y, bool black = true);
+  void centeredFontText(const BitmapFont& font, const char* value,
+                        int16_t center_x, int16_t y, bool black = true);
+  void centeredFittedFontText(const BitmapFont& font, const char* value,
+                              int16_t center_x, int16_t y,
+                              int16_t max_width, bool black = true);
+  void icon(WatchIcon value, int16_t center_x, int16_t center_y,
+            uint8_t size = 16, bool black = true);
 
   const uint8_t* data() const;
-  uint8_t* data();
 
  private:
   static uint8_t glyphColumn(char character, uint8_t column);
@@ -134,6 +143,7 @@ class WatchUi {
 
  private:
   void drawClock(const WatchUiModel& model);
+  void drawLauncher(const WatchUiModel& model);
   void drawNotifications(const WatchUiModel& model);
   void drawTimer(const WatchUiModel& model);
   void drawAlarms(const WatchUiModel& model);
@@ -143,11 +153,9 @@ class WatchUi {
   void drawActivity(const WatchUiModel& model);
   void drawSettings(const WatchUiModel& model);
   void drawCardFrame(const char* title, const char* footer);
-  void drawPageDots();
   void drawProgress(int16_t x, int16_t y, int16_t width, uint8_t percent,
                     int16_t height = 8);
   void drawToggle(int16_t x, int16_t y, bool enabled);
-  void drawBattery(int16_t x, int16_t y, uint8_t percent);
 
   MonochromeCanvas canvas_;
   WatchScreen screen_ = WatchScreen::Clock;

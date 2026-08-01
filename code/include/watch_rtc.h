@@ -13,10 +13,10 @@ class WatchRtc {
                    uint8_t minute, uint8_t second);
   bool setEpoch(time_t epoch);
   time_t epoch();
+  uint64_t milliseconds();
   void restoreAfterBackupReset(time_t saved_epoch, uint32_t elapsed_ms,
                                Print& out);
   void print(Print& out);
-  bool ready() const;
   bool usingLse() const;
 
  private:

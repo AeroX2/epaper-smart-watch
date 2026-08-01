@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+
 namespace {
 
 constexpr char WATCH_SERVICE_UUID[] = "7BD10000-6B10-4A21-9D6A-3A56B35C1000";

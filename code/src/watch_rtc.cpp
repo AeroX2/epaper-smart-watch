@@ -98,6 +98,15 @@ time_t WatchRtc::epoch() {
   return ready_ ? rtc_.getEpoch() : 0;
 }
 
+uint64_t WatchRtc::milliseconds() {
+  if (!ready_) {
+    return 0;
+  }
+  uint32_t subseconds = 0;
+  const time_t seconds = rtc_.getEpoch(&subseconds);
+  return static_cast<uint64_t>(seconds) * 1000ULL + subseconds;
+}
+
 void WatchRtc::restoreAfterBackupReset(time_t saved_epoch, uint32_t elapsed_ms,
                                        Print& out) {
   rtc_.setClockSource(lse_ready_ ? STM32RTC::LSE_CLOCK
@@ -119,10 +128,6 @@ void WatchRtc::print(Print& out) {
            rtc_.getHours(), rtc_.getMinutes(), rtc_.getSeconds());
   out.print(F("RTC: "));
   out.println(value);
-}
-
-bool WatchRtc::ready() const {
-  return ready_;
 }
 
 bool WatchRtc::usingLse() const {

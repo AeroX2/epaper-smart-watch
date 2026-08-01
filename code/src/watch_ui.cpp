@@ -25,6 +25,42 @@ uint8_t clampPercent(int32_t value) {
   return static_cast<uint8_t>(value);
 }
 
+const BitmapFont& fontForScale(uint8_t scale) {
+  if (scale >= 8) {
+    return WatchAssets::Clock64;
+  }
+  if (scale >= 5) {
+    return WatchAssets::Bold36;
+  }
+  if (scale >= 3) {
+    return WatchAssets::Bold22;
+  }
+  return WatchAssets::Ui16;
+}
+
+constexpr const char* SCREEN_LABELS[] = {
+    "CLOCK", "MESSAGES", "TIMER", "ALARMS", "MUSIC",
+    "WEATHER", "SENSORS", "ACTIVITY", "SETTINGS",
+};
+
+constexpr WatchIcon SCREEN_ICONS[] = {
+    WatchIcon::Notifications, WatchIcon::Notifications, WatchIcon::Timer,
+    WatchIcon::Alarms,        WatchIcon::Music,         WatchIcon::Weather,
+    WatchIcon::Sensors,       WatchIcon::Activity,      WatchIcon::Settings,
+};
+
+WatchScreen launcherScreen(int16_t index) {
+  constexpr int16_t first = static_cast<int16_t>(WatchScreen::Notifications);
+  constexpr int16_t count = static_cast<int16_t>(WatchScreen::Count) - first;
+  while (index < first) {
+    index += count;
+  }
+  while (index >= first + count) {
+    index -= count;
+  }
+  return static_cast<WatchScreen>(index);
+}
+
 }  // namespace
 
 void MonochromeCanvas::clear(bool black) {
@@ -123,35 +159,123 @@ void MonochromeCanvas::circle(int16_t center_x, int16_t center_y,
   }
 }
 
-void MonochromeCanvas::triangle(int16_t x0, int16_t y0, int16_t x1,
-                                int16_t y1, int16_t x2, int16_t y2,
-                                bool black) {
-  line(x0, y0, x1, y1, black);
-  line(x1, y1, x2, y2, black);
-  line(x2, y2, x0, y0, black);
-}
-
 int16_t MonochromeCanvas::textWidth(const char* value, uint8_t scale) const {
-  if (value == nullptr || *value == '\0') {
-    return 0;
-  }
-  return static_cast<int16_t>((strlen(value) * 6 - 1) * scale);
+  return fontTextWidth(fontForScale(scale), value);
 }
 
 void MonochromeCanvas::text(const char* value, int16_t x, int16_t y,
                             uint8_t scale, bool black) {
-  if (value == nullptr || scale == 0) {
+  if (scale == 0) {
     return;
   }
-  while (*value != '\0') {
-    character(*value++, x, y, scale, black);
-    x += static_cast<int16_t>(6 * scale);
-  }
+  fontText(fontForScale(scale), value, x, y, black);
 }
 
 void MonochromeCanvas::centeredText(const char* value, int16_t center_x,
                                     int16_t y, uint8_t scale, bool black) {
-  text(value, center_x - textWidth(value, scale) / 2, y, scale, black);
+  centeredFontText(fontForScale(scale), value, center_x, y, black);
+}
+
+int16_t MonochromeCanvas::fontTextWidth(const BitmapFont& font,
+                                        const char* value) const {
+  if (value == nullptr) {
+    return 0;
+  }
+  int16_t width = 0;
+  while (*value != '\0') {
+    uint8_t character = static_cast<uint8_t>(*value++);
+    if (character < font.first_character || character > font.last_character) {
+      character = '?';
+    }
+    width += font.glyphs[character - font.first_character].x_advance;
+  }
+  return width;
+}
+
+void MonochromeCanvas::fontText(const BitmapFont& font, const char* value,
+                                int16_t x, int16_t y, bool black) {
+  if (value == nullptr) {
+    return;
+  }
+  const int16_t baseline = y + font.ascent;
+  while (*value != '\0') {
+    uint8_t character = static_cast<uint8_t>(*value++);
+    if (character < font.first_character || character > font.last_character) {
+      character = '?';
+    }
+    const BitmapGlyph& glyph =
+        font.glyphs[character - font.first_character];
+    const uint8_t row_bytes = static_cast<uint8_t>((glyph.width + 7) / 8);
+    for (uint8_t row = 0; row < glyph.height; ++row) {
+      for (uint8_t column = 0; column < glyph.width; ++column) {
+        const size_t byte_index = glyph.bitmap_offset +
+                                  static_cast<size_t>(row) * row_bytes +
+                                  column / 8;
+        if ((font.bitmap[byte_index] & (0x80U >> (column & 7))) != 0) {
+          pixel(x + glyph.x_offset + column,
+                baseline + glyph.y_offset + row, black);
+        }
+      }
+    }
+    x += glyph.x_advance;
+  }
+}
+
+void MonochromeCanvas::centeredFontText(const BitmapFont& font,
+                                        const char* value, int16_t center_x,
+                                        int16_t y, bool black) {
+  fontText(font, value, center_x - fontTextWidth(font, value) / 2, y, black);
+}
+
+void MonochromeCanvas::centeredFittedFontText(const BitmapFont& font,
+                                              const char* value,
+                                              int16_t center_x, int16_t y,
+                                              int16_t max_width, bool black) {
+  if (value == nullptr || max_width <= 0) {
+    return;
+  }
+  if (fontTextWidth(font, value) <= max_width) {
+    centeredFontText(font, value, center_x, y, black);
+    return;
+  }
+
+  char fitted[48]{};
+  size_t length = 0;
+  while (value[length] != '\0' && length < sizeof(fitted) - 4) {
+    fitted[length] = value[length];
+    fitted[length + 1] = '\0';
+    char candidate[48]{};
+    snprintf(candidate, sizeof(candidate), "%s...", fitted);
+    if (fontTextWidth(font, candidate) > max_width) {
+      fitted[length] = '\0';
+      break;
+    }
+    ++length;
+  }
+  while (length > 0 && fitted[length - 1] == ' ') {
+    fitted[--length] = '\0';
+  }
+  strncat(fitted, "...", sizeof(fitted) - strlen(fitted) - 1);
+  centeredFontText(font, fitted, center_x, y, black);
+}
+
+void MonochromeCanvas::icon(WatchIcon value, int16_t center_x,
+                            int16_t center_y, uint8_t size, bool black) {
+  const BitmapIcon& asset = WatchAssets::icon(value, size);
+  const uint8_t* bitmap = WatchAssets::iconBitmap();
+  const uint8_t row_bytes = static_cast<uint8_t>((asset.width + 7) / 8);
+  const int16_t left = center_x - asset.width / 2;
+  const int16_t top = center_y - asset.height / 2;
+  for (uint8_t row = 0; row < asset.height; ++row) {
+    for (uint8_t column = 0; column < asset.width; ++column) {
+      const size_t byte_index = asset.bitmap_offset +
+                                static_cast<size_t>(row) * row_bytes +
+                                column / 8;
+      if ((bitmap[byte_index] & (0x80U >> (column & 7))) != 0) {
+        pixel(left + column, top + row, black);
+      }
+    }
+  }
 }
 
 void MonochromeCanvas::character(char value, int16_t x, int16_t y,
@@ -170,10 +294,6 @@ void MonochromeCanvas::character(char value, int16_t x, int16_t y,
 }
 
 const uint8_t* MonochromeCanvas::data() const {
-  return pixels_;
-}
-
-uint8_t* MonochromeCanvas::data() {
   return pixels_;
 }
 
@@ -370,6 +490,10 @@ WatchUiAction WatchUi::select(WatchUiModel& model) {
 
 void WatchUi::render(const WatchUiModel& model) {
   canvas_.clear();
+  if (screen_ != WatchScreen::Clock && !inside_) {
+    drawLauncher(model);
+    return;
+  }
   switch (screen_) {
     case WatchScreen::Clock:
       drawClock(model);
@@ -430,66 +554,106 @@ void WatchUi::drawClock(const WatchUiModel& model) {
   const char* month = MONTHS[(model.month >= 1 && model.month <= 12)
                                  ? model.month - 1
                                  : 0];
-  // Claude reference face: asymmetric stacked time with a narrow data rail.
-  snprintf(buffer, sizeof(buffer), "%02u", model.hour);
-  canvas_.text(buffer, 50, 46, 9);
-  snprintf(buffer, sizeof(buffer), "%02u", model.minute);
-  canvas_.text(buffer, 54, 127, 9);
-  canvas_.fillRect(160, 62, 2, 118);
+  snprintf(buffer, sizeof(buffer), "%s  %u %s", weekday, model.day, month);
+  canvas_.centeredFontText(WatchAssets::Ui16, buffer, 120, 24);
 
-  canvas_.text(weekday, 174, 62, 1);
-  snprintf(buffer, sizeof(buffer), "%u %s", model.day, month);
-  canvas_.text(buffer, 174, 75, 1);
+  snprintf(buffer, sizeof(buffer), "%02u:%02u", model.hour, model.minute);
+  canvas_.centeredFontText(WatchAssets::Clock64, buffer, 120, 45);
+  canvas_.line(35, 124, 205, 124);
 
-  if (model.battery_valid) {
-    drawBattery(174, 101, model.battery_percent);
-    snprintf(buffer, sizeof(buffer), "%u%%", model.battery_percent);
+  canvas_.icon(WatchIcon::Battery, 52, 149, 28);
+  canvas_.icon(WatchIcon::Weather, 120, 149, 28);
+  canvas_.icon(WatchIcon::Alarms, 188, 149, 28);
+
+  snprintf(buffer, sizeof(buffer), model.battery_valid ? "%u%%" : "--%%",
+           model.battery_percent);
+  canvas_.centeredFontText(WatchAssets::Ui16, buffer, 52, 169);
+
+  snprintf(buffer, sizeof(buffer), model.environment_valid ? "%dC" : "--C",
+           model.temperature_tenths_c / 10);
+  canvas_.centeredFontText(WatchAssets::Bold22, buffer, 120, 165);
+  snprintf(buffer, sizeof(buffer), model.environment_valid ? "%u%% RH" : "--%% RH",
+           model.humidity_percent);
+  canvas_.centeredFontText(WatchAssets::Ui16, buffer, 120, 190);
+
+  if (model.weekday_alarm_on || model.weekend_alarm_on) {
+    snprintf(buffer, sizeof(buffer), "%02u:%02u", model.alarm_hour,
+             model.alarm_minute);
   } else {
-    drawBattery(174, 101, 0);
-    snprintf(buffer, sizeof(buffer), "--%%");
+    snprintf(buffer, sizeof(buffer), "OFF");
   }
-  canvas_.text(buffer, 174, 116, 1);
+  canvas_.centeredFontText(WatchAssets::Ui16, buffer, 188, 169);
+}
 
-  if (model.environment_valid) {
-    snprintf(buffer, sizeof(buffer), "%dC", model.temperature_tenths_c / 10);
-    canvas_.text(buffer, 174, 137, 2);
-    snprintf(buffer, sizeof(buffer), "%u%% RH", model.humidity_percent);
-  } else {
-    canvas_.text("--C", 174, 137, 2);
-    snprintf(buffer, sizeof(buffer), "--%% RH");
+void WatchUi::drawLauncher(const WatchUiModel& model) {
+  const int16_t current = static_cast<int16_t>(screen_);
+
+  // The settled e-paper frame implies a rolling cylinder: distant entries are
+  // small and deliberately clipped by the round panel, while the selected app
+  // is large and centered. There is no animation on the panel.
+  const WatchScreen two_before = launcherScreen(current - 2);
+  const WatchScreen before = launcherScreen(current - 1);
+  const WatchScreen after = launcherScreen(current + 1);
+  const WatchScreen two_after = launcherScreen(current + 2);
+  canvas_.centeredFontText(
+      WatchAssets::Ui16, SCREEN_LABELS[static_cast<uint8_t>(two_before)], 120,
+      -5);
+  canvas_.centeredFontText(
+      WatchAssets::Ui16, SCREEN_LABELS[static_cast<uint8_t>(before)], 120, 30);
+  canvas_.centeredFontText(
+      WatchAssets::Ui16, SCREEN_LABELS[static_cast<uint8_t>(after)], 120, 190);
+  canvas_.centeredFontText(
+      WatchAssets::Ui16, SCREEN_LABELS[static_cast<uint8_t>(two_after)], 120,
+      226);
+
+  canvas_.icon(SCREEN_ICONS[static_cast<uint8_t>(screen_)], 120, 88, 28);
+  const char* selected = SCREEN_LABELS[static_cast<uint8_t>(screen_)];
+  canvas_.centeredFontText(WatchAssets::Bold36, selected, 120, 111);
+
+  char status[32] = {};
+  switch (screen_) {
+    case WatchScreen::Notifications:
+      snprintf(status, sizeof(status), "%s",
+               model.notification_present ? "1 NEW" : "ALL CLEAR");
+      break;
+    case WatchScreen::Timer:
+      snprintf(status, sizeof(status), "%lu MIN%s",
+               static_cast<unsigned long>(model.timer_remaining_seconds / 60),
+               model.timer_running ? " RUNNING" : "");
+      break;
+    case WatchScreen::Alarms:
+      snprintf(status, sizeof(status), "%02u:%02u  %s", model.alarm_hour,
+               model.alarm_minute, model.weekday_alarm_on ? "ON" : "OFF");
+      break;
+    case WatchScreen::Music:
+      snprintf(status, sizeof(status), "%s",
+               model.music_playing ? "PLAYING" : "PAUSED");
+      break;
+    case WatchScreen::Weather:
+      snprintf(status, sizeof(status), "%s",
+               model.phone_weather_valid ? model.weather_condition
+                                         : "PHONE DATA");
+      break;
+    case WatchScreen::Sensors:
+      snprintf(status, sizeof(status), "LIVE READINGS");
+      break;
+    case WatchScreen::Activity:
+      snprintf(status, sizeof(status), "%lu STEPS",
+               static_cast<unsigned long>(model.steps));
+      break;
+    case WatchScreen::Settings:
+      snprintf(status, sizeof(status), "WATCH OPTIONS");
+      break;
+    default:
+      break;
   }
-  canvas_.text(buffer, 174, 156, 1);
-  canvas_.line(173, 168, 218, 168);
-
-  canvas_.text("ALARM", 174, 175, 1);
-  snprintf(buffer, sizeof(buffer), "%02u:%02u", model.alarm_hour,
-           model.alarm_minute);
-  canvas_.text(buffer, 174, 186, 1);
+  canvas_.centeredFittedFontText(WatchAssets::Ui16, status, 120, 157, 180);
 }
 
 void WatchUi::drawCardFrame(const char* title, const char* footer) {
-  canvas_.centeredText(title, 120, 16, 1);
+  canvas_.centeredFittedFontText(WatchAssets::Ui16, title, 120, 18, 140);
   if (inside_) {
-    canvas_.text("IN", 40, 16, 1);
-    canvas_.centeredText(footer, 120, 218, 1);
-  } else {
-    canvas_.triangle(10, 118, 17, 113, 17, 123);
-    canvas_.triangle(230, 118, 223, 113, 223, 123);
-    drawPageDots();
-    canvas_.centeredText("SELECT OPEN", 120, 218, 1);
-  }
-}
-
-void WatchUi::drawPageDots() {
-  constexpr uint8_t count = static_cast<uint8_t>(WatchScreen::Count) - 1;
-  constexpr int16_t start = 85;
-  for (uint8_t index = 0; index < count; ++index) {
-    const int16_t x = start + index * 10;
-    if (index + 1 == static_cast<uint8_t>(screen_)) {
-      canvas_.fillRect(x, 202, 5, 5);
-    } else {
-      canvas_.rect(x, 202, 5, 5);
-    }
+    canvas_.centeredFittedFontText(WatchAssets::Ui16, footer, 120, 204, 150);
   }
 }
 
@@ -506,56 +670,53 @@ void WatchUi::drawToggle(int16_t x, int16_t y, bool enabled) {
   canvas_.fillRect(enabled ? x + 17 : x + 3, y + 3, 8, 7);
 }
 
-void WatchUi::drawBattery(int16_t x, int16_t y, uint8_t percent) {
-  canvas_.rect(x, y, 29, 12);
-  canvas_.fillRect(x + 29, y + 4, 3, 4);
-  canvas_.fillRect(x + 2, y + 2,
-                   static_cast<int16_t>(23 * clampPercent(percent) / 100), 8);
-}
-
 void WatchUi::drawNotifications(const WatchUiModel& model) {
-  drawCardFrame("MESSAGE 2 MIN", "SELECT DISMISS");
+  drawCardFrame("MESSAGE 2 MIN", "DISMISS");
   if (!model.notification_present) {
-    canvas_.centeredText("NO NOTIFICATIONS", 120, 93, 2);
+    canvas_.centeredFontText(WatchAssets::Bold22, "NO MESSAGES", 120, 91);
     return;
   }
-  canvas_.text(model.notification_sender, 42, 53, 2);
-  canvas_.text(model.notification_line_1, 42, 79, 1);
-  canvas_.text(model.notification_line_2, 42, 101, 1);
-  canvas_.line(42, 141, 198, 141);
-  canvas_.text("SIGNAL", 42, 151, 1);
-  canvas_.text("REPLY ON PHONE", 42, 165, 1);
+  canvas_.centeredFittedFontText(WatchAssets::Bold22,
+                                model.notification_sender, 120, 50, 170);
+  canvas_.centeredFittedFontText(WatchAssets::Ui16,
+                                model.notification_line_1, 120, 82, 188);
+  canvas_.centeredFittedFontText(WatchAssets::Ui16,
+                                model.notification_line_2, 120, 106, 188);
+  canvas_.line(43, 136, 197, 136);
+  canvas_.centeredFontText(WatchAssets::Ui16, "PHONE NOTIFICATION", 120, 151);
 }
 
 void WatchUi::drawTimer(const WatchUiModel& model) {
-  drawCardFrame("TIMER", "PREV/NEXT  SELECT GO");
+  drawCardFrame("TIMER", "START / STOP");
   char buffer[12];
   const uint32_t minutes = model.timer_remaining_seconds / 60;
   const uint32_t seconds = model.timer_remaining_seconds % 60;
   snprintf(buffer, sizeof(buffer), "%02lu:%02lu",
            static_cast<unsigned long>(minutes),
            static_cast<unsigned long>(seconds));
-  canvas_.centeredText(buffer, 120, 66, 5);
-  canvas_.centeredText(model.timer_running ? "RUNNING" : "READY", 120, 112, 1);
-  canvas_.fillRect(67, 133, 106, 2);
-  canvas_.centeredText("VIBRATION AT FINISH", 120, 151, 1);
+  canvas_.centeredFontText(WatchAssets::Clock64, buffer, 120, 51);
+  canvas_.centeredFontText(WatchAssets::Ui16,
+                           model.timer_running ? "RUNNING" : "READY", 120,
+                           127);
+  canvas_.fillRect(57, 151, 126, 2);
+  canvas_.centeredFontText(WatchAssets::Ui16, "VIBRATE ON FINISH", 120, 165);
 }
 
 void WatchUi::drawAlarms(const WatchUiModel& model) {
-  drawCardFrame("ALARMS", "SELECT TOGGLE");
+  drawCardFrame("ALARMS", "TOGGLE");
   char alarm[8];
   snprintf(alarm, sizeof(alarm), "%02u:%02u", model.alarm_hour,
            model.alarm_minute);
-  canvas_.text(alarm, 45, 55, 3);
-  canvas_.text("MO TU WE TH FR", 46, 80, 1);
-  drawToggle(163, 60, model.weekday_alarm_on);
+  canvas_.fontText(WatchAssets::Bold22, alarm, 47, 53);
+  canvas_.fontText(WatchAssets::Ui16, "WEEKDAYS", 47, 80);
+  drawToggle(163, 61, model.weekday_alarm_on);
   if (inside_ && selected_alarm_ == 0) {
     canvas_.rect(40, 50, 160, 45);
   }
   canvas_.line(42, 101, 198, 101);
-  canvas_.text("09:00", 45, 114, 3);
-  canvas_.text("SA SU", 46, 139, 1);
-  drawToggle(163, 119, model.weekend_alarm_on);
+  canvas_.fontText(WatchAssets::Bold22, "09:00", 47, 114);
+  canvas_.fontText(WatchAssets::Ui16, "WEEKEND", 47, 141);
+  drawToggle(163, 122, model.weekend_alarm_on);
   if (inside_ && selected_alarm_ == 1) {
     canvas_.rect(40, 109, 160, 45);
   }
@@ -565,9 +726,11 @@ void WatchUi::drawAlarms(const WatchUiModel& model) {
 }
 
 void WatchUi::drawMusic(const WatchUiModel& model) {
-  drawCardFrame("PLAYING", "PREV  PLAY  NEXT");
-  canvas_.text(model.music_title, 42, 51, 2);
-  canvas_.text(model.music_artist, 42, 72, 1);
+  drawCardFrame("PLAYING", "PLAY / PAUSE");
+  canvas_.centeredFittedFontText(WatchAssets::Bold22, model.music_title, 120,
+                                49, 174);
+  canvas_.centeredFittedFontText(WatchAssets::Ui16, model.music_artist, 120,
+                                77, 180);
   const uint8_t progress =
       model.music_duration_seconds == 0
           ? 0
@@ -580,11 +743,11 @@ void WatchUi::drawMusic(const WatchUiModel& model) {
   snprintf(time_value, sizeof(time_value), "%u:%02u",
            model.music_position_seconds / 60,
            model.music_position_seconds % 60);
-  canvas_.text(time_value, 42, 108, 1);
+  canvas_.fontText(WatchAssets::Ui16, time_value, 42, 112);
   snprintf(time_value, sizeof(time_value), "%u:%02u",
            model.music_duration_seconds / 60,
            model.music_duration_seconds % 60);
-  canvas_.text(time_value, 175, 108, 1);
+  canvas_.fontText(WatchAssets::Ui16, time_value, 168, 112);
   canvas_.text("|<", 54, 139, 2);
   canvas_.circle(120, 146, 22);
   if (model.music_playing) {
@@ -596,8 +759,9 @@ void WatchUi::drawMusic(const WatchUiModel& model) {
     }
   }
   canvas_.text(">|", 166, 139, 2);
-  canvas_.centeredText(model.music_playing ? "PLAYING 1/2" : "PAUSED 1/2", 120,
-                       178, 1);
+  canvas_.centeredFontText(WatchAssets::Ui16,
+                           model.music_playing ? "PLAYING 1/2" : "PAUSED 1/2",
+                           120, 178);
 }
 
 void WatchUi::drawWeather(const WatchUiModel& model) {
@@ -611,7 +775,8 @@ void WatchUi::drawWeather(const WatchUiModel& model) {
     snprintf(buffer, sizeof(buffer), "--C");
   }
   canvas_.centeredText(buffer, 120, 50, 5);
-  canvas_.centeredText(model.weather_condition, 120, 94, 1);
+  canvas_.centeredFittedFontText(WatchAssets::Ui16, model.weather_condition,
+                                120, 94, 178);
   if (model.phone_weather_valid) {
     snprintf(buffer, sizeof(buffer), "H %dC  L %dC", model.forecast_high_c,
              model.forecast_low_c);
@@ -629,26 +794,15 @@ void WatchUi::drawWeather(const WatchUiModel& model) {
 }
 
 void WatchUi::drawSensors(const WatchUiModel& model) {
-  drawCardFrame("SENSORS", "DEVICE DATA");
+  drawCardFrame("SENSORS", "AMBIENT AIR");
   char buffer[24];
-  canvas_.text("ACCEL", 47, 50, 1);
-  if (model.accelerometer_valid) {
-    const int32_t magnitude =
-        abs(model.accel_x_mg) + abs(model.accel_y_mg) + abs(model.accel_z_mg);
-    snprintf(buffer, sizeof(buffer), "%ld MG", static_cast<long>(magnitude));
-  } else {
-    snprintf(buffer, sizeof(buffer), "--");
-  }
-  canvas_.text(buffer, 130, 50, 1);
-  canvas_.line(47, 68, 193, 68);
-
-  canvas_.text("PRESS", 47, 78, 1);
+  canvas_.text("PRESS", 47, 58, 1);
   snprintf(buffer, sizeof(buffer), model.environment_valid ? "%u HPA" : "--",
            model.pressure_hpa);
-  canvas_.text(buffer, 130, 78, 1);
-  canvas_.line(47, 96, 193, 96);
+  canvas_.text(buffer, 130, 58, 1);
+  canvas_.line(47, 79, 193, 79);
 
-  canvas_.text("TEMP", 47, 106, 1);
+  canvas_.text("TEMP", 47, 93, 1);
   if (model.environment_valid) {
     snprintf(buffer, sizeof(buffer), "%d.%d C",
              model.temperature_tenths_c / 10,
@@ -656,19 +810,18 @@ void WatchUi::drawSensors(const WatchUiModel& model) {
   } else {
     snprintf(buffer, sizeof(buffer), "--");
   }
-  canvas_.text(buffer, 130, 106, 1);
-  canvas_.line(47, 124, 193, 124);
+  canvas_.text(buffer, 130, 93, 1);
+  canvas_.line(47, 114, 193, 114);
 
-  canvas_.text("HUMID", 47, 134, 1);
+  canvas_.text("HUMID", 47, 128, 1);
   snprintf(buffer, sizeof(buffer), model.environment_valid ? "%u%% RH" : "--",
            model.humidity_percent);
-  canvas_.text(buffer, 130, 134, 1);
-  canvas_.line(47, 152, 193, 152);
-  canvas_.centeredText("NOT BODY TEMPERATURE", 120, 174, 1);
+  canvas_.text(buffer, 130, 128, 1);
+  canvas_.line(47, 149, 193, 149);
 }
 
 void WatchUi::drawActivity(const WatchUiModel& model) {
-  drawCardFrame("ACTIVITY", "GOAL 10000 STEPS");
+  drawCardFrame("ACTIVITY", "10K GOAL");
   char buffer[24];
   snprintf(buffer, sizeof(buffer), "%lu",
            static_cast<unsigned long>(model.steps));
@@ -687,7 +840,7 @@ void WatchUi::drawActivity(const WatchUiModel& model) {
 }
 
 void WatchUi::drawSettings(const WatchUiModel& model) {
-  drawCardFrame("SETTINGS", "PREV/NEXT  SELECT");
+  drawCardFrame("SETTINGS", "SELECT");
   const bool enabled[] = {model.bluetooth_connected, model.quiet_mode,
                           model.led_ring_on, model.vibration_on};
   const char* labels[] = {"BT", "QUIET", "LED", "VIBRA"};

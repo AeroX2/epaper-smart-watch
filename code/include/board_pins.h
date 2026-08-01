@@ -41,18 +41,4 @@ constexpr uint32_t DISPLAY_RESET = PA6;
 constexpr uint32_t DISPLAY_BUSY = PA2;
 constexpr uint32_t DISPLAY_LIGHT = PC3;
 
-// TSC group 1: PB12 is the sampling capacitor; PB13..15 are electrodes.
-constexpr uint32_t TOUCH_SAMPLE = PB12;
-constexpr uint32_t TOUCH_1 = PB13;
-constexpr uint32_t TOUCH_2 = PB14;
-constexpr uint32_t TOUCH_3 = PB15;
-
-// Hardware Quad-SPI bank 1.
-constexpr uint32_t FLASH_CLK = PA3;
-constexpr uint32_t FLASH_CS = PD3;
-constexpr uint32_t FLASH_IO0 = PD4;
-constexpr uint32_t FLASH_IO1 = PD5;
-constexpr uint32_t FLASH_IO2 = PD6;
-constexpr uint32_t FLASH_IO3 = PD7;
-
 }  // namespace BoardPins

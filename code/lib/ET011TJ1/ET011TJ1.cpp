@@ -1,5 +1,7 @@
 #include "ET011TJ1.h"
 
+#include "ET011VendorReference.h"
+
 namespace {
 
 constexpr uint8_t CMD_PSR = 0x00;
@@ -26,49 +28,19 @@ constexpr uint8_t CMD_VDCS = 0x82;
 constexpr uint8_t CMD_VBDS = 0x84;
 constexpr uint8_t CMD_LVSEL = 0xE4;
 
-// Values transcribed from the ET011TJ1 vendor bring-up notes.
+// Values retained from the proven board bring-up where the supplied archive
+// either used the same value or left its source variable uninitialized.
 constexpr uint8_t POWER_SETTINGS[] = {0x03, 0x01, 0x2B, 0x2B, 0x00};
 constexpr uint8_t BOOSTER_SOFT_START[] = {0x17, 0x97, 0x20};
-constexpr uint8_t PANEL_SETTINGS[] = {0x0F, 0x86, 0x89};
 constexpr uint8_t POWER_OFF_SEQUENCE = 0x00;
-constexpr uint8_t LINE_PERIOD = 0x4F;
 constexpr uint8_t INTERNAL_TEMPERATURE_SENSOR = 0x00;
-constexpr uint8_t VCOM_DATA_INTERVAL[] = {0xA0, 0x20, 0x10};
 constexpr uint8_t RESOLUTION[] = {0xEF, 0x00, 0xEF};
-constexpr uint8_t GATE_DRIVER_SETTINGS[] = {0x89, 0x89, 0xCB, 0xCB, 0x03};
 // VDCS (R82H) sets VCOM_DC; 0x25 = -1.95 V.
 constexpr uint8_t VCOM_DC_LEVEL = 0x25;
 constexpr uint8_t BORDER_DRIVER_VOLTAGE = 0x25;
 constexpr uint8_t LEVEL_SELECT = 0x02;
 constexpr uint8_t GATE_BIAS_START[] = {0x02, 0x02};
 constexpr uint8_t GATE_BIAS_STOP[] = {0x02, 0x02};
-
-// Room-temperature KW waveform transcribed from the vendor bring-up notes.
-// Unspecified elements are zero-initialized to preserve the noted repeat runs.
-constexpr uint8_t LUT_20[32] = {
-    0x00, 0x00, 0x00, 0x30,
-};
-
-constexpr uint8_t LUT_22[512] = {
-    0x01, 0x00, 0x00, 0x00,
-    0x01, 0x00, 0x00, 0x00,
-    0x02, 0x00, 0x00, 0x80,
-    0x02, 0x00, 0x00, 0x40,
-    0x02, 0x00, 0x00, 0x04,
-    0x02, 0x00, 0x00, 0x40,
-    0x02, 0x00, 0x00, 0x40,
-    0x02, 0x00, 0x00, 0x40,
-    0x02, 0x00, 0x00, 0x40,
-    0x02, 0x00, 0x00, 0x40,
-    0x02, 0x00, 0x00, 0x40,
-    0x00, 0x00, 0x00, 0x00,
-    0xFF, 0xFF, 0xFF, 0xFF,
-};
-
-constexpr uint8_t LUT_26[128] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x05, 0x0A, 0x0A, 0x00, 0xFF,
-};
 
 constexpr uint8_t FULL_WINDOW[] = {
     0x00,        // X start
@@ -77,17 +49,27 @@ constexpr uint8_t FULL_WINDOW[] = {
     0x00, 0xEF,  // Y end = 239
 };
 
-constexpr uint8_t FULL_REFRESH[] = {
-    // Mode 0x00 (KWG) selects the R20/R22/R26 register waveform and the 2-bpp
-    // DTM1/DTM2 planes this driver writes; partial scan and REGAL disabled.
-    // Mode 0x01 (KW) reads the 1-bpp DTM3/DTM4 planes instead and leaves every
-    // update displaying the previous frame.
-    0x00,
+// Register values and refresh mode copied from the supplied
+// Ardiuno_ET011TJ2_hspi_01.zip (whose inner sketch is named ET011TT6).
+constexpr uint8_t VENDOR_PANEL_SETTINGS[] = {0x0B, 0x86};
+constexpr uint8_t VENDOR_LINE_PERIOD = 0x25;
+constexpr uint8_t VENDOR_VCOM_DATA_INTERVAL[] = {0xE1, 0x20, 0x10};
+constexpr uint8_t VENDOR_GATE_DRIVER_SETTINGS[] = {
+    0xA9, 0xA9, 0xEB, 0xEB, 0x02,
+};
+constexpr uint8_t VENDOR_FULL_REFRESH[] = {
+    0x08,
     0x00,        // X start
     0x00, 0x00,  // Y start
     0xEF,        // X end = 239
     0x00, 0xEF,  // Y end = 239
 };
+
+// Epson's ET011TT2 reference uses GC mode with DN_EN for subsequent images.
+// DTM1 must contain the previous frame and DTM2 the new frame. Unlike the ZIP
+// demo's first-image 0x08 mode, this avoids the conspicuous cleaning flash.
+constexpr uint8_t GC_FAST_REFRESH_MODE = 0x04;
+constexpr uint8_t VENDOR_FULL_REFRESH_MODE = 0x08;
 
 }  // namespace
 
@@ -118,7 +100,14 @@ void ET011TJ1::prepare() {
   prepared_ = true;
   controller_awake_ = false;
   booster_on_ = false;
-  initialized_ = false;
+}
+
+void ET011TJ1::shutdown() {
+  if (controller_awake_) {
+    writeCommand(CMD_POF);
+    delay(50);
+  }
+  holdInReset();
 }
 
 bool ET011TJ1::logicProbe(Print& out) {
@@ -146,35 +135,26 @@ bool ET011TJ1::logicProbe(Print& out) {
 
 bool ET011TJ1::show(ET011TJ1Pattern pattern, Print& out) {
   prepare();
+  out.println(F("Display driver: supplied ET011TJ2 ZIP / ET011TT6 sketch"));
   out.println(F("Display test: high-voltage booster will be enabled."));
 
-  if (!initialized_ && !initialize(out)) {
+  if (!initializeVendorUpdate(out)) {
     safeShutdown(out);
     return false;
   }
 
-  // ET011TJ1 sections 14 and 15-1 specify this normal standby update:
-  // DTMW -> DTM2 -> PON -> DRF -> POF.
-  out.println(F("DTMW -> DTM2: writing 240x240 current frame..."));
+  out.println(F("Vendor update: writing 240x240 current frame..."));
   writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
-  writePattern(CMD_DTM2, pattern);
+  writePattern(CMD_DTM2, pattern, true);
 
-  if (!powerOn(out)) {
-    safeShutdown(out);
-    return false;
-  }
-  if (!refresh(out)) {
-    safeShutdown(out);
-    return false;
-  }
-  if (!powerOff(out)) {
+  if (!finishVendorUpdate(out, VENDOR_FULL_REFRESH_MODE)) {
     safeShutdown(out);
     return false;
   }
 
-  out.println(F("[PASS] ET011TJ1 full refresh completed"));
-  last_pattern_ = pattern;
-  out.println(F("ET011TJ1 is in standby; booster is off"));
+  out.println(F("[PASS] Supplied vendor display refresh completed"));
+  holdInReset();
+  out.println(F("ET011 controller returned to reset; booster is off"));
   return true;
 }
 
@@ -186,32 +166,59 @@ bool ET011TJ1::showFrame(const uint8_t* framebuffer, size_t stride_bytes,
   }
 
   prepare();
+  out.println(F("Display driver: supplied ET011TJ2 ZIP / ET011TT6 sketch"));
   out.println(F("Display UI: high-voltage booster will be enabled."));
 
-  if (!initialized_ && !initialize(out)) {
+  if (!initializeVendorUpdate(out)) {
     safeShutdown(out);
     return false;
   }
 
-  out.println(F("DTMW -> DTM2: streaming 240x240 UI framebuffer..."));
+  out.println(F("Vendor update: streaming 240x240 UI framebuffer..."));
   writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
-  writeFramebuffer(CMD_DTM2, framebuffer, stride_bytes);
+  writeFramebuffer(CMD_DTM2, framebuffer, stride_bytes, true);
 
-  if (!powerOn(out)) {
-    safeShutdown(out);
-    return false;
-  }
-  if (!refresh(out)) {
-    safeShutdown(out);
-    return false;
-  }
-  if (!powerOff(out)) {
+  if (!finishVendorUpdate(out, VENDOR_FULL_REFRESH_MODE)) {
     safeShutdown(out);
     return false;
   }
 
-  out.println(F("[PASS] ET011TJ1 UI refresh completed"));
-  out.println(F("ET011TJ1 is in standby; booster is off"));
+  out.println(F("[PASS] Supplied vendor UI refresh completed"));
+  holdInReset();
+  out.println(F("ET011 controller returned to reset; booster is off"));
+  return true;
+}
+
+bool ET011TJ1::showFrameFast(const uint8_t* framebuffer,
+                             const uint8_t* previous_framebuffer,
+                             size_t stride_bytes, Print& out) {
+  if (framebuffer == nullptr || previous_framebuffer == nullptr ||
+      stride_bytes < WIDTH / 8) {
+    out.println(F("[FAIL] Invalid ET011TJ1 fast-update framebuffer"));
+    return false;
+  }
+
+  prepare();
+  out.println(F("Display driver: Epson GC fast update (DTM1 old / DTM2 new)"));
+  out.println(F("Display UI: high-voltage booster will be enabled."));
+
+  if (!initializeVendorUpdate(out, previous_framebuffer, stride_bytes)) {
+    safeShutdown(out);
+    return false;
+  }
+
+  out.println(F("Fast update: streaming new 240x240 UI framebuffer..."));
+  writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
+  writeFramebuffer(CMD_DTM2, framebuffer, stride_bytes, true);
+
+  if (!finishVendorUpdate(out, GC_FAST_REFRESH_MODE)) {
+    safeShutdown(out);
+    return false;
+  }
+
+  out.println(F("[PASS] Epson GC fast UI refresh completed"));
+  holdInReset();
+  out.println(F("ET011 controller returned to reset; booster is off"));
   return true;
 }
 
@@ -234,63 +241,70 @@ int ET011TJ1::hardwareReset() {
   return busy_during_reset;
 }
 
-bool ET011TJ1::initialize(Print& out) {
-  out.println(F("Initializing ET011TJ1 controller..."));
+bool ET011TJ1::initializeVendorUpdate(Print& out,
+                                     const uint8_t* history_framebuffer,
+                                     size_t history_stride_bytes) {
+  out.println(F("Initializing supplied vendor display sequence..."));
   hardwareReset();
   if (!waitReady(1000)) {
     out.println(F("[FAIL] BUSY_N stayed low after hardware reset"));
     return false;
   }
 
-  // Follow the datasheet's Initial Registers flow: configure the power and
-  // soft-start registers, start the booster, then load the remaining
-  // controller registers and initialize both frame SRAM planes.
-  writeCommandData(CMD_PWR, POWER_SETTINGS, sizeof(POWER_SETTINGS));
+  // Preserve the supplied archive's unusual BTST -> PWR -> PON order.
   writeCommandData(CMD_BTST, BOOSTER_SOFT_START,
                    sizeof(BOOSTER_SOFT_START));
-  if (!powerOn(out)) {
+  writeCommandData(CMD_PWR, POWER_SETTINGS, sizeof(POWER_SETTINGS));
+  if (!powerOn(out) || !configureVendorReference(out)) {
     return false;
   }
 
-  if (!configureController(out)) {
-    return false;
+  // The sketch writes 14,401 bytes due to an off-by-one. Send the controller's
+  // actual 240x240x2-bpp capacity (14,400), with its 0xFF=white polarity.
+  out.println(history_framebuffer == nullptr
+                  ? F("Vendor init: setting DTM1 history to white...")
+                  : F("Fast init: streaming the previous frame to DTM1..."));
+  writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
+  if (history_framebuffer == nullptr) {
+    writePattern(CMD_DTM1, ET011TJ1Pattern::White, true);
+  } else {
+    writeFramebuffer(CMD_DTM1, history_framebuffer, history_stride_bytes,
+                     true);
   }
-
-  // Initialize the previous/current 2-bpp SRAM planes to the same known image.
-  // With CDI.DDX=0, 00 is white and 11 is black.
-  out.println(F("Initializing DTM1/DTM2 frame history..."));
-  writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
-  writePattern(CMD_DTM1, last_pattern_);
-  writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
-  writePattern(CMD_DTM2, last_pattern_);
-
   if (!powerOff(out)) {
     return false;
   }
-  initialized_ = true;
+
+  // The supplied code reloads all three waveform registers before each frame.
+  writeCommandData(CMD_LUT_20, ET011VendorReference::LUT_20,
+                   sizeof(ET011VendorReference::LUT_20));
+  writeCommandData(CMD_LUT_22, ET011VendorReference::LUT_22,
+                   sizeof(ET011VendorReference::LUT_22));
+  writeCommandData(CMD_LUT_26, ET011VendorReference::LUT_26,
+                   sizeof(ET011VendorReference::LUT_26));
   return true;
 }
 
-bool ET011TJ1::configureController(Print& out) {
-  writeCommandData(CMD_PSR, PANEL_SETTINGS, sizeof(PANEL_SETTINGS));
+bool ET011TJ1::configureVendorReference(Print& out) {
+  writeCommandData(CMD_PSR, VENDOR_PANEL_SETTINGS,
+                   sizeof(VENDOR_PANEL_SETTINGS));
   writeCommandData(CMD_PFS, &POWER_OFF_SEQUENCE, 1);
-  writeCommandData(CMD_LPRD, &LINE_PERIOD, 1);
+  writeCommandData(CMD_LPRD, &VENDOR_LINE_PERIOD, 1);
   writeCommandData(CMD_TSE, &INTERNAL_TEMPERATURE_SENSOR, 1);
-  writeCommandData(CMD_CDI, VCOM_DATA_INTERVAL,
-                   sizeof(VCOM_DATA_INTERVAL));
+  writeCommandData(CMD_CDI, VENDOR_VCOM_DATA_INTERVAL,
+                   sizeof(VENDOR_VCOM_DATA_INTERVAL));
   writeCommandData(CMD_TRES, RESOLUTION, sizeof(RESOLUTION));
-  writeCommandData(CMD_GDS, GATE_DRIVER_SETTINGS,
-                   sizeof(GATE_DRIVER_SETTINGS));
+  writeCommandData(CMD_GDS, VENDOR_GATE_DRIVER_SETTINGS,
+                   sizeof(VENDOR_GATE_DRIVER_SETTINGS));
+
+  // VcomOTP is never populated in the supplied sketch and therefore sends
+  // zero. Retain the panel value already proven on this board instead.
   writeCommandData(CMD_VDCS, &VCOM_DC_LEVEL, 1);
   writeCommandData(CMD_VBDS, &BORDER_DRIVER_VOLTAGE, 1);
   writeCommandData(CMD_LVSEL, &LEVEL_SELECT, 1);
   writeCommandData(CMD_GBS, GATE_BIAS_START, sizeof(GATE_BIAS_START));
   writeCommandData(CMD_GSS, GATE_BIAS_STOP, sizeof(GATE_BIAS_STOP));
-  writeCommandData(CMD_LUT_20, LUT_20, sizeof(LUT_20));
-  writeCommandData(CMD_LUT_22, LUT_22, sizeof(LUT_22));
-  writeCommandData(CMD_LUT_26, LUT_26, sizeof(LUT_26));
-
-  out.println(F("Controller registers and waveform loaded"));
+  out.println(F("Supplied vendor register set loaded"));
   return true;
 }
 
@@ -330,15 +344,24 @@ bool ET011TJ1::powerOff(Print& out) {
   return true;
 }
 
-bool ET011TJ1::refresh(Print& out) {
-  writeCommandData(CMD_DRF, FULL_REFRESH, sizeof(FULL_REFRESH));
-  out.println(F("Refresh started; this may take several seconds..."));
+bool ET011TJ1::finishVendorUpdate(Print& out, uint8_t refresh_mode) {
+  if (!powerOn(out)) {
+    return false;
+  }
+
+  uint8_t refresh[sizeof(VENDOR_FULL_REFRESH)];
+  memcpy(refresh, VENDOR_FULL_REFRESH, sizeof(refresh));
+  refresh[0] = refresh_mode;
+  writeCommandData(CMD_DRF, refresh, sizeof(refresh));
+  out.println(refresh_mode == GC_FAST_REFRESH_MODE
+                  ? F("GC fast refresh started...")
+                  : F("Vendor cleaning refresh started; this may take several seconds..."));
   if (!waitBusyCycle(1000, 20000)) {
-    out.print(F("[FAIL] DRF BUSY_N cycle timed out; level = "));
+    out.print(F("[FAIL] Vendor DRF BUSY_N cycle timed out; level = "));
     out.println(busyLevel());
     return false;
   }
-  return true;
+  return powerOff(out);
 }
 
 void ET011TJ1::safeShutdown(Print& out) {
@@ -364,7 +387,6 @@ void ET011TJ1::holdInReset() {
   }
   controller_awake_ = false;
   booster_on_ = false;
-  initialized_ = false;
 }
 
 void ET011TJ1::writeCommand(uint8_t command) {
@@ -397,7 +419,8 @@ void ET011TJ1::writeCommandData(uint8_t command, const uint8_t* data,
   spi_.endTransaction();
 }
 
-void ET011TJ1::writePattern(uint8_t command, ET011TJ1Pattern pattern) {
+void ET011TJ1::writePattern(uint8_t command, ET011TJ1Pattern pattern,
+                            bool inverted) {
   spi_.beginTransaction(spi_settings_);
   digitalWrite(dc_pin_, LOW);
   digitalWrite(cs_pin_, LOW);
@@ -409,7 +432,11 @@ void ET011TJ1::writePattern(uint8_t command, ET011TJ1Pattern pattern) {
 
   for (uint16_t y = 0; y < HEIGHT; ++y) {
     for (uint16_t x = 0; x < WIDTH; x += 4) {
-      spi_.transfer(packed2BppPatternByte(pattern, x, y), SPI_TRANSMITONLY);
+      uint8_t packed = packed2BppPatternByte(pattern, x, y);
+      if (inverted) {
+        packed = static_cast<uint8_t>(~packed);
+      }
+      spi_.transfer(packed, SPI_TRANSMITONLY);
     }
   }
 
@@ -418,7 +445,7 @@ void ET011TJ1::writePattern(uint8_t command, ET011TJ1Pattern pattern) {
 }
 
 void ET011TJ1::writeFramebuffer(uint8_t command, const uint8_t* framebuffer,
-                                size_t stride_bytes) {
+                                size_t stride_bytes, bool inverted) {
   spi_.beginTransaction(spi_settings_);
   digitalWrite(dc_pin_, LOW);
   digitalWrite(cs_pin_, LOW);
@@ -438,6 +465,9 @@ void ET011TJ1::writeFramebuffer(uint8_t command, const uint8_t* framebuffer,
         if (black) {
           packed_2bpp |= static_cast<uint8_t>(0x03U << (6 - 2 * pixel));
         }
+      }
+      if (inverted) {
+        packed_2bpp = static_cast<uint8_t>(~packed_2bpp);
       }
       spi_.transfer(packed_2bpp, SPI_TRANSMITONLY);
     }
