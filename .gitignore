@@ -13,6 +13,9 @@
 *~
 _autosave-*
 *.tmp
+*.FCBak
+*.pyc
+__pycache__/
 *-save.pro
 *-save.kicad_pcb
 fp-info-cache
