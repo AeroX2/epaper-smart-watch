@@ -261,6 +261,10 @@ void MonochromeCanvas::centeredFittedFontText(const BitmapFont& font,
 
 void MonochromeCanvas::icon(WatchIcon value, int16_t center_x,
                             int16_t center_y, uint8_t size, bool black) {
+  if (static_cast<uint8_t>(value) >=
+      static_cast<uint8_t>(WatchIcon::Count)) {
+    return;
+  }
   const BitmapIcon& asset = WatchAssets::icon(value, size);
   const uint8_t* bitmap = WatchAssets::iconBitmap();
   const uint8_t row_bytes = static_cast<uint8_t>((asset.width + 7) / 8);
@@ -541,7 +545,10 @@ const char* WatchUi::screenName() const {
       "clock", "notifications", "timer",    "alarms",  "music",
       "weather", "sensors",       "activity", "settings",
   };
-  return NAMES[static_cast<uint8_t>(screen_)];
+  const uint8_t index = static_cast<uint8_t>(screen_);
+  return index < static_cast<uint8_t>(WatchScreen::Count)
+             ? NAMES[index]
+             : "clock";
 }
 
 const uint8_t* WatchUi::framebuffer() const {
@@ -555,38 +562,57 @@ void WatchUi::drawClock(const WatchUiModel& model) {
                                  ? model.month - 1
                                  : 0];
   snprintf(buffer, sizeof(buffer), "%s  %u %s", weekday, model.day, month);
-  canvas_.centeredFontText(WatchAssets::Ui16, buffer, 120, 24);
+  canvas_.centeredFontText(WatchAssets::Bold22, buffer, 120, 18);
 
-  snprintf(buffer, sizeof(buffer), "%02u:%02u", model.hour, model.minute);
-  canvas_.centeredFontText(WatchAssets::Clock64, buffer, 120, 45);
-  canvas_.line(35, 124, 205, 124);
+  const uint8_t hour_12 =
+      model.hour % 12 == 0 ? 12 : static_cast<uint8_t>(model.hour % 12);
+  snprintf(buffer, sizeof(buffer), "%u:%02u", hour_12, model.minute);
+  const int16_t time_width =
+      canvas_.fontTextWidth(WatchAssets::Clock64, buffer);
+  canvas_.centeredFontText(WatchAssets::Clock64, buffer, 120, 47);
+  canvas_.fontText(WatchAssets::Ui16, model.hour < 12 ? "AM" : "PM",
+                   static_cast<int16_t>(122 + time_width / 2), 87);
 
-  canvas_.icon(WatchIcon::Battery, 52, 149, 28);
-  canvas_.icon(WatchIcon::Weather, 120, 149, 28);
-  canvas_.icon(WatchIcon::Alarms, 188, 149, 28);
-
-  snprintf(buffer, sizeof(buffer), model.battery_valid ? "%u%%" : "--%%",
-           model.battery_percent);
-  canvas_.centeredFontText(WatchAssets::Ui16, buffer, 52, 169);
-
-  snprintf(buffer, sizeof(buffer), model.environment_valid ? "%dC" : "--C",
-           model.temperature_tenths_c / 10);
-  canvas_.centeredFontText(WatchAssets::Bold22, buffer, 120, 165);
-  snprintf(buffer, sizeof(buffer), model.environment_valid ? "%u%% RH" : "--%% RH",
-           model.humidity_percent);
-  canvas_.centeredFontText(WatchAssets::Ui16, buffer, 120, 190);
-
+  // Status belongs at the edge, not in the primary information hierarchy.
+  canvas_.icon(WatchIcon::Battery, 28, 133, 16);
   if (model.weekday_alarm_on || model.weekend_alarm_on) {
-    snprintf(buffer, sizeof(buffer), "%02u:%02u", model.alarm_hour,
-             model.alarm_minute);
-  } else {
-    snprintf(buffer, sizeof(buffer), "OFF");
+    canvas_.icon(WatchIcon::Alarms, 212, 133, 16);
   }
-  canvas_.centeredFontText(WatchAssets::Ui16, buffer, 188, 169);
+  if (model.notification_present) {
+    canvas_.icon(WatchIcon::Notifications, 28, 160, 16);
+  }
+  canvas_.line(48, 133, 192, 133);
+
+  // Weather and movement are useful at a glance, but deliberately secondary.
+  canvas_.icon(WatchIcon::Weather, 78, 157, 16);
+  if (model.phone_weather_valid) {
+    snprintf(buffer, sizeof(buffer), "%dC", model.forecast_temperature_c);
+  } else if (model.environment_valid) {
+    snprintf(buffer, sizeof(buffer), "%dC",
+             model.temperature_tenths_c / 10);
+  } else {
+    snprintf(buffer, sizeof(buffer), "--C");
+  }
+  canvas_.centeredFontText(WatchAssets::Bold22, buffer, 78, 169);
+  canvas_.centeredFittedFontText(
+      WatchAssets::Ui16,
+      model.phone_weather_valid ? model.weather_condition : "WEATHER", 78,
+      197, 72);
+
+  canvas_.icon(WatchIcon::Activity, 162, 157, 16);
+  snprintf(buffer, sizeof(buffer), "%lu",
+           static_cast<unsigned long>(model.steps));
+  canvas_.centeredFittedFontText(WatchAssets::Bold22, buffer, 162, 169, 72);
+  canvas_.centeredFontText(WatchAssets::Ui16, "STEPS", 162, 197);
 }
 
 void WatchUi::drawLauncher(const WatchUiModel& model) {
-  const int16_t current = static_cast<int16_t>(screen_);
+  int16_t current = static_cast<int16_t>(screen_);
+  if (current < static_cast<int16_t>(WatchScreen::Notifications) ||
+      current >= static_cast<int16_t>(WatchScreen::Count)) {
+    screen_ = WatchScreen::Notifications;
+    current = static_cast<int16_t>(screen_);
+  }
 
   // The settled e-paper frame implies a rolling cylinder: distant entries are
   // small and deliberately clipped by the round panel, while the selected app

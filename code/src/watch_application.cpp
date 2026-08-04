@@ -267,8 +267,10 @@ void WatchApplication::processPhoneUpdates() {
       copyPhoneText(model_.notification_line_1, update.line_1);
       copyPhoneText(model_.notification_line_2, update.line_2);
       model_.notification_present = true;
-      ui_.showScreen(WatchScreen::Notifications);
-      should_render = true;
+      // A notification should neither steal the screen nor begin a multi-second
+      // e-paper refresh from inside BLE processing. The clock picks up its
+      // small pending-message indicator on the next minute/input refresh.
+      should_render = false;
       break;
     case PhoneUpdateType::ClearNotification:
       model_.notification_present = false;
@@ -314,8 +316,7 @@ void WatchApplication::processPhoneUpdates() {
       copyPhoneText(model_.notification_line_1, update.line_1);
       copyPhoneText(model_.notification_line_2, update.line_2);
       model_.notification_present = true;
-      ui_.showScreen(WatchScreen::Notifications);
-      should_render = true;
+      should_render = false;
       break;
     case PhoneUpdateType::SleepHint:
       for (uint32_t i = 0; i < min(update.value, 5UL); ++i) {
