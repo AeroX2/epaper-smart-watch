@@ -68,6 +68,10 @@
  * STM32WB wireless-stack reservation are intentionally not exposed. */
 #define FLASH_DESC_STR      "@Watch Application /0x08010000/186*04Kg"
 
+_Static_assert((((sizeof(FLASH_DESC_STR) - 1U) * 2U) + 2U) <=
+                   USBD_MAX_STR_DESC_SIZ,
+               "DFU memory-map descriptor exceeds USB string buffer");
+
 /* USER CODE BEGIN PRIVATE_DEFINES */
 #define FLASH_ERASE_TIME    (uint16_t)50
 #define FLASH_PROGRAM_TIME  (uint16_t)50

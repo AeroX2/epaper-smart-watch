@@ -69,7 +69,9 @@
 /*---------- -----------*/
 #define USBD_MAX_NUM_CONFIGURATION     1U
 /*---------- -----------*/
-#define USBD_MAX_STR_DESC_SIZ     48U
+/* DfuSe encodes the writable memory map in a USB interface string. The watch
+ * descriptor needs 84 bytes once converted from ASCII to UTF-16LE. */
+#define USBD_MAX_STR_DESC_SIZ     128U
 /*---------- -----------*/
 #define USBD_SUPPORT_USER_STRING_DESC     1U
 /*---------- -----------*/
