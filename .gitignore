@@ -58,3 +58,9 @@ usbc*
 
 # KiCad DRC/ERC report files
 *.rpt
+
+# Generated 3D model exports and previews. Keep editable FreeCAD .FCStd sources.
+*.3mf
+*.step
+*.stl
+*-preview.png
