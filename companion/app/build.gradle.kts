@@ -29,3 +29,11 @@ android {
         jvmTarget = "17"
     }
 }
+
+dependencies {
+    // Health Connect step sync (the only AndroidX use in the app) and its suspend API.
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha08")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    testImplementation("junit:junit:4.13.2")
+}

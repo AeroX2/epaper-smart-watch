@@ -1,0 +1,6 @@
+<resources>
+    <item name="weather_off" type="id" />
+    <item name="weather_location" type="id" />
+    <item name="weather_coords" type="id" />
+    <item name="weather_manual" type="id" />
+</resources>

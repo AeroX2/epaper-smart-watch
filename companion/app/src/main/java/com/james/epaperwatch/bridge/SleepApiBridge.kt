@@ -1,23 +1,30 @@
-package com.james.epaperwatch
+package com.james.epaperwatch.bridge
 
-import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
-import kotlin.math.max
+import com.james.epaperwatch.protocol.InMessage
+import com.james.epaperwatch.protocol.Out
+import com.james.epaperwatch.protocol.OutMessage
 
+/**
+ * Sleep as Android wearable bridge (movement only), ported to the v2 message names.
+ *
+ * Sleep -> watch: CHECK_CONNECTED, START/STOP_TRACKING, SET_PAUSE, SET_SUSPENDED,
+ * SET_BATCH_SIZE, START/STOP/UPDATE_ALARM, SHOW_NOTIFICATION, HINT.
+ * Watch -> Sleep: SLEEP_DATA movement batches (as MAX_RAW_DATA), SNOOZE, DISMISS, PAUSE, RESUME.
+ */
 class SleepApiBridge(
     private val context: Context,
     private val isWatchConnected: () -> Boolean,
-    private val sendToWatch: (String) -> Unit,
+    private val sendToWatch: (OutMessage) -> Unit,
 ) : BroadcastReceiver() {
     private val movementBatch = ArrayList<Float>()
     private var requestedBatchSize = 12
     private var registered = false
 
-    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     fun register() {
         if (registered) return
         val filter = IntentFilter().apply {
@@ -33,10 +40,11 @@ class SleepApiBridge(
             addAction(SHOW_NOTIFICATION)
             addAction(HINT)
         }
+        // Sleep as Android is another app, so this receiver must be exported.
         if (Build.VERSION.SDK_INT >= 33) {
             context.registerReceiver(this, filter, Context.RECEIVER_EXPORTED)
         } else {
-            @Suppress("DEPRECATION")
+            @Suppress("UnspecifiedRegisterReceiverFlag")
             context.registerReceiver(this, filter)
         }
         registered = true
@@ -50,69 +58,65 @@ class SleepApiBridge(
 
     override fun onReceive(receiverContext: Context, intent: Intent) {
         when (intent.action) {
-            CHECK_CONNECTED -> if (isWatchConnected()) {
-                sendToSleep(Intent(CONFIRM_CONNECTED))
-            }
+            CHECK_CONNECTED -> if (isWatchConnected()) sendToSleep(Intent(CONFIRM_CONNECTED))
             START_TRACKING -> {
                 movementBatch.clear()
-                sendToWatch("SLEEP,START")
+                sendToWatch(Out.sleepStart())
             }
             STOP_TRACKING -> {
                 flushMovement()
-                sendToWatch("SLEEP,STOP")
+                sendToWatch(Out.sleepStop())
             }
             SET_PAUSE -> {
-                val untilSeconds = max(0L, intent.getLongExtra("TIMESTAMP", 0L) / 1000L)
-                sendToWatch("SLEEP,PAUSE,$untilSeconds")
+                // TIMESTAMP is the epoch-ms the pause ends (0 = resume); the wire wants seconds.
+                val until = intent.getLongExtra("TIMESTAMP", 0L)
+                val seconds = if (until <= 0L) 0L else
+                    ((until - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L)
+                sendToWatch(Out.sleepPause(seconds))
             }
             SET_SUSPENDED -> {
                 val suspended = intent.getBooleanExtra("SUSPENDED", false)
-                val until = if (suspended) 4_102_444_800L else 0L
-                sendToWatch("SLEEP,PAUSE,$until")
+                sendToWatch(Out.sleepPause(if (suspended) SUSPEND_SECONDS else 0L))
             }
             SET_BATCH_SIZE -> {
-                requestedBatchSize =
-                    intent.getLongExtra("SIZE", 12L).toInt().coerceIn(1, 120)
+                requestedBatchSize = intent.getLongExtra("SIZE", 12L).toInt().coerceIn(1, 120)
                 if (movementBatch.size >= requestedBatchSize) flushMovement()
             }
             START_ALARM -> {
-                val delay = intent.getIntExtra("DELAY", 0)
-                val wireDelay = if (delay < 0) 4_294_967_295L else delay.toLong()
-                sendToWatch("SLEEP,ALARM,$wireDelay")
+                // DELAY is in milliseconds; a negative delay means "no alarm vibration".
+                val delayMs = intent.getIntExtra("DELAY", 0)
+                if (delayMs >= 0) sendToWatch(Out.sleepAlarm((delayMs + 999L) / 1000L))
             }
-            STOP_ALARM -> sendToWatch("SLEEP,ALARM_STOP")
+            STOP_ALARM -> sendToWatch(Out.sleepAlarmStop())
             UPDATE_ALARM -> {
                 val timestamp = intent.getLongExtra("TIMESTAMP", 0L)
                 if (timestamp > 0L) {
-                    val delay = (timestamp - System.currentTimeMillis()).coerceAtLeast(0L)
-                    sendToWatch("SLEEP,ALARM,${delay.coerceAtMost(4_294_967_294L)}")
+                    val delayMs = (timestamp - System.currentTimeMillis()).coerceAtLeast(0L)
+                    sendToWatch(Out.sleepAlarm((delayMs + 999L) / 1000L))
                 }
             }
-            SHOW_NOTIFICATION -> {
-                val title = WatchProtocol.clean(intent.getStringExtra("TITLE"), 28)
-                val text = WatchProtocol.clean(intent.getStringExtra("TEXT"), 28)
-                sendToWatch("SLEEP,NOTIFY,$title|$text")
-            }
-            HINT -> {
-                val repeats = intent.getIntExtra("REPEAT", 1).coerceIn(1, 5)
-                sendToWatch("SLEEP,HINT,$repeats")
-            }
+            SHOW_NOTIFICATION -> sendToWatch(
+                Out.sleepNotify(intent.getStringExtra("TITLE"), intent.getStringExtra("TEXT")),
+            )
+            HINT -> sendToWatch(Out.sleepHint(intent.getIntExtra("REPEAT", 1).coerceIn(1, 5)))
         }
     }
 
-    fun onMovement(maxDeltaMg: Int) {
+    /** Handles SLEEP_* messages from the watch. */
+    fun onWatchMessage(message: InMessage) {
+        when (message.type) {
+            "SLEEP_DATA" -> onMovement(message.int(0))
+            "SLEEP_SNOOZE" -> sendToSleep(Intent(SNOOZE_FROM_WATCH))
+            "SLEEP_DISMISS" -> sendToSleep(Intent(DISMISS_FROM_WATCH))
+            "SLEEP_PAUSE" -> sendToSleep(Intent(PAUSE_FROM_WATCH))
+            "SLEEP_RESUME" -> sendToSleep(Intent(RESUME_FROM_WATCH))
+        }
+    }
+
+    private fun onMovement(maxDeltaMg: Int) {
         // Sleep expects acceleration change in m/s². The watch sends milligravity.
         movementBatch += maxDeltaMg.coerceAtLeast(0) * 0.00980665f
         if (movementBatch.size >= requestedBatchSize) flushMovement()
-    }
-
-    fun onWatchCommand(command: String) {
-        when (command) {
-            "SLEEP,SNOOZE" -> sendToSleep(Intent(SNOOZE_FROM_WATCH))
-            "SLEEP,DISMISS" -> sendToSleep(Intent(DISMISS_FROM_WATCH))
-            "SLEEP,PAUSE" -> sendToSleep(Intent(PAUSE_FROM_WATCH))
-            "SLEEP,RESUME" -> sendToSleep(Intent(RESUME_FROM_WATCH))
-        }
     }
 
     private fun flushMovement() {
@@ -129,6 +133,8 @@ class SleepApiBridge(
     companion object {
         private const val SLEEP_PACKAGE = "com.urbandroid.sleep"
         private const val PREFIX = "com.urbandroid.sleep.watch."
+        /** "Suspended until further notice"; SET_SUSPENDED=false sends 0 to resume. */
+        private const val SUSPEND_SECONDS = 365L * 24 * 60 * 60
 
         const val CHECK_CONNECTED = "${PREFIX}CHECK_CONNECTED"
         const val CONFIRM_CONNECTED = "${PREFIX}CONFIRM_CONNECTED"
