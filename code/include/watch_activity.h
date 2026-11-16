@@ -17,8 +17,14 @@ class WatchActivity {
                 WatchConfigStore& store);
 
   void begin(Print& out);
+  // BMA400 INT1: only the data-ready interrupt of a sleep-tracking session.
   void serviceInterrupt(Print& out);
+  // Reads the BMA400's own step counter into model.steps. Cheap (one I2C
+  // read); called before anything shows, sends or stores the count.
+  void pollSteps();
   void resetSteps(Print& out);
+  // Milliseconds until the next periodic step read or step save is due.
+  uint32_t msUntilNextService(uint32_t now) const;
 
   void startSleepTracking(Print& out);
   void stopSleepTracking(Print& out);
@@ -52,6 +58,9 @@ class WatchActivity {
 
   static constexpr uint32_t SAVE_INTERVAL_MS = 60UL * 60UL * 1000UL;
   static constexpr uint32_t RESET_SAVE_INTERVAL_MS = 60UL * 1000UL;
+  // Background step read when nothing else asked for one (keeps the hourly
+  // save meaningful while a screen without a step count is shown).
+  static constexpr uint32_t STEP_POLL_INTERVAL_MS = 10UL * 60UL * 1000UL;
 
   void restore(Print& out);
   void archive(uint32_t day, uint32_t steps);
@@ -90,5 +99,6 @@ class WatchActivity {
   uint32_t pending_steps_ = 0;
   uint32_t saved_steps_ = 0;
   uint32_t last_save_ms_ = 0;
+  uint32_t last_poll_ms_ = 0;
   bool save_requested_ = false;
 };

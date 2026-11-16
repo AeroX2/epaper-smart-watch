@@ -76,9 +76,58 @@ bool WatchAlarm::stopSleepAlarm(Print& out) {
   return true;
 }
 
-void WatchAlarm::stopOutput() {
-  analogWrite(BoardPins::VIBRATION, 0);
+void WatchAlarm::vibrationOff() {
+  digitalWrite(BoardPins::VIBRATION, LOW);
+  pinMode(BoardPins::VIBRATION, OUTPUT);  // also stops the PWM timer
+}
+
+void WatchAlarm::buzzerOff() {
   noTone(BoardPins::BUZZER);
+  digitalWrite(BoardPins::BUZZER, LOW);
+}
+
+uint32_t WatchAlarm::msUntilNextEvent(uint32_t now) {
+  uint32_t best = UINT32_MAX;
+  const auto consider = [&best](uint32_t ms) {
+    if (ms < best) {
+      best = ms;
+    }
+  };
+  if (model_.timer_running) {
+    const uint64_t total =
+        static_cast<uint64_t>(model_.timer_remaining_seconds) * 1000ULL;
+    const uint32_t elapsed = now - timer_last_tick_;
+    consider(elapsed >= total ? 0 : static_cast<uint32_t>(total - elapsed));
+  }
+  if (sleep_alarm_at_ != 0) {
+    const int32_t remaining = static_cast<int32_t>(sleep_alarm_at_ - now);
+    consider(remaining <= 0 ? 0 : static_cast<uint32_t>(remaining));
+  }
+  const time_t epoch = rtc_.epoch();
+  if (snooze_until_ != 0) {
+    consider(snooze_until_ <= epoch
+                 ? 0
+                 : static_cast<uint32_t>(snooze_until_ - epoch) * 1000UL);
+  }
+  if (model_.time_valid && epoch > 0) {
+    const uint32_t second_of_day = static_cast<uint32_t>(epoch % 86400);
+    consider((86400UL - second_of_day) * 1000UL);
+    const bool alarm_day =
+        (model_.weekday >= 1 && model_.weekday <= 5)
+            ? model_.weekday_alarm_on
+            : model_.weekend_alarm_on;
+    const uint32_t alarm_second =
+        model_.alarm_hour * 3600UL + model_.alarm_minute * 60UL;
+    if (alarm_day && second_of_day < alarm_second) {
+      consider((alarm_second - second_of_day) * 1000UL);
+    }
+  }
+  return best;
+}
+
+void WatchAlarm::stopOutput() {
+  vibrationOff();
+  buzzerOff();
   actuator_off_at_ = 0;
   tone_sequence_ = NO_TONE_SEQUENCE;
 }
@@ -90,7 +139,7 @@ void WatchAlarm::startNote() {
     // stalled main loop can stretch a rest but never a sound.
     tone(BoardPins::BUZZER, note.frequency, note.duration_ms);
   } else {
-    noTone(BoardPins::BUZZER);
+    buzzerOff();
   }
   tone_note_until_ = millis() + note.duration_ms;
 }
@@ -207,13 +256,13 @@ void WatchAlarm::serviceOutput() {
     if (alert_active) {
       // A higher-priority alert started: it now owns the buzzer.
       tone_sequence_ = NO_TONE_SEQUENCE;
-      noTone(BoardPins::BUZZER);
+      buzzerOff();
     } else if (static_cast<int32_t>(now - tone_note_until_) >= 0) {
       if (++tone_note_ < TONE_SEQUENCES[tone_sequence_].length) {
         startNote();
       } else {
         tone_sequence_ = NO_TONE_SEQUENCE;
-        noTone(BoardPins::BUZZER);
+        buzzerOff();
       }
     }
   }
@@ -221,7 +270,7 @@ void WatchAlarm::serviceOutput() {
       static_cast<int32_t>(now - actuator_off_at_) >= 0) {
     if (tone_sequence_ != NO_TONE_SEQUENCE) {
       // Only the notification's vibration pulse ended; the tone goes on.
-      analogWrite(BoardPins::VIBRATION, 0);
+      vibrationOff();
       actuator_off_at_ = 0;
     } else {
       stopOutput();

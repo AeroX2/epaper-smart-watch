@@ -55,6 +55,10 @@ bool WatchOta::transferActive() const {
          state_ == State::Ready;
 }
 
+bool WatchOta::idle() const {
+  return state_ == State::Idle && !cleanup_pending_ && !flash_held_;
+}
+
 bool WatchOta::screenShown() const {
   return model_.ota_screen != OtaScreen::None;
 }

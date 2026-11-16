@@ -13,6 +13,15 @@
 #include "watch_version.h"
 #include "watch_watchdog.h"
 
+// Receive FIFO indices and flags of STM32duinoBLE 1.4.2's shared-memory
+// transport (utility/HCISharedMemTransport.cpp). They are read here, never
+// written, to answer "is there controller traffic waiting?" without calling
+// into the library, whose own available() re-enables interrupts.
+extern volatile uint16_t _read_index;
+extern volatile uint16_t _write_index;
+extern volatile bool data_overflow;
+extern volatile bool acl_data_on;
+
 namespace {
 
 constexpr char WATCH_SERVICE_UUID[] = "7BD10000-6B10-4A21-9D6A-3A56B35C1000";
@@ -198,7 +207,12 @@ bool WatchBle::begin(Print& out, bool secure, uint8_t hello_flags) {
                             length);
   battery_level.writeValue(static_cast<uint8_t>(0));
 
+  BLE.setAdvertisingInterval(ADV_INTERVAL_FAST);
   BLE.advertise();
+  adv_fast_ = true;
+  adv_boost_pending_ = false;
+  adv_retry_ = false;
+  adv_mark_ms_ = millis();
   ready_ = true;
   connected_ = false;
   last_seq_ = 0;
@@ -254,6 +268,9 @@ void WatchBle::poll() {
     clearOutbound();
     last_seq_ = 0;
     disconnected_event_ = true;
+    // The library has already re-enabled advertising with the interval that
+    // was last programmed; ask for a fast window so the phone finds us.
+    adv_boost_pending_ = true;
   }
   connected_ = now_connected;
   drainOutbound();
@@ -387,6 +404,89 @@ uint8_t WatchBle::outboundFree() const {
 
 bool WatchBle::outboundPending() const {
   return ready_ && connected_ && outbound_count_ > 0;
+}
+
+bool WatchBle::sendPending() const {
+  return ready_ && connected_ && (outbound_count_ > 0 || sending_active_) &&
+         watch_to_phone.subscribed();
+}
+
+bool WatchBle::rxPending() const {
+  return ready_ && (_read_index != _write_index || data_overflow);
+}
+
+bool WatchBle::transportBusy() const {
+  return ready_ && acl_data_on;
+}
+
+void WatchBle::applyAdvertising(bool fast) {
+  busy_ = true;  // no nested poll()/flush() while HCI commands are in flight
+  BLE.stopAdvertise();
+  BLE.setAdvertisingInterval(fast ? ADV_INTERVAL_FAST : ADV_INTERVAL_SLOW);
+  bool ok = BLE.advertise() != 0;
+  if (!ok) {
+    ok = BLE.advertise() != 0;
+  }
+  busy_ = false;
+  adv_mark_ms_ = millis();
+  if (ok) {
+    adv_fast_ = fast;
+    adv_retry_ = false;
+  } else {
+    // Advertising may be off now: keep trying until it is back.
+    adv_retry_ = true;
+    adv_retry_fast_ = fast;
+  }
+}
+
+void WatchBle::serviceAdvertising() {
+  if (!ready_ || busy_) {
+    return;
+  }
+  if (!adv_boost_pending_ && !adv_retry_ && !adv_fast_) {
+    return;  // settled on the slow interval
+  }
+  // BLE.connected() drains the controller first, so a connection that has
+  // just formed is seen before advertising is touched.
+  if (connected_ || BLE.connected()) {
+    return;
+  }
+  const uint32_t now = millis();
+  if (adv_retry_) {
+    if (now - adv_mark_ms_ >= ADV_RETRY_MS) {
+      applyAdvertising(adv_retry_fast_);
+    }
+    return;
+  }
+  if (adv_boost_pending_) {
+    adv_boost_pending_ = false;
+    if (adv_fast_) {
+      adv_mark_ms_ = now;  // already fast: just restart the window
+    } else {
+      applyAdvertising(true);
+    }
+    return;
+  }
+  if (now - adv_mark_ms_ >= ADV_FAST_WINDOW_MS) {
+    applyAdvertising(false);
+  }
+}
+
+uint32_t WatchBle::msUntilAdvertisingService() const {
+  if (!ready_ || connected_) {
+    return UINT32_MAX;
+  }
+  if (adv_boost_pending_) {
+    return 0;
+  }
+  const uint32_t elapsed = millis() - adv_mark_ms_;
+  if (adv_retry_) {
+    return elapsed >= ADV_RETRY_MS ? 0 : ADV_RETRY_MS - elapsed;
+  }
+  if (adv_fast_) {
+    return elapsed >= ADV_FAST_WINDOW_MS ? 0 : ADV_FAST_WINDOW_MS - elapsed;
+  }
+  return UINT32_MAX;
 }
 
 void WatchBle::updateBattery(uint8_t percent) {

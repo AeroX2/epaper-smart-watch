@@ -99,41 +99,153 @@ ignored by USB CDC, though the monitor is configured for 115200 baud for consist
 
 `main.cpp` is only the Arduino entry point. `WatchApplication` owns and coordinates the hardware
 and feature modules, while step/sleep sampling and alarm/timer output live in `WatchActivity` and
-`WatchAlarm`. `WatchPower` owns the MCU sleep and wake policy. Display refresh policy, UI drawing,
+`WatchAlarm`. `WatchPower` owns the MCU sleep and wake policy (Stop 2 or Sleep mode, see below). Display refresh policy, UI drawing,
 buttons, BLE, RTC, diagnostics, sensors, and the ET011 controller each remain in their own driver
 or controller files.
 
 ## Power and wake model
 
-Normal operation is interrupt-driven. After servicing any queued work, CPU1 enters STM32 Sleep
-mode through STM32LowPower; SysTick is suspended while asleep and the hardware RTC restores the
-elapsed `millis()` time after wake. The application no longer runs a continuously polling loop.
+Nothing in this section has been measured on hardware yet. The mechanisms are described as
+implemented; every current figure is an estimate from datasheet typicals.
 
-The current wake sources are:
+### Sleep model
 
-| Source | Wake reason |
+After servicing whatever woke it, the main loop asks `WatchPower::sleep()` to sleep until the next
+real deadline (`WatchApplication::sleepBudgetMs()`), and `WatchPower` picks one of two modes:
+
+| Mode | What it is | When | Longest sleep |
+| --- | --- | --- | --- |
+| **Stop 2** ("deep sleep") | All high-speed clocks off, RTC on LSE, RAM and registers retained | No blocker in the table below | 10 s (the 20 s IWDG keeps counting in Stop) |
+| **Sleep** (`LowPower.idle()`) | CPU halted, 64 MHz clock tree, SMPS and all peripherals running | Any blocker set | 1 s, as before |
+
+`millis()` is corrected from the RTC after either mode, so debounce, alarms and protocol timers
+see continuous time. The deadline is the earliest of: 10 ms while a button is being debounced/held,
+an actuator pulse or tone is running, step history is being sent or a message to the phone is
+pending; 250 ms while a firmware update is in progress; the next minute boundary (only while the
+clock face is displayed); timer expiry, Sleep as Android alarm, snooze end, today's alarm, local
+midnight; the 10-minute `STATUS` (only with a phone session); the 10-minute background step read
+and the hourly step save; the end of the fast-advertising window; the front-light auto-off.
+
+Wake sources in Stop 2:
+
+| Source | Line | Purpose |
+| --- | --- | --- |
+| RTC alarm A | EXTI 17 | Deadline / watchdog feed. Always re-armed and verified before every Stop |
+| Buttons | EXTI 2, 4, 10, 12 | Input |
+| BMA400 INT1 | EXTI 0 | Data-ready, only during a Sleep as Android session |
+| MAX17048 ALRT | EXTI 3 | Fuel-gauge alert |
+| VDDUSB monitor (PVM1) | EXTI 31 | USB plugged in or removed |
+| IPCC CPU1 receive | EXTI 36 | BLE controller traffic (only relevant with the radio on) |
+
+### What blocks deep sleep
+
+`z` on the console prints the current state of every item.
+
+| Blocker | Meaning |
 | --- | --- |
-| Four button EXTI lines | Start/continue debounce, hold, or navigation handling |
-| BMA400 INT1 | Hardware step event; data-ready samples only during active sleep tracking |
-| MAX17048 ALERT | Refresh the fuel-gauge state |
-| STM32 RTC | Minute/alarm/timer progress and a one-second safety deadline |
-| USB interrupt | Serial console input |
-| STM32WB IPCC/radio interrupt | Pending BLE controller traffic |
+| Setting | Deep sleep switched off with console `0` |
+| Watchdog reset | This boot followed an IWDG reset |
+| Stop fault | The previous reset happened inside a Stop attempt, or a wake did not restore the PLL |
+| No backstop | Option bytes freeze the IWDG in Stop, or the RTC is not running |
+| USB | VDDUSB is present (its LDO is only powered from the connector), or the monitor could not be enabled |
+| Boot grace | First 60 s after boot |
+| Activity | 30 s after a button press, 5 min after a console byte |
+| Radio | Bluetooth is on and the setting is not `2` |
+| Busy | Actuator/tone running, button held, external flash held awake, firmware update not idle, phone-link data in flight, console line half typed |
+| Debugger | An SWD debugger is attached |
 
-Buttons are sampled at 10 ms only while a debounce, press, hold, or chord is in progress. Alarm
-outputs also use the 10 ms deadline while active. At all other times the core sleeps until an
-external interrupt or the one-second RTC deadline. `BLE.poll()` only drains controller events after
-a wake; it is no longer called by a free-running busy loop.
+E-paper refreshes and flash operations are synchronous, so the loop never reaches the sleep call
+during one; the BUSY waits inside a refresh use Sleep mode (WFI until the next 1 ms tick) rather
+than spinning.
 
-The BMA400's internal step engine replaces the old 20 Hz software step detector. Its data-ready
-interrupt is normally disabled and is enabled only for a Sleep as Android tracking session, where
-movement samples are required. The BME280 is left in its library's forced-measurement mode and is
-read only when live UI sensor data is rendered. The fuel gauge is read for UI data or in response
-to its ALERT line. The display booster and frontlight remain off between explicit refreshes.
+### Radio on: Sleep mode by default
 
-Sleep mode is intentional at this stage: it preserves USB CDC and the STM32WB radio/IPCC path while
-still stopping CPU instruction execution and SysTick between events. STOP2 can reduce current
-further, but should be introduced only with explicit clock, USB, and BLE resume testing on hardware.
+With Bluetooth advertising or connected the default is **Sleep mode, not Stop**. The Stop entry
+and exit follow ST's dual-core sequence (RCC and entry-stop-mode hardware semaphores, HSI16 as
+wake-up clock, CPU2's own low-power request left alone once CPU2 runs, the IPCC receive line
+enabled as a wake source), and the clock tree is rebuilt before any interrupt handler runs. But
+this stack is not a configuration ST or STM32duinoBLE has tested: the generic WB5MMG variant did
+not even select the radio's wake-up clock (now done in `WatchPower::selectRadioWakeClock()`), and
+the CPU2 side of the handshake cannot be inspected. Until it has been verified on hardware
+(checks below), Stop with the radio on is opt-in with console `2`.
+
+After Bluetooth has been turned off again CPU2 keeps running idle. The watch then uses Stop 2
+under the default setting, with the same dual-core sequence.
+
+### Fail-safe ladder
+
+1. The IWDG (20 s) runs in Stop. A Stop that never ends becomes a reset.
+2. A boot that follows a watchdog reset never uses Stop.
+3. A marker in RTC backup register 15 is set for the duration of every Stop attempt including the
+   clock restart. Found set at boot, Stop is disabled for that boot whatever the reset cause.
+4. Stop is refused unless the RTC alarm is enabled, routed through EXTI 17 and enabled in the
+   NVIC, and still in the future; interrupts are masked from that check until the clocks are back,
+   so a wake that arrives in between makes `WFI` fall straight through.
+5. If the hardware semaphores cannot be taken, or the PLL is not the system clock after a wake,
+   the watch falls back to Sleep mode (the latter for the rest of the boot).
+6. USB: Stop is never used with VDDUSB present, for a minute after boot, for 30 s after a button
+   press or for 5 min after console input. If the console is ever unreachable: press a button,
+   plug in USB within 30 s, and send `0`.
+7. Console `0` disables deep sleep and stores that in the external flash (`1` = default,
+   `2` = also with the radio on). Without working flash the setting lasts until the next reset.
+
+### Peripherals
+
+- BMA400: normal mode, 100 Hz, OSR 0 (about 4 uA; its low-power mode cannot count steps). The step
+  counter runs without an interrupt pin; `WatchActivity::pollSteps()` reads it before every render,
+  `STATUS`, save and midnight roll-over, and every 10 minutes otherwise. Data-ready is enabled only
+  for a Sleep as Android session, at 12.5 Hz.
+- BME280: forced mode, one conversion at most every 5 minutes unless the Sensors or Weather screen
+  is drawn.
+- MAX17048: forced into hibernate (`HIBRT = 0xFFFF`, about 4 uA instead of 23 uA); read on render
+  and for `STATUS`.
+- ET011TJ1: after every update the booster is powered off and the controller held in reset with
+  SPI1 disabled; SCK/MOSI are then driven low and BUSY_N is put in analog mode.
+- Front light: off at boot, switches itself off 30 s after it was turned on or a button was last
+  pressed.
+- External flash: deep power-down except inside an operation or a firmware transfer.
+- Vibration and buzzer gates are returned to plain GPIO low after every use (PWM timer released,
+  tone timer paused with the pin forced low).
+- Unused MCU pins are left in their reset state, which is analog mode on STM32WB; `z` prints the
+  MODER registers.
+
+### Bluetooth parameters
+
+Advertising runs at 100 ms for 30 s after Bluetooth is turned on and after every disconnect, then
+at 1022.5 ms. The connection interval is the phone's decision (the companion requests low-power
+parameters once the session is up and fast ones only for a firmware transfer); the watch sends no
+connection-parameter requests. TX power stays at the library default of about 0 dBm.
+
+### Expected current (estimates, to be measured)
+
+Battery current, 130 mAh cell. "Refresh" is one e-paper update per minute on the clock face.
+
+| State | Estimate | Assumes |
+| --- | --- | --- |
+| Bluetooth off, static screen | 15-25 uA | Stop 2 with RTC about 3 uA; BMA400 4 uA; MAX17048 4 uA; flash, BME280, nPM1100, AP3032 about 1 uA each; display controller in reset a few uA (unknown) |
+| Bluetooth off, clock face | 100-200 uA | The above plus one fast refresh a minute at roughly 6 mA*s (1.5 s of MCU Sleep mode plus booster and panel, both unmeasured) and a cleaning refresh every tenth update |
+| Bluetooth on (default), any screen | 1-2 mA | MCU in Sleep mode at 64 MHz with HSI16, HSI48, MSI and PLL running |
+| Bluetooth advertising, setting `2`, static screen | 40-70 uA | 1 s advertising interval at about 20-30 uA average |
+| Bluetooth connected, setting `2`, clock face | 150-300 uA | Phone-chosen 100-125 ms interval with slave latency; refresh as above |
+| USB attached | 1-2 mA plus charging | Sleep mode, by design |
+| Front light on | add 3-5 mA | Until the 30 s auto-off |
+
+### Hardware checks, in order
+
+1. With USB attached, `z`: "USB attached: yes", and the IWDG line says it runs in Stop.
+2. Send `0`, unplug USB, wait ten seconds, plug it back in, `z`: the console still works and
+   "plug/unplug edges seen" went up by two. Only then send `1`.
+3. Bluetooth off, on battery with a meter in series, a non-clock screen showing: wait 60 s after
+   the last button press. Expect tens of microamps. Plug USB in and press `z`: Stop time should
+   dominate "last minute", with about 6 wakes a minute, nearly all by RTC.
+4. Buttons respond from deep sleep; the clock face redraws on the minute.
+5. If the watch resets about 20 s after going quiet, `z` shows "watchdog reset YES" or
+   "Stop fault YES" and it stays in Sleep mode: the RTC wake-up from Stop is not working.
+6. Bluetooth on, setting `1`: pairing, notifications and firmware update behave as before, and
+   `z` reports "RF wake clock LSE".
+7. Only then try `2`: advertise, connect, leave it for an hour, send notifications, check `z`
+   for wakes by radio and that "device reached Stop" keeps counting. Any link drop or missed
+   message: back to `1`.
 
 ## Console commands
 
@@ -146,6 +258,11 @@ and `b` for a buzzer chirp. Press `h` to print the command list on the device.
 record uses, and how many writes this boot), the Bluetooth-update state, and the secure-link /
 bond / encryption state. The same flash line is printed at boot. `t` plays the next notification
 alert tone (1-5) regardless of settings. `p` forgets the bonded phone (erases the stored link key).
+
+`z` prints the sleep policy: whether USB is attached, whether deep sleep is allowed and why not,
+wakes and Stop/Sleep/awake time over the last minute and since boot, what ended each Stop, and the
+fail-safe flags. `0` switches deep sleep off, `1` restores the default (Stop 2 only while Bluetooth
+is off) and `2` also allows it with the radio on; the choice is stored in the external flash.
 
 Press `f` to shut down the display booster, LED ring, vibration, buzzer, and BLE,
 then reboot into resident STM32 USB DFU. Ordinarily `tools/usb_dfu_update.py`
@@ -204,8 +321,8 @@ Use `j` to inspect it or enter `@YYYY-MM-DDTHH:MM:SS` followed by Enter to set i
 
 The timer is adjusted in one-minute steps on its screen. Scheduled weekday/weekend alarms,
 five-minute snooze, quiet mode, vibration, and alarm overrides for the buttons are active.
-The step counter uses the BMA400's hardware step engine and interrupt rather than periodic raw
-acceleration sampling. Resetting steps records a new sensor-counter baseline without resetting the
+The step counter uses the BMA400's hardware step engine, read on a slow cadence (no interrupt per
+step) rather than periodic raw acceleration sampling. Resetting steps records a new sensor-counter baseline without resetting the
 accelerometer itself.
 
 The Settings card is a scrolling list (five rows visible, arrows mark more rows above/below, the
@@ -223,7 +340,7 @@ the watchdog, and the chip is in deep power-down except while an operation (or a
 transfer) holds it awake. A missing or dead chip reads as JEDEC `0xFFFFFF`/`0x000000` and every
 operation then fails immediately.
 
-`WatchConfigStore` (`watch_config.cpp`) keeps three records in `0x000000`-`0x005FFF`, each in a
+`WatchConfigStore` (`watch_config.cpp`) keeps four records in `0x000000`-`0x007FFF`, each in a
 pair of 4 KiB sectors (A/B). A save erases the sector that does not hold the newest valid copy,
 writes the record there with the next sequence number and a CRC-32, and reads it back, so losing
 power at any point leaves the previous copy intact. The exact layout is documented at the top of
@@ -234,6 +351,7 @@ power at any point leaves the previous copy intact. The exact layout is document
 | Settings | `0x0000` / `0x1000` | vibration, quiet, alert tone, secure link | only when a value changes |
 | Bond | `0x2000` / `0x3000` | bonded phone's identity address and link key | on pairing; erased by Forget phone or turning Secure link off |
 | Steps | `0x4000` / `0x5000` | today's day number and count, six archived days | at midnight roll-over, at most hourly while the count changes, about a minute after a step reset, and before a deliberate reboot |
+| Power | `0x6000` / `0x7000` | deep-sleep setting (console `0`/`1`/`2`) | only when changed from the console |
 
 Without the flash (or after a write fails, until the next boot) everything keeps working from RAM
 exactly as before. At boot the archived days are restored. Today's stored count is added back only
@@ -374,5 +492,4 @@ verify if the controller logic works but the booster does not.
    find phone/watch, and the quiet/vibration settings sync.
 9. Start the companion's test tracking and watch serial for a movement sample every ten seconds.
 
-Power behavior should still be measured on the assembled watch, particularly with BLE connected
-and during Sleep as Android tracking. Those modes naturally wake more often than the idle clock.
+Then work through "Hardware checks, in order" in the power section before relying on deep sleep.

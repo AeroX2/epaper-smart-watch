@@ -109,6 +109,9 @@ void WatchApplication::printHelp() {
   Serial.println(F("  t  play the next notification alert tone (1-5)"));
   Serial.println(F("  p  forget the bonded phone (erase the stored link key)"));
   Serial.println(F("  f  reboot into resident STM32 USB DFU"));
+  Serial.println(F("  z  print the sleep policy / power diagnostics"));
+  Serial.println(F("  0  deep sleep OFF   1  deep sleep while Bluetooth is off (default)"));
+  Serial.println(F("  2  deep sleep also with the radio on (experimental)"));
   Serial.println(F("  @  set local RTC time: @YYYY-MM-DDTHH:MM:SS then Enter"));
   Serial.println(F("  !  set alarm: !HH:MM then Enter"));
   Serial.println(F("  h  show this help"));
@@ -125,21 +128,124 @@ void WatchApplication::runVibrationTest() {
   Serial.println(F("Vibration motor: 300 ms at 50% drive"));
   analogWrite(BoardPins::VIBRATION, 128);
   delay(300);
-  analogWrite(BoardPins::VIBRATION, 0);
+  WatchAlarm::vibrationOff();
 }
 
 void WatchApplication::runBuzzerTest() {
   Serial.println(F("Buzzer: 2.4 kHz chirp"));
   tone(BoardPins::BUZZER, 2400, 180);
   delay(220);
-  noTone(BoardPins::BUZZER);
+  WatchAlarm::buzzerOff();
+}
+
+void WatchApplication::setDisplayLight(bool on) {
+  display_light_on_ = on;
+  model_.led_ring_on = on;
+  display_light_since_ms_ = millis();
+  digitalWrite(BoardPins::DISPLAY_LIGHT, on ? HIGH : LOW);
 }
 
 void WatchApplication::toggleDisplayLight() {
-  display_light_on_ = !display_light_on_;
-  digitalWrite(BoardPins::DISPLAY_LIGHT, display_light_on_ ? HIGH : LOW);
+  setDisplayLight(!display_light_on_);
   Serial.print(F("Display LED ring: "));
   Serial.println(display_light_on_ ? F("ON") : F("OFF"));
+}
+
+// The front-light boost converter draws milliamps for as long as it is on,
+// asleep or not: never leave it on unattended.
+void WatchApplication::serviceDisplayLight() {
+  if (!display_light_on_ ||
+      millis() - display_light_since_ms_ < DISPLAY_LIGHT_TIMEOUT_MS) {
+    return;
+  }
+  setDisplayLight(false);
+  Serial.println(F("Display LED ring: auto-off."));
+  if (display_controller_.active() && ui_.screen() == WatchScreen::Settings) {
+    renderUi();  // the Settings list shows the switch
+  }
+}
+
+void WatchApplication::setDeepSleepMode(DeepSleepMode mode) {
+  power_.setMode(mode);
+  Serial.print(F("Deep sleep (Stop 2): "));
+  Serial.println(mode == DeepSleepMode::Off
+                     ? F("OFF")
+                     : mode == DeepSleepMode::RadioOffOnly
+                           ? F("only while Bluetooth is off (default)")
+                           : F("also with the radio on (experimental)"));
+  if (!config_.savePowerMode(static_cast<uint8_t>(mode))) {
+    Serial.println(F("[WARN] Not stored (no flash): lasts until the reset."));
+  }
+}
+
+uint8_t WatchApplication::sleepBusy() {
+  uint8_t busy = SLEEP_BUSY_NONE;
+  if (alarm_.needsFastService()) {
+    busy |= SLEEP_BUSY_ACTUATOR;
+  }
+  if (buttons_.needsService()) {
+    busy |= SLEEP_BUSY_BUTTONS;
+  }
+  if (flash_.awake()) {
+    busy |= SLEEP_BUSY_FLASH;
+  }
+  if (!ota_.idle()) {
+    busy |= SLEEP_BUSY_OTA;
+  }
+  if (history_sending_ || ble_.sendPending() || ble_.transportBusy() ||
+      ble_.rxPending()) {
+    busy |= SLEEP_BUSY_LINK;
+  }
+  if (serial_capture_ || Serial.available() > 0) {
+    busy |= SLEEP_BUSY_SERIAL;
+  }
+  return busy;
+}
+
+// Sleep until the next real deadline instead of on a fixed tick. Interrupts
+// (buttons, sensors, USB, the radio) end the sleep early by themselves; this
+// only has to cover what the loop does on its own clock. WatchPower caps the
+// result (10 s in Stop for the watchdog, 1 s in Sleep mode).
+uint32_t WatchApplication::sleepBudgetMs() {
+  // Debounce, holds, actuator timing and bursts to the phone are polled.
+  if (buttons_.needsService() || alarm_.needsFastService() ||
+      history_sending_ || ble_.sendPending()) {
+    return 10;
+  }
+  const uint32_t now = millis();
+  uint32_t budget = 60000;
+  const auto consider = [&budget](uint32_t ms) {
+    if (ms < budget) {
+      budget = ms;
+    }
+  };
+  const auto remaining = [](uint32_t interval, uint32_t elapsed) -> uint32_t {
+    return elapsed >= interval ? 0 : interval - elapsed;
+  };
+  if (!ota_.idle()) {
+    consider(250);  // prompt / chunk time-outs and the reboot delay
+  }
+  consider(alarm_.msUntilNextEvent(now));
+  if (display_controller_.active() && ui_.screen() == WatchScreen::Clock &&
+      model_.time_valid) {
+    consider(rtc_.msUntilNextMinute());  // the only time-dependent screen
+  }
+  if (phone_session_ && ble_.connected() && !ota_.transferActive()) {
+    consider(remaining(STATUS_INTERVAL_MS, now - last_status_ms_));
+  }
+  consider(activity_.msUntilNextService(now));
+  consider(ble_.msUntilAdvertisingService());
+  if (display_light_on_) {
+    consider(remaining(DISPLAY_LIGHT_TIMEOUT_MS,
+                       now - display_light_since_ms_));
+  }
+  return budget == 0 ? 1 : budget;
+}
+
+// Runs with interrupts disabled right before the core stops: controller
+// traffic that arrived after the loop's BLE.poll() must be served first.
+bool WatchApplication::sleepVeto() {
+  return instance_ != nullptr && instance_->ble_.rxPending();
 }
 
 void WatchApplication::enterDfu() {
@@ -151,8 +257,8 @@ void WatchApplication::enterDfu() {
   display_.shutdown();
   display_light_on_ = false;
   digitalWrite(BoardPins::DISPLAY_LIGHT, LOW);
-  analogWrite(BoardPins::VIBRATION, 0);
-  noTone(BoardPins::BUZZER);
+  WatchAlarm::vibrationOff();
+  WatchAlarm::buzzerOff();
   if (ble_.ready()) {
     ble_.end(Serial);
   }
@@ -166,21 +272,32 @@ void WatchApplication::updateUiSensors() {
   rtc_.updateModel(model_);
   diagnostics_.initializePeripherals();
 
-  EnvironmentReading environment{};
-  model_.environment_valid =
-      diagnostics_.environmentReady() && environment_.read(environment);
-  if (model_.environment_valid) {
-    model_.temperature_tenths_c =
-        static_cast<int16_t>(lroundf(environment.temperature_c * 10.0f));
-    model_.pressure_hpa =
-        static_cast<uint16_t>(lroundf(environment.pressure_hpa));
-    model_.humidity_percent =
-        environment.has_humidity
-            ? static_cast<uint8_t>(constrain(
-                  lroundf(environment.humidity_percent), 0L, 100L))
-            : 0;
+  // A forced BME280 conversion keeps the MCU awake for about 10 ms. The
+  // clock face (redrawn every minute) only shows whole degrees, so measure
+  // at most every few minutes unless a screen with live values is up.
+  const WatchScreen screen = ui_.screen();
+  const uint32_t now = millis();
+  if (screen == WatchScreen::Sensors || screen == WatchScreen::Weather ||
+      !model_.environment_valid ||
+      now - environment_read_ms_ >= ENVIRONMENT_INTERVAL_MS) {
+    environment_read_ms_ = now;
+    EnvironmentReading environment{};
+    model_.environment_valid =
+        diagnostics_.environmentReady() && environment_.read(environment);
+    if (model_.environment_valid) {
+      model_.temperature_tenths_c =
+          static_cast<int16_t>(lroundf(environment.temperature_c * 10.0f));
+      model_.pressure_hpa =
+          static_cast<uint16_t>(lroundf(environment.pressure_hpa));
+      model_.humidity_percent =
+          environment.has_humidity
+              ? static_cast<uint8_t>(constrain(
+                    lroundf(environment.humidity_percent), 0L, 100L))
+              : 0;
+    }
   }
 
+  activity_.pollSteps();
   readBattery();
   updateMusicPosition();
 
@@ -235,6 +352,9 @@ bool WatchApplication::startBluetooth() {
   // BLE.begin() cannot be fed from inside and spins forever if CPU2 never
   // answers; give it the full watchdog window so a hang resets the watch.
   WatchWatchdog::feed();
+  // The BLE controller times its sleep from the "RF wake-up" clock, which
+  // the generic WB5MMG clock setup leaves unselected.
+  WatchPower::selectRadioWakeClock();
   // The secure-link setting is sampled here: it takes effect when the radio
   // starts, which is why changing it restarts a running radio.
   const bool started_ok =
@@ -361,8 +481,8 @@ void WatchApplication::rebootForUpdate() {
   display_.shutdown();
   display_light_on_ = false;
   digitalWrite(BoardPins::DISPLAY_LIGHT, LOW);
-  analogWrite(BoardPins::VIBRATION, 0);
-  noTone(BoardPins::BUZZER);
+  WatchAlarm::vibrationOff();
+  WatchAlarm::buzzerOff();
   ble_.flush();
   if (ble_.ready()) {
     ble_.end(Serial);
@@ -461,8 +581,7 @@ void WatchApplication::applyUiAction(WatchUiAction action) {
   }
 
   if (model_.led_ring_on != display_light_on_) {
-    display_light_on_ = model_.led_ring_on;
-    digitalWrite(BoardPins::DISPLAY_LIGHT, display_light_on_ ? HIGH : LOW);
+    setDisplayLight(model_.led_ring_on);
   }
 }
 
@@ -549,6 +668,7 @@ void WatchApplication::sendStatus() {
   if (!ble_.connected()) {
     return;
   }
+  activity_.pollSteps();
   readBattery();
   // The board has no charger-status input wired to the MCU: -1 = unknown.
   const bool sent = ble_.sendf(
@@ -612,7 +732,6 @@ void WatchApplication::servicePhoneLink() {
     return;  // STATUS and HISTORY are suspended during a firmware transfer
   }
   serviceHistory();
-  constexpr uint32_t STATUS_INTERVAL_MS = 10UL * 60UL * 1000UL;
   const int16_t battery =
       model_.battery_valid ? static_cast<int16_t>(model_.battery_percent) : -1;
   if (battery != last_status_battery_ ||
@@ -806,6 +925,9 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
         analogWrite(BoardPins::VIBRATION, 0);
         delay(80);
       }
+      if (repeats > 0) {
+        WatchAlarm::vibrationOff();
+      }
       return false;
     }
     default:
@@ -944,6 +1066,23 @@ void WatchApplication::handleCommand(char command) {
       }
       break;
     case 'f': case 'F': enterDfu(); break;
+    case 'z': case 'Z':
+      power_.printStatus(Serial, ble_.ready(), sleepBusy());
+      Serial.print(F("Next loop deadline in ms: "));
+      Serial.println(sleepBudgetMs());
+      Serial.print(F("Advertising: "));
+      Serial.println(!ble_.ready() ? F("radio off")
+                                   : ble_.connected()
+                                         ? F("connected")
+                                         : ble_.advertisingFast()
+                                               ? F("fast (100 ms)")
+                                               : F("slow (1 s)"));
+      Serial.print(F("MAX17048 forced hibernate: "));
+      Serial.println(fuel_gauge_.hibernating() ? F("yes") : F("no"));
+      break;
+    case '0': setDeepSleepMode(DeepSleepMode::Off); break;
+    case '1': setDeepSleepMode(DeepSleepMode::RadioOffOnly); break;
+    case '2': setDeepSleepMode(DeepSleepMode::Always); break;
     case 'h': case 'H': case '?': printHelp(); break;
     case '\r': case '\n': case ' ': case '\t': break;
     default:
@@ -1079,6 +1218,7 @@ void WatchApplication::setup() {
   flash_.begin();
   instance_ = this;
   display_.setWaitHook(displayWaitHook);
+  display_.setIdleBusPins(BoardPins::DISPLAY_SCK, BoardPins::DISPLAY_MOSI);
   i2c_.begin();
 
   // Let the nPM1100 finish port detection before attaching the USB console.
@@ -1105,7 +1245,12 @@ void WatchApplication::setup() {
   WatchWatchdog::feed();
   activity_.begin(Serial);
   alarm_.begin();
-  power_.begin(rtc_, Serial);
+  power_.begin(rtc_, watchdog_.resetByWatchdog(), Serial);
+  power_.setWakeVeto(sleepVeto);
+  uint8_t stored_sleep_mode = 0;
+  if (config_.loadPowerMode(stored_sleep_mode)) {
+    power_.setMode(static_cast<DeepSleepMode>(stored_sleep_mode));
+  }
   printHelp();
   updateUiSensors();
   WatchWatchdog::feed();
@@ -1117,9 +1262,13 @@ void WatchApplication::loop() {
   const uint8_t wake_events = power_.takeEvents();
 
   while (Serial.available() > 0) {
+    // Someone is at the console: stay in USB-safe Sleep mode for a while
+    // whatever the VDDUSB detection says.
+    power_.noteActivity(WatchPower::CONSOLE_HOLD_MS);
     handleSerialByte(static_cast<char>(Serial.read()));
   }
   ble_.poll();
+  ble_.serviceAdvertising();
   model_.bluetooth_enabled = ble_.ready();
   model_.bluetooth_connected = ble_.connected();
   processPhoneUpdates();
@@ -1162,20 +1311,24 @@ void WatchApplication::loop() {
   }
   if ((wake_events & WATCH_WAKE_BUTTON) != 0 || buttons_.needsService()) {
     pollButtons();
+    if (buttons_.needsService()) {
+      // A button really is down (the display SPI borrowing PB4 also raises
+      // the button interrupt, with nothing pressed). Full clocks for a while
+      // after any press: snappy follow-up presses, and a way to get the USB
+      // console up if VDDUSB detection ever fails.
+      power_.noteActivity(WatchPower::BUTTON_HOLD_MS);
+      display_light_since_ms_ = millis();
+    }
   }
+  serviceDisplayLight();
   if (display_controller_.clockMinuteChanged()) {
     renderUi();
   }
   // Send anything queued by button handling or alarms before sleeping.
   ble_.flush();
 
-  // Button debouncing/holds and active actuator pulses need short deadlines.
-  // Everything else sleeps until an interrupt or the one-second RTC safety
-  // deadline; USB and STM32WB IPCC interrupts wake this sleep immediately.
-  const uint32_t sleep_ms =
-      (buttons_.needsService() || alarm_.needsFastService() ||
-       history_sending_)
-          ? 10U
-          : 1000U;
-  power_.sleepFor(sleep_ms);
+  // Sleep until the next deadline or interrupt. WatchPower chooses Stop 2 or
+  // plain Sleep mode from the radio state and the busy flags.
+  const uint32_t budget_ms = sleepBudgetMs();
+  power_.sleep(budget_ms, ble_.ready(), sleepBusy());
 }

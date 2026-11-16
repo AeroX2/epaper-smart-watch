@@ -27,6 +27,8 @@ class WatchRtc {
   // Applies a due transition; true when the local time just changed.
   bool serviceTransition();
   uint64_t milliseconds();
+  // Milliseconds until the displayed minute changes (1..60000).
+  uint32_t msUntilNextMinute();
   void restoreAfterBackupReset(time_t saved_epoch, uint32_t elapsed_ms,
                                Print& out);
   void print(Print& out);

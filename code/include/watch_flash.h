@@ -40,6 +40,8 @@ class WatchFlash {
   // nest; every acquire() needs one release().
   void acquire();
   void release();
+  // True while a caller holds the chip out of deep power-down.
+  bool awake() const { return hold_count_ != 0; }
 
   // All three fail (false) when the chip is absent, the range is outside the
   // device, or the chip stays busy past its timeout. Each returns only after

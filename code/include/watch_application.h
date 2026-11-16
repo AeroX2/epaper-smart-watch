@@ -78,6 +78,16 @@ class WatchApplication {
   void handleButton(size_t index, bool long_press);
   void handleChord(bool backslash, bool long_press);
 
+  // Power policy inputs (see WatchPower and the README power section).
+  void setDisplayLight(bool on);
+  void serviceDisplayLight();
+  void setDeepSleepMode(DeepSleepMode mode);
+  // WatchSleepBusy bits: work that needs the full clock tree right now.
+  uint8_t sleepBusy();
+  // Milliseconds until the main loop next has something to do by itself.
+  uint32_t sleepBudgetMs();
+  static bool sleepVeto();
+
   TwoWire wire_;
   I2cBus i2c_;
   Bma400 accelerometer_;
@@ -119,4 +129,14 @@ class WatchApplication {
   uint8_t history_next_ = 0;
   uint32_t music_base_position_ = 0;
   uint32_t music_base_ms_ = 0;
+
+  // Front light switches itself off this long after it was turned on or a
+  // button was last pressed.
+  static constexpr uint32_t DISPLAY_LIGHT_TIMEOUT_MS = 30000;
+  // The BME280 is only measured this often unless a screen that shows its
+  // values is being drawn.
+  static constexpr uint32_t ENVIRONMENT_INTERVAL_MS = 5UL * 60UL * 1000UL;
+  static constexpr uint32_t STATUS_INTERVAL_MS = 10UL * 60UL * 1000UL;
+  uint32_t display_light_since_ms_ = 0;
+  uint32_t environment_read_ms_ = 0;
 };

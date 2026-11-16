@@ -17,7 +17,8 @@ class WatchFlash;
 //   0x000000 / 0x001000  1  settings
 //   0x002000 / 0x003000  2  bond key
 //   0x004000 / 0x005000  3  step history
-//   0x006000 - 0x00FFFF  unused
+//   0x006000 / 0x007000  4  power policy
+//   0x008000 - 0x00FFFF  unused
 //
 // Record, little-endian, at the start of its sector:
 //   0  u32 magic      0x47464357 ("WCFG")
@@ -34,6 +35,8 @@ class WatchFlash;
 //   steps (60):    u32 today_day, u32 today_steps, u8 count, u8 reserved[3],
 //                  6 x { u32 day, u32 steps }   (oldest first; day = local
 //                  epoch / 86400)
+//   power (4):     u8 deep_sleep_mode (0 off, 1 radio-off only, 2 always),
+//                  u8 reserved[3]
 //
 // When the flash is absent, or after a write fails, every save returns false
 // and the callers simply keep running from RAM.
@@ -81,10 +84,14 @@ class WatchConfigStore {
   bool loadSteps(StoredSteps& steps);
   bool saveSteps(const StoredSteps& steps);
 
+  // Deep-sleep mode (a DeepSleepMode value). No record = default.
+  bool loadPowerMode(uint8_t& mode);
+  bool savePowerMode(uint8_t mode);
+
   void printStatus(Print& out);
 
  private:
-  static constexpr uint8_t KIND_COUNT = 3;
+  static constexpr uint8_t KIND_COUNT = 4;
   static constexpr size_t MAX_PAYLOAD = 60;
   static constexpr size_t HEADER_SIZE = 12;
   static constexpr size_t MAX_RECORD = HEADER_SIZE + MAX_PAYLOAD + 4;

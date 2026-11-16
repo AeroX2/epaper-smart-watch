@@ -82,6 +82,30 @@ ET011TJ1::ET011TJ1(SPIClass& spi, uint32_t cs_pin, uint32_t dc_pin,
       reset_pin_(reset_pin),
       busy_pin_(busy_pin) {}
 
+namespace {
+
+// delay() spins the core at full run current. A refresh spends one to several
+// seconds in BUSY waits, once a minute on the clock face, so wait in Sleep
+// mode instead: WFI until the next SysTick (at most 1 ms away) or any other
+// interrupt. Nothing but the CPU clock stops, so SPI, USB and the radio are
+// unaffected. Falls back to delay() if SysTick could not end the wait.
+void lowPowerDelay(uint32_t ms) {
+  const bool tick_running =
+      (SysTick->CTRL & (SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk)) ==
+      (SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk);
+  if (!tick_running || __get_PRIMASK() != 0 ||
+      (SCB->SCR & SCB_SCR_SLEEPDEEP_Msk) != 0) {
+    delay(ms);
+    return;
+  }
+  const uint32_t started = millis();
+  while (millis() - started < ms) {
+    __WFI();
+  }
+}
+
+}  // namespace
+
 void ET011TJ1::prepare() {
   if (prepared_) {
     return;
@@ -105,7 +129,7 @@ void ET011TJ1::prepare() {
 void ET011TJ1::shutdown() {
   if (controller_awake_) {
     writeCommand(CMD_POF);
-    delay(50);
+    lowPowerDelay(50);
   }
   holdInReset();
 }
@@ -231,12 +255,12 @@ int ET011TJ1::hardwareReset() {
   // The normal idle state holds RST_N low. First release it so the following
   // low pulse is a real reset edge rather than LOW -> LOW -> HIGH.
   digitalWrite(reset_pin_, HIGH);
-  delay(20);
+  lowPowerDelay(20);
   digitalWrite(reset_pin_, LOW);
-  delay(10);
+  lowPowerDelay(10);
   const int busy_during_reset = busyLevel();
   digitalWrite(reset_pin_, HIGH);
-  delay(100);
+  lowPowerDelay(100);
   controller_awake_ = true;
   return busy_during_reset;
 }
@@ -370,7 +394,7 @@ void ET011TJ1::safeShutdown(Print& out) {
     // immediately afterwards, so a failed BUSY handshake cannot leave the
     // controller active in application firmware.
     writeCommand(CMD_POF);
-    delay(50);
+    lowPowerDelay(50);
   }
   booster_on_ = false;
   holdInReset();
@@ -385,6 +409,17 @@ void ET011TJ1::holdInReset() {
     spi_.end();
     prepared_ = false;
   }
+  // SPI.end() leaves SCK/MOSI configured for a peripheral that is now off,
+  // i.e. floating into the controller: drive them low. Take the pull-down
+  // off BUSY_N as well (analog mode draws nothing whatever the held-in-reset
+  // controller does with the line). prepare() restores all three.
+  if (idle_bus_pins_set_) {
+    digitalWrite(idle_sck_pin_, LOW);
+    pinMode(idle_sck_pin_, OUTPUT);
+    digitalWrite(idle_mosi_pin_, LOW);
+    pinMode(idle_mosi_pin_, OUTPUT);
+  }
+  pinMode(busy_pin_, INPUT_ANALOG);
   controller_awake_ = false;
   booster_on_ = false;
 }
@@ -477,6 +512,12 @@ void ET011TJ1::writeFramebuffer(uint8_t command, const uint8_t* framebuffer,
   spi_.endTransaction();
 }
 
+void ET011TJ1::setIdleBusPins(uint32_t sck_pin, uint32_t mosi_pin) {
+  idle_sck_pin_ = sck_pin;
+  idle_mosi_pin_ = mosi_pin;
+  idle_bus_pins_set_ = true;
+}
+
 void ET011TJ1::setWaitHook(void (*hook)()) {
   wait_hook_ = hook;
 }
@@ -494,7 +535,7 @@ bool ET011TJ1::waitReady(uint32_t timeout_ms) {
       return false;
     }
     runWaitHook();
-    delay(1);
+    lowPowerDelay(1);
   }
   return true;
 }
@@ -512,7 +553,7 @@ bool ET011TJ1::waitBusyCycle(uint32_t assert_timeout_ms,
       return true;
     }
     runWaitHook();
-    delay(1);
+    lowPowerDelay(1);
   }
   return waitReady(ready_timeout_ms);
 }

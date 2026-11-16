@@ -22,6 +22,18 @@ class WatchAlarm {
   void snooze(Print& out);
   void pulseHaptic(uint8_t strength, uint32_t duration_ms);
   bool needsFastService() const;
+  // Milliseconds until the next thing service() has to act on: timer expiry,
+  // Sleep as Android alarm, snooze end, today's scheduled alarm, or local
+  // midnight (when "today" and its alarm are re-evaluated). UINT32_MAX if
+  // nothing is scheduled.
+  uint32_t msUntilNextEvent(uint32_t now);
+
+  // Actuator "off" states that draw nothing: the motor gate as a plain GPIO
+  // low with its PWM timer released, and the piezo gate low with the tone
+  // timer paused (noTone() alone can leave the gate high mid-cycle, holding
+  // the piezo's bleed resistor across the supply).
+  static void vibrationOff();
+  static void buzzerOff();
 
   // Incoming-call ring pattern (caller decides whether quiet mode allows it).
   void startCallAlert();

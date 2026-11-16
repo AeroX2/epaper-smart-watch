@@ -48,8 +48,13 @@ class Bma400 {
 
   bool begin();
   bool read(AccelReading& reading);
+  // Step counter running with no interrupt pin mapped (it is read on a slow
+  // cadence instead); data-ready routed to INT1 but disabled.
   bool configureActivityInterrupts();
   bool enableDataReadyInterrupt(bool enable);
+  // Data-ready rate: 12.5 Hz while sleep tracking, 100 Hz otherwise. The
+  // step counter has its own fixed 100 Hz path and is not affected.
+  bool setTrackingRate(bool tracking);
   bool readInterruptStatus(uint16_t& status);
   bool readStepCount(uint32_t& count, uint8_t& activity_type);
   uint8_t address() const;
@@ -84,8 +89,11 @@ class Max17048 {
 
   bool begin();
   bool read(BatteryReading& reading);
+  // HIBRT was written to "always hibernate" (about 4 uA instead of 23 uA).
+  bool hibernating() const { return hibernate_set_; }
 
  private:
   I2cBus& bus_;
   Adafruit_MAX17048 device_;
+  bool hibernate_set_ = false;
 };

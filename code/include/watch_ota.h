@@ -35,6 +35,8 @@ class WatchOta {
   bool supported() const;
   // Receiving, verifying or waiting to reboot: STATUS/HISTORY are suspended.
   bool transferActive() const;
+  // Nothing in progress: no prompt, transfer, verification or clean-up.
+  bool idle() const;
   // The update overlay owns the screen and the buttons.
   bool screenShown() const;
 

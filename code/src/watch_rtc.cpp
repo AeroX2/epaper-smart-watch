@@ -170,6 +170,10 @@ uint64_t WatchRtc::milliseconds() {
   return static_cast<uint64_t>(seconds) * 1000ULL + subseconds;
 }
 
+uint32_t WatchRtc::msUntilNextMinute() {
+  return 60000UL - static_cast<uint32_t>(milliseconds() % 60000ULL);
+}
+
 void WatchRtc::restoreAfterBackupReset(time_t saved_epoch, uint32_t elapsed_ms,
                                        Print& out) {
   rtc_.setClockSource(lse_ready_ ? STM32RTC::LSE_CLOCK

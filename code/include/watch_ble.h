@@ -109,6 +109,24 @@ class WatchBle {
   bool sendf(const char* format, ...) __attribute__((format(printf, 2, 3)));
   uint8_t outboundFree() const;
   bool outboundPending() const;
+  // A queued message could go out right now (connected and subscribed).
+  bool sendPending() const;
+
+  // Power policy helpers. rxPending(): the controller has delivered events
+  // that poll() has not drained yet. transportBusy(): an outgoing ACL packet
+  // has not been taken by CPU2 yet. Both only read flags, so they are safe
+  // with interrupts disabled.
+  bool rxPending() const;
+  bool transportBusy() const;
+
+  // Advertising interval policy: fast (100 ms) for ADV_FAST_WINDOW_MS after
+  // the radio starts or a phone disconnects, about 1 s otherwise. Call from
+  // the main loop only (it sends HCI commands).
+  void serviceAdvertising();
+  // Milliseconds until serviceAdvertising() has something to do, or
+  // UINT32_MAX.
+  uint32_t msUntilAdvertisingService() const;
+  bool advertisingFast() const { return adv_fast_; }
 
   void updateBattery(uint8_t percent);
 
@@ -138,6 +156,19 @@ class WatchBle {
       __attribute__((format(printf, 2, 3)));
   void clearOutbound();
   void drainOutbound();
+  void applyAdvertising(bool fast);
+
+  static constexpr uint32_t ADV_FAST_WINDOW_MS = 30000;
+  static constexpr uint32_t ADV_RETRY_MS = 2000;
+  // Units of 0.625 ms: 100 ms and 1022.5 ms.
+  static constexpr uint16_t ADV_INTERVAL_FAST = 160;
+  static constexpr uint16_t ADV_INTERVAL_SLOW = 1636;
+
+  bool adv_fast_ = true;            // interval currently programmed
+  bool adv_boost_pending_ = false;  // a disconnect asks for a fast window
+  bool adv_retry_ = false;          // the last change was refused
+  bool adv_retry_fast_ = false;
+  uint32_t adv_mark_ms_ = 0;        // start of the fast window / last attempt
 
   bool ready_ = false;
   bool connected_ = false;

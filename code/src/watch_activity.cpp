@@ -56,7 +56,8 @@ void WatchActivity::begin(Print& out) {
   uint8_t activity_type = 0;
   if (hardware_activity_ready_ &&
       accelerometer_.readStepCount(sensor_step_baseline_, activity_type)) {
-    out.println(F("[PASS] BMA400 hardware step/data-ready interrupts armed."));
+    last_poll_ms_ = millis();
+    out.println(F("[PASS] BMA400 step counter running (polled, no step IRQ)."));
   } else {
     hardware_activity_ready_ = false;
     out.println(F("[WARN] BMA400 interrupt configuration failed."));
@@ -68,9 +69,13 @@ void WatchActivity::startSleepTracking(Print& out) {
   sleep_accel_seeded_ = false;
   sleep_max_delta_mg_ = 0;
   sleep_interval_started_at_ = millis();
-  if (hardware_activity_ready_ &&
-      !accelerometer_.enableDataReadyInterrupt(true)) {
-    out.println(F("[WARN] Could not enable BMA400 sleep data-ready IRQ."));
+  if (hardware_activity_ready_) {
+    // 12.5 samples/s is plenty for a ten-second movement maximum and wakes
+    // the MCU an eighth as often as the normal 100 Hz rate.
+    accelerometer_.setTrackingRate(true);
+    if (!accelerometer_.enableDataReadyInterrupt(true)) {
+      out.println(F("[WARN] Could not enable BMA400 sleep data-ready IRQ."));
+    }
   }
   out.println(F("Sleep as Android movement tracking started."));
 }
@@ -81,6 +86,7 @@ void WatchActivity::stopSleepTracking(Print& out) {
   sleep_max_delta_mg_ = 0;
   if (hardware_activity_ready_) {
     accelerometer_.enableDataReadyInterrupt(false);
+    accelerometer_.setTrackingRate(false);
   }
   out.println(F("Sleep as Android movement tracking stopped."));
 }
@@ -166,6 +172,7 @@ void WatchActivity::serviceDay(uint32_t local_day, bool time_trusted,
   }
   if (local_day != current_day_) {
     if (current_day_ != 0 && local_day == current_day_ + 1) {
+      pollSteps();  // the finished day gets its last steps
       const uint32_t finished = model_.steps;
       archive(current_day_, finished);
       out.print(F("Local midnight: archived steps "));
@@ -204,6 +211,10 @@ void WatchActivity::save(Print& out) {
 }
 
 void WatchActivity::serviceStorage(Print& out) {
+  if (hardware_activity_ready_ &&
+      millis() - last_poll_ms_ >= STEP_POLL_INTERVAL_MS) {
+    pollSteps();
+  }
   // current_day_ == 0 also covers "stored today still pending": the flash
   // copy must not be overwritten before it has been reconciled.
   if (current_day_ == 0) {
@@ -219,7 +230,31 @@ void WatchActivity::serviceStorage(Print& out) {
   }
 }
 
+uint32_t WatchActivity::msUntilNextService(uint32_t now) const {
+  uint32_t best = UINT32_MAX;
+  if (hardware_activity_ready_) {
+    const uint32_t elapsed = now - last_poll_ms_;
+    best = elapsed >= STEP_POLL_INTERVAL_MS ? 0
+                                            : STEP_POLL_INTERVAL_MS - elapsed;
+  }
+  if (current_day_ != 0) {
+    const uint32_t elapsed = now - last_save_ms_;
+    uint32_t interval = UINT32_MAX;
+    if (save_requested_) {
+      interval = RESET_SAVE_INTERVAL_MS;
+    } else if (model_.steps != saved_steps_) {
+      interval = SAVE_INTERVAL_MS;
+    }
+    if (interval != UINT32_MAX) {
+      const uint32_t remaining = elapsed >= interval ? 0 : interval - elapsed;
+      best = remaining < best ? remaining : best;
+    }
+  }
+  return best;
+}
+
 void WatchActivity::saveNow(Print& out) {
+  pollSteps();
   if (current_day_ != 0 &&
       (save_requested_ || model_.steps != saved_steps_)) {
     save(out);
@@ -269,29 +304,27 @@ void WatchActivity::resetSteps(Print& out) {
   out.println(F("BMA400 step baseline reset."));
 }
 
-void WatchActivity::serviceInterrupt(Print& out) {
+void WatchActivity::pollSteps() {
+  last_poll_ms_ = millis();
   if (!hardware_activity_ready_) {
     return;
   }
+  uint32_t sensor_steps = 0;
+  uint8_t activity_type = 0;
+  if (accelerometer_.readStepCount(sensor_steps, activity_type)) {
+    const uint32_t delta =
+        (sensor_steps - sensor_step_baseline_) & 0x00FFFFFFUL;
+    model_.steps = reported_step_baseline_ + delta;
+  }
+}
 
-  uint16_t status = 0;
-  if (!accelerometer_.readInterruptStatus(status)) {
+void WatchActivity::serviceInterrupt(Print& out) {
+  // INT1 carries only data-ready, and only during a tracking session; the
+  // step counter is no longer mapped to a pin (see pollSteps()).
+  if (!hardware_activity_ready_ || !sleep_tracking_) {
     return;
   }
-
-  if ((status & BMA400_ASSERTED_STEP_INT) != 0) {
-    uint32_t sensor_steps = 0;
-    uint8_t activity_type = 0;
-    if (accelerometer_.readStepCount(sensor_steps, activity_type)) {
-      const uint32_t delta =
-          (sensor_steps - sensor_step_baseline_) & 0x00FFFFFFUL;
-      model_.steps = reported_step_baseline_ + delta;
-    }
-  }
-
-  if (sleep_tracking_ && (status & BMA400_ASSERTED_DRDY_INT) != 0) {
-    processSleepSample(out);
-  }
+  processSleepSample(out);
 }
 
 void WatchActivity::processSleepSample(Print& out) {

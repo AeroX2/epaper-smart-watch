@@ -78,8 +78,10 @@ bool Bma400::configureActivityInterrupts() {
   if (address_ == 0) {
     return false;
   }
+  // The step counter runs whenever its enable bit is set; mapping it to a
+  // pin would only wake the MCU on every single step.
   bma400_step_int_conf step_config{};
-  step_config.int_chan = BMA400_INT_CHANNEL_1;
+  step_config.int_chan = BMA400_UNMAP_INT_PIN;
   return device_.setStepCounterInterrupt(&step_config) == BMA400_OK &&
          device_.setDRDYInterruptChannel(BMA400_INT_CHANNEL_1) == BMA400_OK &&
          device_.setInterruptPinMode(BMA400_INT_CHANNEL_1,
@@ -93,6 +95,12 @@ bool Bma400::configureActivityInterrupts() {
 bool Bma400::enableDataReadyInterrupt(bool enable) {
   return address_ != 0 &&
          device_.enableInterrupt(BMA400_DRDY_INT_EN, enable) == BMA400_OK;
+}
+
+bool Bma400::setTrackingRate(bool tracking) {
+  return address_ != 0 &&
+         device_.setODR(tracking ? BMA400_ODR_12_5HZ : BMA400_ODR_100HZ) ==
+             BMA400_OK;
 }
 
 bool Bma400::readInterruptStatus(uint16_t& status) {
@@ -165,7 +173,22 @@ uint8_t Bme280::chipId() const {
 Max17048::Max17048(I2cBus& bus) : bus_(bus) {}
 
 bool Max17048::begin() {
-  return device_.begin(&bus_.wire());
+  if (!device_.begin(&bus_.wire())) {
+    return false;
+  }
+  // HIBRT = 0xFFFF keeps the gauge in hibernate mode permanently: it samples
+  // every 45 s instead of every 250 ms, which suits a load of well under
+  // C/100 and cuts its supply current from about 23 uA to about 4 uA. With
+  // the default thresholds every e-paper refresh (a >60 mV dip) would kick it
+  // back to active mode for six minutes. Written as one 16-bit transfer; the
+  // gauge ignores single-byte register writes.
+  TwoWire& wire = bus_.wire();
+  wire.beginTransmission(MAX17048_I2CADDR_DEFAULT);
+  wire.write(static_cast<uint8_t>(MAX1704X_HIBRT_REG));
+  wire.write(static_cast<uint8_t>(0xFF));
+  wire.write(static_cast<uint8_t>(0xFF));
+  hibernate_set_ = wire.endTransmission() == 0;
+  return true;
 }
 
 bool Max17048::read(BatteryReading& reading) {

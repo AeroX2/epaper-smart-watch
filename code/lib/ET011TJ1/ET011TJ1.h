@@ -28,6 +28,10 @@ class ET011TJ1 {
   // Called on every poll while waiting on BUSY_N (each wait is itself
   // bounded); used to feed a watchdog through long refreshes.
   void setWaitHook(void (*hook)());
+  // SPI clock/data pins to drive low whenever the controller is held in
+  // reset (the SPI peripheral is switched off then and would leave them
+  // floating).
+  void setIdleBusPins(uint32_t sck_pin, uint32_t mosi_pin);
 
   // Resets the controller and verifies that active-low BUSY_N returns high.
   // This deliberately leaves the high-voltage booster off and returns the
@@ -64,6 +68,9 @@ class ET011TJ1 {
   bool prepared_ = false;
   bool controller_awake_ = false;
   bool booster_on_ = false;
+  bool idle_bus_pins_set_ = false;
+  uint32_t idle_sck_pin_ = 0;
+  uint32_t idle_mosi_pin_ = 0;
 
   int hardwareReset();
   bool initializeVendorUpdate(Print& out,

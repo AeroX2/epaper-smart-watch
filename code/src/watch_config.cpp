@@ -13,10 +13,12 @@ constexpr uint8_t RECORD_VERSION = 1;
 constexpr uint8_t KIND_SETTINGS = 1;
 constexpr uint8_t KIND_BOND = 2;
 constexpr uint8_t KIND_STEPS = 3;
+constexpr uint8_t KIND_POWER = 4;
 
 constexpr size_t SETTINGS_LENGTH = 4;
 constexpr size_t BOND_LENGTH = 24;
 constexpr size_t STEPS_LENGTH = 60;
+constexpr size_t POWER_LENGTH = 4;
 
 }  // namespace
 
@@ -264,8 +266,27 @@ bool WatchConfigStore::saveSteps(const StoredSteps& steps) {
   return save(KIND_STEPS, payload, sizeof(payload));
 }
 
+bool WatchConfigStore::loadPowerMode(uint8_t& mode) {
+  uint8_t payload[POWER_LENGTH];
+  if (!load(KIND_POWER, payload, sizeof(payload)) || payload[0] > 2) {
+    return false;
+  }
+  mode = payload[0];
+  return true;
+}
+
+bool WatchConfigStore::savePowerMode(uint8_t mode) {
+  uint8_t stored = 0;
+  if (loadPowerMode(stored) && stored == mode) {
+    return true;  // unchanged: no flash wear
+  }
+  const uint8_t payload[POWER_LENGTH] = {mode, 0, 0, 0};
+  return save(KIND_POWER, payload, sizeof(payload));
+}
+
 void WatchConfigStore::printStatus(Print& out) {
-  static const char* const NAMES[KIND_COUNT] = {"settings", "bond", "steps"};
+  static const char* const NAMES[KIND_COUNT] = {"settings", "bond", "steps",
+                                                "power"};
   out.print(F("Config store: "));
   if (flash_ == nullptr || !flash_->present()) {
     out.println(F("no external flash (RAM only)"));
