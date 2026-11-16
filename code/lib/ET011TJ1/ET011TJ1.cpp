@@ -477,12 +477,23 @@ void ET011TJ1::writeFramebuffer(uint8_t command, const uint8_t* framebuffer,
   spi_.endTransaction();
 }
 
+void ET011TJ1::setWaitHook(void (*hook)()) {
+  wait_hook_ = hook;
+}
+
+void ET011TJ1::runWaitHook() const {
+  if (wait_hook_ != nullptr) {
+    wait_hook_();
+  }
+}
+
 bool ET011TJ1::waitReady(uint32_t timeout_ms) {
   const uint32_t started = millis();
   while (busyLevel() == LOW) {
     if (millis() - started >= timeout_ms) {
       return false;
     }
+    runWaitHook();
     delay(1);
   }
   return true;
@@ -500,6 +511,7 @@ bool ET011TJ1::waitBusyCycle(uint32_t assert_timeout_ms,
     if (millis() - started >= assert_timeout_ms) {
       return true;
     }
+    runWaitHook();
     delay(1);
   }
   return waitReady(ready_timeout_ms);

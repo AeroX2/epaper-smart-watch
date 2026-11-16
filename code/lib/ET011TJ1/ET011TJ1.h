@@ -25,6 +25,9 @@ class ET011TJ1 {
   // Turns off the booster if necessary and holds the controller in reset.
   // Intended for firmware hand-off and recovery paths.
   void shutdown();
+  // Called on every poll while waiting on BUSY_N (each wait is itself
+  // bounded); used to feed a watchdog through long refreshes.
+  void setWaitHook(void (*hook)());
 
   // Resets the controller and verifies that active-low BUSY_N returns high.
   // This deliberately leaves the high-voltage booster off and returns the
@@ -82,6 +85,9 @@ class ET011TJ1 {
 
   bool waitReady(uint32_t timeout_ms);
   bool waitBusyCycle(uint32_t assert_timeout_ms, uint32_t ready_timeout_ms);
+  void runWaitHook() const;
+
+  void (*wait_hook_)() = nullptr;
   uint8_t packed2BppPatternByte(ET011TJ1Pattern pattern, uint16_t x,
                                uint16_t y) const;
   bool diagnosticPixel(uint16_t x, uint16_t y) const;
