@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothGatt
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -28,6 +29,7 @@ import com.james.epaperwatch.data.Prefs
 import com.james.epaperwatch.data.WatchState
 import com.james.epaperwatch.health.StepSync
 import com.james.epaperwatch.link.GattLink
+import com.james.epaperwatch.link.PowerPolicy
 import com.james.epaperwatch.link.ReliableChannel
 import com.james.epaperwatch.link.WakeAlarms
 import com.james.epaperwatch.ota.FirmwareImage
@@ -80,6 +82,11 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
     private val hardFailures = HashMap<String, Int>()
     private val retryDirty = Runnable { flushDirtyState() }
 
+    /** Delay before the next resend of dropped state; doubles until a resend gets through. */
+    private var stateRetryMs = PowerPolicy.STATE_RETRY_MS
+    /** A firmware transfer holds the connection at high priority. */
+    private var otaHighPriority = false
+
     private val historyBuffer = ArrayList<Pair<String, Int>>()
     private var lastTimeSyncMs = 0L
     /** When this connection's secure watch first announced itself before any session (0 = not). */
@@ -106,10 +113,18 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         workWakeLock = power?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "epaperwatch:work")
             ?.apply { setReferenceCounted(false) }
 
-        link = GattLink(this, handler, this)
-        channel = ReliableChannel(handler, ::onWatchUnresponsive) { bytes, done -> link.write(bytes, done) }
+        alarms = WakeAlarms(
+            this, listOf(ALARM_TICK, ALARM_CALENDAR, ALARM_RECONNECT), ::onWakeAlarm,
+        ).also { it.register() }
+        link = GattLink(
+            this, handler, this,
+            scheduleWake = { delay -> alarms.schedule(ALARM_RECONNECT, delay) },
+            cancelWake = { alarms.cancel(ALARM_RECONNECT) },
+        )
+        channel = ReliableChannel(handler, ::onWatchUnresponsive, ::onChannelIdle) { bytes, done ->
+            link.write(bytes, done)
+        }
         ota = OtaManager(handler, this)
-        alarms = WakeAlarms(this, listOf(ALARM_TICK, ALARM_CALENDAR), ::onWakeAlarm).also { it.register() }
         phone = PhoneStateBridge(this, ::onPhoneState).also { it.register() }
         calendar = CalendarBridge(
             this, handler,
@@ -117,7 +132,7 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
             cancelWake = { alarms.cancel(ALARM_CALENDAR) },
         ) { sendCalendar() }
         calendar.refreshRegistration()
-        weather = WeatherBridge(this, handler) { sendState(it) }
+        weather = WeatherBridge(this, handler, onSettled = ::releaseWorkLockIfIdle) { sendState(it) }
         media = MediaBridge(this, handler) {
             // The bridge already decided that the watch's copy is wrong: always send.
             if (sessionActive) media.messageIfChanged()?.let { msg -> sendState(msg, force = true) }
@@ -146,6 +161,8 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
             return START_NOT_STICKY
         }
         link.connect(address)
+        // The user or a presence event asked: do not sit out a backoff (or a given-up link).
+        if (intent?.action == ACTION_RECONNECT) link.kick()
         return START_STICKY
     }
 
@@ -241,9 +258,22 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
 
     override fun writeChunk(packet: ByteArray, done: (Boolean) -> Unit) = link.writeOta(packet, done)
 
-    override fun setHighPriority(high: Boolean) = link.setHighPriority(high)
+    /**
+     * High connection priority only while firmware data flows. Afterwards balanced, for the
+     * resync that follows a failed transfer; [onChannelIdle] then drops to low power.
+     */
+    override fun setHighPriority(high: Boolean) {
+        otaHighPriority = high
+        link.requestPriority(
+            if (high) BluetoothGatt.CONNECTION_PRIORITY_HIGH else BluetoothGatt.CONNECTION_PRIORITY_BALANCED,
+        )
+    }
 
-    /** A partial wake lock for the whole transfer and install; released on every exit path. */
+    /**
+     * A partial wake lock for the whole transfer and install (the transfer is a chain of
+     * callbacks the CPU would otherwise sleep through); released on every exit path of
+     * [OtaManager] and capped by a timeout.
+     */
     override fun holdWakeLock(hold: Boolean) {
         val lock = otaWakeLock ?: return
         try {
@@ -291,13 +321,13 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
                 ReliableChannel.Outcome.ACKED -> startSession()
                 ReliableChannel.Outcome.NAKED -> {
                     setState(WatchState.Link.INCOMPATIBLE, "Watch rejected HELLO ($reason)")
-                    link.restart()
+                    link.restart("the watch rejected HELLO ($reason)")
                 }
                 ReliableChannel.Outcome.TIMED_OUT -> {
                     val seen = secureSeenAt
                     if (seen == 0L) {
                         setState(WatchState.Link.CONNECTING, "Watch did not answer HELLO")
-                        link.restart()
+                        link.restart("the watch did not answer HELLO")
                     } else if (SystemClock.elapsedRealtime() - seen < PAIRING_WINDOW_MS) {
                         handler.post { if (link.status == GattLink.Status.READY && !sessionActive) sendHello() }
                     } else {
@@ -318,8 +348,10 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         ota.onLinkLost()
         clearStateTracking()
         historyBuffer.clear()
+        otaHighPriority = false
         alarms.cancel(ALARM_TICK)
         alarms.cancel(ALARM_CALENDAR)
+        releaseWorkLockIfIdle()
     }
 
     /** Three messages in a row were dropped for timeout: the watch is gone, start over. */
@@ -327,9 +359,22 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         handler.post {
             if (!sessionActive) return@post
             Log.w(TAG, "Watch stopped acknowledging; restarting the link")
-            link.restart() // ends the session (onDisconnected) and reconnects with backoff
             setState(WatchState.Link.CONNECTING, "Watch stopped responding, reconnecting")
+            // Ends the session (onDisconnected) and reconnects with backoff, or gives up.
+            link.restart("the watch stopped responding")
         }
+    }
+
+    /**
+     * Nothing is left to send. Once the session-start burst (or any later exchange) has been
+     * acknowledged the connection goes to low power: a long connection interval is what keeps
+     * the watch's idle radio current down. Messages still get through, only a little slower.
+     */
+    private fun onChannelIdle() {
+        if (sessionActive && !otaHighPriority && !ota.blocksTraffic) {
+            link.requestPriority(BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER)
+        }
+        releaseWorkLockIfIdle()
     }
 
     override fun onMessage(bytes: ByteArray) {
@@ -406,8 +451,8 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         sendSessionState()
         markSynced(force = true)
         media.start()
-        alarms.schedule(ALARM_TICK, TICK_MS)
-        weather.refresh(force = false)
+        alarms.schedule(ALARM_TICK, PowerPolicy.TICK_MS)
+        weather.refresh(force = false) // fetches only if the cached forecast is stale
         ota.onSessionStarted()
     }
 
@@ -429,7 +474,7 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
     private fun currentState(key: String): OutMessage? = when (key) {
         KEY_TIME -> phone.timeMessage()
         "SETTINGS" -> settingsMessage()
-        "PHONE" -> phone.phoneMessage()
+        KEY_PHONE -> phone.phoneMessage()
         "NEXT_ALARM" -> phone.alarmMessage()
         "EVENT" -> calendar.eventMessage()
         "WEATHER" -> weather.currentMessage()
@@ -449,15 +494,26 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
                 sendState(phone.alarmMessage())
                 sendCalendar()
             }
-            PhoneStateBridge.Kind.PHONE -> sendState(phone.phoneMessage())
+            PhoneStateBridge.Kind.PHONE -> {
+                if (!sessionActive) return
+                // Battery in coarse steps only: not every percent is worth waking the watch.
+                val message = phone.phoneMessage()
+                val shown = pendingState[KEY_PHONE] ?: ackedState[KEY_PHONE]
+                if (PowerPolicy.phoneWorthSending(shown, message.body)) sendState(message)
+            }
             PhoneStateBridge.Kind.ALARM -> sendState(phone.alarmMessage())
         }
     }
 
-    /** Doze-safe periodic work (see [WakeAlarms]). */
+    /** Doze-safe timers (see [WakeAlarms]). Nothing here runs without a session. */
     private fun onWakeAlarm(tag: String) {
+        if (tag == ALARM_RECONNECT) {
+            link.onWake()
+            return
+        }
+        if (!sessionActive) return
         // The alarm's own wake lock ends when this returns; the weather download and the BLE
-        // writes it leads to need a little longer.
+        // writes this leads to need a little longer. Released as soon as both are done.
         try {
             workWakeLock?.acquire(WORK_WAKE_MS)
         } catch (e: RuntimeException) {
@@ -465,16 +521,21 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         }
         when (tag) {
             ALARM_TICK -> {
-                if (!sessionActive) return
-                alarms.schedule(ALARM_TICK, TICK_MS)
+                alarms.schedule(ALARM_TICK, PowerPolicy.TICK_MS)
                 weather.refresh(force = false)
                 sendCalendar()
-                if (System.currentTimeMillis() - lastTimeSyncMs > TIME_RESYNC_MS) {
+                if (System.currentTimeMillis() - lastTimeSyncMs > PowerPolicy.TIME_RESYNC_MS) {
                     sendState(phone.timeMessage(), force = true)
                 }
             }
             ALARM_CALENDAR -> sendCalendar() // the reported event has started: move on
         }
+        releaseWorkLockIfIdle()
+    }
+
+    /** Let the CPU sleep again once the alarm's work (download, BLE writes) is finished. */
+    private fun releaseWorkLockIfIdle() {
+        if (channel.pendingCount == 0 && !weather.isBusy) releaseWakeLock(workWakeLock)
     }
 
     /** Non-state messages: sent once, dropped if there is no session or a transfer runs. */
@@ -520,6 +581,8 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
                 hardFailures.remove(key)
                 if (pendingState[key] == body) pendingState.remove(key)
                 if (key == KEY_TIME) lastTimeSyncMs = System.currentTimeMillis()
+                // Everything is through again: the next drop starts from the short delay.
+                if (dirtyState.isEmpty() && pendingState.isEmpty()) stateRetryMs = PowerPolicy.STATE_RETRY_MS
             }
             ReliableChannel.Outcome.NAKED -> onStateDropped(key, body, hard = reason != "FULL")
             ReliableChannel.Outcome.TIMED_OUT -> onStateDropped(key, body, hard = false)
@@ -546,8 +609,11 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         }
         if (key == KEY_MUSIC) media.invalidate()
         dirtyState += key
+        // Backs off: a watch that keeps answering FULL (or keeps losing one message) is not
+        // sent the same state every few seconds for ever.
         handler.removeCallbacks(retryDirty)
-        handler.postDelayed(retryDirty, STATE_RETRY_MS)
+        handler.postDelayed(retryDirty, stateRetryMs)
+        stateRetryMs = PowerPolicy.nextBackoff(stateRetryMs, PowerPolicy.STATE_RETRY_MAX_MS)
     }
 
     private fun flushDirtyState() {
@@ -559,6 +625,7 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
 
     private fun clearStateTracking() {
         handler.removeCallbacks(retryDirty)
+        stateRetryMs = PowerPolicy.STATE_RETRY_MS
         ackedState.clear()
         pendingState.clear()
         dirtyState.clear()
@@ -644,18 +711,19 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         private const val TAG = "WatchLinkService"
         private const val CHANNEL_ID = "watch-link"
         private const val NOTIFICATION_ID = 71
-        private const val TICK_MS = 30L * 60 * 1000
-        private const val TIME_RESYNC_MS = 6L * 60 * 60 * 1000
-        private const val STATE_RETRY_MS = 5_000L
         private const val MAX_HARD_FAILURES = 3
+        /** Upper bound for the work wake lock; normally released within a few seconds. */
         private const val WORK_WAKE_MS = 30_000L
         /** How long a secure watch may ignore our HELLO while the bond is created. */
         private const val PAIRING_WINDOW_MS = 35_000L
         private const val ALARM_TICK = "tick"
         private const val ALARM_CALENDAR = "calendar"
+        private const val ALARM_RECONNECT = "reconnect"
         private const val KEY_TIME = "TIME"
+        private const val KEY_PHONE = "PHONE"
         private const val KEY_MUSIC = "MUSIC"
         private const val ACTION_STOP = "com.james.epaperwatch.STOP"
+        private const val ACTION_RECONNECT = "com.james.epaperwatch.RECONNECT"
         private const val ACTION_STOP_FIND_PHONE = "com.james.epaperwatch.STOP_FIND_PHONE"
 
         /** State keys in PROTOCOL.md session-start order. */
@@ -669,7 +737,16 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
             private set
 
         /** Start (or poke) the link service if a watch is associated. */
-        fun start(context: Context) {
+        fun start(context: Context) = start(context, null)
+
+        /**
+         * Like [start], and also retry right away if the link is waiting out a reconnect
+         * backoff or has stopped after repeated failures. For the user's Reconnect button and
+         * for the system reporting the watch in range, not for routine pokes.
+         */
+        fun reconnect(context: Context) = start(context, ACTION_RECONNECT)
+
+        private fun start(context: Context, action: String?) {
             if (!Prefs(context).isPaired) return
             // On API 34 startForeground(connectedDevice) throws without BLUETOOTH_CONNECT, and
             // a startForegroundService() that never reaches startForeground() crashes the app.
@@ -678,7 +755,9 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
                 return
             }
             try {
-                context.startForegroundService(Intent(context, WatchLinkService::class.java))
+                context.startForegroundService(
+                    Intent(context, WatchLinkService::class.java).setAction(action),
+                )
             } catch (e: Exception) {
                 // e.g. ForegroundServiceStartNotAllowedException without a CDM exemption
                 Log.w(TAG, "Could not start link service", e)

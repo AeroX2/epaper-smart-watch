@@ -14,7 +14,8 @@ import java.util.TimeZone
 
 /**
  * TIME, PHONE (battery / charging / DND) and NEXT_ALARM sources. Fires [onChange] with the
- * kind of data that changed; the service de-duplicates before sending.
+ * kind of data that changed; the service de-duplicates (and, for the battery level, coarsens)
+ * before sending.
  */
 class PhoneStateBridge(
     private val context: Context,
@@ -55,8 +56,12 @@ class PhoneStateBridge(
     override fun onReceive(receiverContext: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BATTERY_CHANGED -> {
+                // Sent for every voltage or temperature change too: only a new level or
+                // plug state is passed on (the service then sends it in coarse steps).
+                val levelBefore = battery
+                val chargingBefore = charging
                 readBattery(intent)
-                onChange(Kind.PHONE)
+                if (battery != levelBefore || charging != chargingBefore) onChange(Kind.PHONE)
             }
             NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED -> onChange(Kind.PHONE)
             AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED -> onChange(Kind.ALARM)

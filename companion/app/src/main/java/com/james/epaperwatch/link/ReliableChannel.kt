@@ -26,6 +26,8 @@ import java.util.ArrayDeque
 class ReliableChannel(
     private val handler: Handler,
     private val onUnresponsive: () -> Unit,
+    /** Called whenever the last queued message has been settled: nothing is left to send. */
+    private val onIdle: () -> Unit = {},
     private val writer: (ByteArray, (Boolean) -> Unit) -> Unit,
 ) {
     enum class Outcome { ACKED, NAKED, TIMED_OUT, CANCELLED }
@@ -168,6 +170,7 @@ class ReliableChannel(
             }
         }
         pump()
+        if (active && inflight == null && queue.isEmpty()) onIdle()
     }
 
     private fun allocateSeq(): Int {

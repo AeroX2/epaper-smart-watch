@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.james.epaperwatch.data.Prefs
 import com.james.epaperwatch.data.WatchState
+import com.james.epaperwatch.link.PowerPolicy
 import com.james.epaperwatch.protocol.Out
 import com.james.epaperwatch.protocol.OutMessage
 import org.json.JSONObject
@@ -23,12 +24,17 @@ import kotlin.math.roundToInt
 class WeatherBridge(
     private val context: Context,
     private val handler: Handler,
+    /** A refresh that was started has finished (with or without a result). */
+    private val onSettled: () -> Unit = {},
     private val onWeather: (OutMessage) -> Unit,
 ) {
     private val prefs = Prefs(context)
     private val executor = Executors.newSingleThreadExecutor()
     private var inFlight = false
     private var lastAttempt = 0L
+
+    /** A location fix or download is under way. */
+    val isBusy: Boolean get() = inFlight
 
     /** The best weather to send right now, or null if unknown / disabled. */
     fun currentMessage(): OutMessage? = when (prefs.weatherMode) {
@@ -37,7 +43,12 @@ class WeatherBridge(
         else -> cachedMessage()
     }
 
-    /** Fetch fresh weather (rate-limited unless [force]). Manual mode just re-sends the values. */
+    /**
+     * Fetch fresh weather. Unless [force] (the user asked), nothing is fetched while the
+     * cached forecast is still fresh or the last attempt was recent ([PowerPolicy]): a
+     * reconnect or the hourly tick must not cost a download each time. Manual mode just
+     * re-sends the values.
+     */
     fun refresh(force: Boolean) {
         when (prefs.weatherMode) {
             Prefs.WEATHER_OFF -> return
@@ -46,8 +57,17 @@ class WeatherBridge(
                 return
             }
         }
+        if (inFlight) return
         val now = SystemClock.elapsedRealtime()
-        if (inFlight || (!force && lastAttempt != 0L && now - lastAttempt < MIN_INTERVAL_MS)) return
+        if (!force) {
+            val sinceAttempt = if (lastAttempt == 0L) null else now - lastAttempt
+            val cacheAge = if (prefs.weatherCache == null) {
+                Long.MAX_VALUE
+            } else {
+                System.currentTimeMillis() - prefs.weatherCacheTime
+            }
+            if (!PowerPolicy.weatherFetchDue(sinceAttempt, cacheAge)) return
+        }
         lastAttempt = now
         when (prefs.weatherMode) {
             Prefs.WEATHER_COORDS -> {
@@ -79,10 +99,13 @@ class WeatherBridge(
             inFlight = false
             if (fix != null) {
                 fetch(fix.latitude, fix.longitude)
-            } else if (PhoneLocation.hasBackgroundPermission(context)) {
-                fail("No location fix yet")
             } else {
-                fail("No location fix yet: open this app once so it can read the location")
+                if (PhoneLocation.hasBackgroundPermission(context)) {
+                    fail("No location fix yet")
+                } else {
+                    fail("No location fix yet: open this app once so it can read the location")
+                }
+                onSettled()
             }
         }
     }
@@ -117,6 +140,7 @@ class WeatherBridge(
                     Log.w(TAG, "Weather fetch failed", it)
                     fail("Weather fetch failed: ${it.message ?: it.javaClass.simpleName}")
                 }
+                onSettled()
             }
         }
     }
@@ -165,7 +189,6 @@ class WeatherBridge(
 
     companion object {
         private const val TAG = "WeatherBridge"
-        private const val MIN_INTERVAL_MS = 10L * 60 * 1000
         private const val STALE_LOCATION_MS = 3L * 60 * 60 * 1000
         private const val CACHE_VALID_MS = 3L * 60 * 60 * 1000
 

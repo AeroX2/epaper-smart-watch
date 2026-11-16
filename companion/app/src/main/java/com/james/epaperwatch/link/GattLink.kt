@@ -18,6 +18,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
+import android.os.SystemClock
 import android.util.Log
 import com.james.epaperwatch.protocol.Protocol
 import java.util.ArrayDeque
@@ -26,8 +27,12 @@ import java.util.ArrayDeque
  * One BLE link to the associated watch.
  *
  * - Connects with `connectGatt(autoConnect = true)` to the stored (public) address; after a
- *   link loss the GATT object is closed and a new auto-connect is issued (with backoff on
- *   immediate errors).
+ *   link loss the GATT object is closed and a new auto-connect is issued. While the watch is
+ *   away that pending auto-connect is all there is: no scan, no timer, no retry.
+ * - Reconnects back off ([PowerPolicy]): the delay doubles until a session has lasted
+ *   [PowerPolicy.STABLE_SESSION_MS]. Connections that are established but keep failing
+ *   (setup, handshake, an unresponsive watch, pairing) are given up after a few attempts;
+ *   [kick] (the user, a presence event, Bluetooth switched on) starts over.
  * - Every GATT operation (MTU, discovery, CCC write, message writes, OTA data writes) goes
  *   through one serialized queue; the next operation starts only when the previous one's
  *   callback arrived. A write whose callback does not arrive in time means the link is dead:
@@ -44,6 +49,9 @@ class GattLink(
     private val context: Context,
     private val handler: Handler,
     private val listener: Listener,
+    /** Arm / cancel a Doze-safe alarm that ends in [onWake] (for long reconnect delays). */
+    private val scheduleWake: (delayMs: Long) -> Unit = {},
+    private val cancelWake: () -> Unit = {},
 ) {
     interface Listener {
         fun onLinkStatus(status: Status, detail: String)
@@ -79,7 +87,22 @@ class GattLink(
     private var tx: BluetoothGattCharacteristic? = null
     private var ota: BluetoothGattCharacteristic? = null
     private var generation = 0
-    private var reconnectDelayMs = INITIAL_RECONNECT_MS
+
+    /** Backoff state: the delay the next reconnect starts from (doubled after each use). */
+    private var reconnectDelayMs = PowerPolicy.INITIAL_RECONNECT_MS
+    private var reconnectPending = false
+    private var reconnectAt = 0L
+    private var wakeArmed = false
+    /** The current GATT object reached the connected state. */
+    private var connected = false
+    /** When the session on this connection started working (0 = no session). */
+    private var healthySince = 0L
+    /** Established connections in a row that did not lead to a stable session. */
+    private var failedConnections = 0
+    private var pairingFailures = 0
+    /** Reconnecting has stopped until [kick]; see [PowerPolicy.MAX_FAILED_CONNECTIONS]. */
+    private var gaveUp = false
+    private var currentPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED
     private val reassembler = FragmentReassembler()
 
     /** Waiting for the bond to complete; no GATT operation is issued meanwhile. */
@@ -94,7 +117,10 @@ class GattLink(
     private val ops = ArrayDeque<Op>()
     private var current: Op? = null
     private val opTimeout = Runnable { onOpTimeout() }
-    private val reconnect = Runnable { openGatt() }
+    private val reconnect = Runnable {
+        reconnectPending = false
+        openGatt()
+    }
     private val bondTimeout = Runnable { onBondTimeout() }
     private val resumeSetup = Runnable {
         awaitingBond = false
@@ -141,18 +167,45 @@ class GattLink(
             }
             receiverRegistered = true
         }
-        if (this.address == address && (gatt != null || handler.hasCallbacksCompat(reconnect))) return
+        // Already connecting, waiting out a backoff, or stopped after repeated failures: a
+        // plain start must not cut any of those short (see kick()).
+        if (this.address == address && (gatt != null || reconnectPending || gaveUp)) return
         teardown()
         this.address = address
-        reconnectDelayMs = INITIAL_RECONNECT_MS
+        resetBackoff()
+        pairingFailures = 0
+        gaveUp = false
         stickyFailure = null
         openGatt()
+    }
+
+    /**
+     * Try again now: the user asked, the system reported the watch in range, or Bluetooth was
+     * switched on. Ends a backoff wait or the given-up state; a no-op while a connection
+     * exists or an auto-connect is already pending.
+     */
+    fun kick() {
+        if (address == null || gatt != null) return
+        teardown()
+        resetBackoff()
+        pairingFailures = 0
+        gaveUp = false
+        openGatt()
+    }
+
+    /** The alarm armed through [scheduleWake] fired: run a reconnect that is due. */
+    fun onWake() {
+        wakeArmed = false
+        if (!reconnectPending || SystemClock.elapsedRealtime() < reconnectAt - WAKE_SLACK_MS) return
+        handler.removeCallbacks(reconnect)
+        reconnect.run()
     }
 
     /** Drop the link and any pending auto-connect. */
     fun shutdown() {
         address = null
         teardown()
+        gaveUp = false
         if (receiverRegistered) {
             context.unregisterReceiver(receiver)
             receiverRegistered = false
@@ -162,22 +215,22 @@ class GattLink(
 
     /**
      * Force a fresh connection attempt with backoff (the watch failed the handshake, or it
-     * stopped acknowledging messages).
+     * stopped acknowledging messages). [reason] completes "Stopped reconnecting: ..." if this
+     * was one failure too many.
      */
-    fun restart() {
-        val target = address ?: return
-        teardown()
-        address = target
-        handler.postDelayed(reconnect, reconnectDelayMs)
-        reconnectDelayMs = (reconnectDelayMs * 2).coerceAtMost(MAX_RECONNECT_MS)
+    fun restart(reason: String) {
+        if (address == null) return
+        dropConnection(reason)
     }
 
     /**
-     * The session on this link works (HELLO was ACKed): reset the reconnect backoff. Not done
-     * at READY, so a watch that connects but fails the handshake is retried with backoff.
+     * The session on this link works (HELLO was ACKed). The reconnect backoff is not reset
+     * here but when the session has lasted ([PowerPolicy.STABLE_SESSION_MS]), so a watch that
+     * completes the handshake and then stops answering is still retried with backoff.
      */
     fun markHealthy() {
-        reconnectDelayMs = INITIAL_RECONNECT_MS
+        healthySince = SystemClock.elapsedRealtime()
+        pairingFailures = 0
         stickyFailure = null
     }
 
@@ -226,16 +279,19 @@ class GattLink(
     /** Queue a write-with-response to the OTA data characteristic (same serialized queue). */
     fun writeOta(value: ByteArray, done: (Boolean) -> Unit) = queueWrite(Kind.OTA, value, done)
 
-    /** Ask for a short connection interval during a firmware transfer, or go back to balanced. */
-    fun setHighPriority(high: Boolean) {
+    /**
+     * Ask for a connection interval: `BluetoothGatt.CONNECTION_PRIORITY_HIGH` (firmware
+     * transfer), `_BALANCED` (the default of a new connection) or `_LOW_POWER` (idle; the
+     * interval sets the watch's idle radio current). A no-op if it is what was asked last.
+     */
+    fun requestPriority(priority: Int) {
+        val g = gatt ?: return
+        if (status != Status.READY || priority == currentPriority) return
         try {
-            gatt?.requestConnectionPriority(
-                if (high) {
-                    BluetoothGatt.CONNECTION_PRIORITY_HIGH
-                } else {
-                    BluetoothGatt.CONNECTION_PRIORITY_BALANCED
-                },
-            )
+            if (g.requestConnectionPriority(priority)) {
+                Log.i(TAG, "Connection priority $priority requested")
+                currentPriority = priority
+            }
         } catch (e: SecurityException) {
             Log.w(TAG, "requestConnectionPriority refused", e)
         }
@@ -269,11 +325,7 @@ class GattLink(
 
     private fun onAdapterState(state: Int) {
         when (state) {
-            BluetoothAdapter.STATE_ON -> if (address != null && gatt == null) {
-                reconnectDelayMs = INITIAL_RECONNECT_MS
-                handler.removeCallbacks(reconnect)
-                openGatt()
-            }
+            BluetoothAdapter.STATE_ON -> kick()
             BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> {
                 teardown()
                 setStatus(Status.BLUETOOTH_OFF, "Bluetooth is off")
@@ -316,20 +368,76 @@ class GattLink(
         } catch (e: SecurityException) {
             null
         }
-        if (gatt == null) scheduleReconnect()
+        if (gatt == null) scheduleReconnect(linkLoss = false)
     }
 
-    private fun scheduleReconnect() {
+    /**
+     * Open a new auto-connect after the backoff delay. [linkLoss]: the link simply dropped
+     * (out of range), see [PowerPolicy.LINK_LOSS_MAX_RECONNECT_MS].
+     */
+    private fun scheduleReconnect(linkLoss: Boolean) {
         if (address == null) return
+        val delay = PowerPolicy.reconnectDelayMs(reconnectDelayMs, linkLoss)
+        reconnectDelayMs = PowerPolicy.nextBackoff(reconnectDelayMs, PowerPolicy.MAX_RECONNECT_MS)
         handler.removeCallbacks(reconnect)
-        handler.postDelayed(reconnect, reconnectDelayMs)
-        reconnectDelayMs = (reconnectDelayMs * 2).coerceAtMost(MAX_RECONNECT_MS)
+        handler.postDelayed(reconnect, delay)
+        reconnectPending = true
+        reconnectAt = SystemClock.elapsedRealtime() + delay
+        // Handler delays stand still in deep sleep, and until the reconnect runs there is no
+        // pending auto-connect at all: back a long wait with an alarm.
+        if (delay >= WAKE_ASSIST_MS) {
+            wakeArmed = true
+            scheduleWake(delay)
+        }
+    }
+
+    private fun resetBackoff() {
+        reconnectDelayMs = PowerPolicy.INITIAL_RECONNECT_MS
+        failedConnections = 0
+    }
+
+    /** How long the session on this connection has been working, null if there is none. */
+    private fun sessionAgeMs(): Long? =
+        if (healthySince == 0L) null else SystemClock.elapsedRealtime() - healthySince
+
+    /**
+     * An established connection ended for a reason other than plain link loss and was closed.
+     * Reconnect with backoff, or give up after too many in a row without a stable session.
+     * Returns false if it gave up.
+     */
+    private fun reconnectAfterFailure(stable: Boolean, reason: String): Boolean {
+        if (stable) {
+            resetBackoff()
+        } else {
+            failedConnections++
+            if (failedConnections >= PowerPolicy.MAX_FAILED_CONNECTIONS) {
+                giveUp(Status.WAITING, "Stopped reconnecting: $reason. Tap Reconnect to try again.")
+                return false
+            }
+        }
+        scheduleReconnect(linkLoss = false)
+        return true
+    }
+
+    /** No connection, no pending auto-connect, no timer, until [kick]. */
+    private fun giveUp(status: Status, detail: String) {
+        Log.w(TAG, "Giving up: $detail")
+        gaveUp = true
+        setStatus(status, detail)
     }
 
     /** Close everything and invalidate in-flight callbacks; does not schedule a reconnect. */
     private fun teardown() {
         generation++
         handler.removeCallbacks(reconnect)
+        reconnectPending = false
+        if (wakeArmed) {
+            wakeArmed = false
+            cancelWake()
+        }
+        connected = false
+        healthySince = 0L
+        currentPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED
         handler.removeCallbacks(bondTimeout)
         handler.removeCallbacks(resumeSetup)
         awaitingBond = false
@@ -356,6 +464,7 @@ class GattLink(
     }
 
     private fun onConnected(g: BluetoothGatt) {
+        connected = true
         authRetries = 0
         secureBondRequested = false
         mtu = DEFAULT_MTU
@@ -378,7 +487,7 @@ class GattLink(
             if (rx == null || notifyChar == null) {
                 Log.w(TAG, "Watch service not found (discovery ok=$ok)")
                 setStatus(Status.SETTING_UP, "Watch service missing")
-                dropConnection()
+                dropConnection("the watch service was not found")
                 return@Op
             }
             enableNotifications(g, notifyChar)
@@ -404,7 +513,7 @@ class GattLink(
         }) { ok ->
             if (!ok) {
                 setStatus(Status.SETTING_UP, "Could not enable notifications")
-                dropConnection()
+                dropConnection("notifications could not be enabled")
                 return@Op
             }
             reassembler.reset()
@@ -415,35 +524,40 @@ class GattLink(
 
     /**
      * Setup failed on a connected link: close it and retry with backoff. Does not wait for a
-     * disconnect callback (which may never come, and reports a "clean" status that would
-     * reset the backoff and retry every second).
+     * disconnect callback (which may never come). Returns false if it gave up instead.
      */
-    private fun dropConnection() {
+    private fun dropConnection(reason: String): Boolean {
+        val stable = PowerPolicy.isStableSession(sessionAgeMs())
         teardown()
-        scheduleReconnect()
+        return reconnectAfterFailure(stable, reason)
     }
 
     private fun onDisconnected(status: Int) {
         Log.i(TAG, "Disconnected (status $status)")
         val wasBonded = gatt?.let { bondStateOf(it) == BluetoothDevice.BOND_BONDED } ?: false
+        val wasConnected = connected
+        val stable = PowerPolicy.isStableSession(sessionAgeMs())
         teardown()
         if (wasBonded && isEncryptionFailure(status)) {
             // Bonded here, but the link could not be encrypted: the watch lost our key.
-            Log.w(TAG, "Encryption failed with a bonded watch (status $status)")
-            stickyFailure = PAIRING_FAILED_TEXT
-            reconnectDelayMs = reconnectDelayMs.coerceAtLeast(BOND_FAILURE_BACKOFF_MS)
-            setStatus(Status.PAIRING_FAILED, PAIRING_FAILED_TEXT)
-            scheduleReconnect()
+            bondFailed("encryption failed with a bonded watch (status $status)")
             return
         }
-        setStatus(Status.WAITING, stickyFailure ?: "Waiting for watch")
-        // A clean link loss reconnects promptly; immediate errors (e.g. 133) back off.
-        if (status == BluetoothGatt.GATT_SUCCESS || status == GATT_CONN_TIMEOUT ||
-            status == GATT_CONN_TERMINATE_PEER
-        ) {
-            reconnectDelayMs = INITIAL_RECONNECT_MS
+        // Out of range (supervision timeout). Anything else that ends an established
+        // connection before its session proved stable is a failure: a watch that connects and
+        // then closes the link each time must not be reconnected every second for ever.
+        val linkLoss = status == BluetoothGatt.GATT_SUCCESS || status == GATT_CONN_TIMEOUT
+        if (wasConnected && !linkLoss) {
+            if (reconnectAfterFailure(stable, "the watch keeps closing the connection (status $status)")) {
+                setStatus(Status.WAITING, stickyFailure ?: "Waiting for watch")
+            }
+            return
         }
-        scheduleReconnect()
+        // After a session that lasted, reconnect promptly; a link that flaps, and errors
+        // before any connection (e.g. 133), back off.
+        if (stable) resetBackoff()
+        setStatus(Status.WAITING, stickyFailure ?: "Waiting for watch")
+        scheduleReconnect(linkLoss)
     }
 
     // ---------------------------------------------------------------- bonding
@@ -464,6 +578,7 @@ class GattLink(
         if (awaitingBond) return
         Log.i(TAG, "Bond needed: $reason")
         awaitingBond = true
+        healthySince = 0L
         val wasReady = status == Status.READY
         status = Status.SETTING_UP
         failAllOps()
@@ -540,10 +655,16 @@ class GattLink(
         Log.w(TAG, "Bonding failed: $why")
         stickyFailure = PAIRING_FAILED_TEXT
         teardown()
-        // Do not hammer the watch (and the user) with pairing attempts.
+        // Do not hammer the watch (and the user) with pairing attempts: a long backoff, and
+        // after a few failures in a row no more attempts until the user steps in.
+        pairingFailures++
+        if (pairingFailures >= PowerPolicy.MAX_PAIRING_FAILURES) {
+            giveUp(Status.PAIRING_FAILED, PAIRING_FAILED_TEXT)
+            return
+        }
         reconnectDelayMs = reconnectDelayMs.coerceAtLeast(BOND_FAILURE_BACKOFF_MS)
         setStatus(Status.PAIRING_FAILED, PAIRING_FAILED_TEXT)
-        scheduleReconnect()
+        scheduleReconnect(linkLoss = false)
     }
 
     // ---------------------------------------------------------------- operation queue
@@ -601,8 +722,9 @@ class GattLink(
                 // The stack may still be busy with this write, and a late callback could be
                 // taken for the next operation's: the link is dead, start over.
                 Log.w(TAG, "GATT ${op.kind} timed out; restarting the link")
-                dropConnection()
-                setStatus(Status.WAITING, "Watch stopped responding, reconnecting")
+                if (dropConnection("the watch stopped responding")) {
+                    setStatus(Status.WAITING, "Watch stopped responding, reconnecting")
+                }
             }
             else -> complete(op, false)
         }
@@ -706,8 +828,9 @@ class GattLink(
     companion object {
         private const val TAG = "GattLink"
         private const val DEFAULT_MTU = 23
-        private const val INITIAL_RECONNECT_MS = 1_000L
-        private const val MAX_RECONNECT_MS = 60_000L
+        /** Reconnect delays from this length on are also armed as a wake alarm. */
+        private const val WAKE_ASSIST_MS = 30_000L
+        private const val WAKE_SLACK_MS = 1_000L
         private const val SETUP_TIMEOUT_MS = 5_000L
         private const val DISCOVERY_TIMEOUT_MS = 15_000L
         private const val WRITE_TIMEOUT_MS = 5_000L
@@ -717,7 +840,6 @@ class GattLink(
         private const val BONDED_RETRY_MS = 2_000L
         private const val BOND_FAILURE_BACKOFF_MS = 30_000L
         private const val GATT_CONN_TIMEOUT = 8
-        private const val GATT_CONN_TERMINATE_PEER = 19
 
         const val PAIRING_FAILED_TEXT =
             "Pairing failed — forget the watch in Android Bluetooth settings (and use " +
@@ -743,8 +865,5 @@ class GattLink(
             Build.VERSION.SDK_INT < 31 ||
                 context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) ==
                 PackageManager.PERMISSION_GRANTED
-
-        private fun Handler.hasCallbacksCompat(r: Runnable): Boolean =
-            Build.VERSION.SDK_INT >= 29 && hasCallbacks(r)
     }
 }

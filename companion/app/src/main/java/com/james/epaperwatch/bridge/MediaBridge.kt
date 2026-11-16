@@ -11,10 +11,10 @@ import android.os.Handler
 import android.os.SystemClock
 import android.view.KeyEvent
 import com.james.epaperwatch.WatchNotificationListener
+import com.james.epaperwatch.link.PowerPolicy
 import com.james.epaperwatch.protocol.Out
 import com.james.epaperwatch.protocol.OutMessage
 import com.james.epaperwatch.protocol.WireText
-import kotlin.math.abs
 
 /**
  * Event-driven media relay: an active-sessions listener plus a MediaController.Callback on each
@@ -40,6 +40,8 @@ class MediaBridge(
     private var started = false
     private var lastSent: Snapshot? = null
     private var lastSentAt = 0L
+    /** When the last position-only MUSIC message (a seek or drift correction) went out. */
+    private var lastPositionFixAt = 0L
 
     private val debounced = Runnable { onChange() }
 
@@ -66,6 +68,7 @@ class MediaBridge(
     }
 
     fun stop() {
+        handler.removeCallbacks(debounced)
         if (!started) return
         manager.removeOnActiveSessionsChangedListener(sessionsListener)
         controllers.forEach { it.unregisterCallback(callback) }
@@ -80,9 +83,13 @@ class MediaBridge(
         changed()
     }
 
+    /**
+     * Players report in bursts (a track change is several metadata and state callbacks), and
+     * some report their position every second: wait for the burst to end, then look once.
+     */
     private fun changed() {
         handler.removeCallbacks(debounced)
-        handler.postDelayed(debounced, 300L)
+        handler.postDelayed(debounced, DEBOUNCE_MS)
     }
 
     /** The current MUSIC message, recorded as sent (used at session start). */
@@ -98,14 +105,42 @@ class MediaBridge(
         lastSent = null
     }
 
-    /** A MUSIC message if what the watch shows is now wrong, else null. */
+    /**
+     * A MUSIC message if what the watch shows is now wrong, else null. A new track or play
+     * state is reported at once; position-only corrections are rate-limited
+     * ([PowerPolicy.musicSendDelayMs]) and, when held back, looked at again later.
+     */
     fun messageIfChanged(): OutMessage? {
         val snap = snapshot()
         val prev = lastSent
-        if (prev != null && equivalent(prev, snap)) return null
+        val now = SystemClock.elapsedRealtime()
+        if (prev != null) {
+            val same = prev.state == snap.state && prev.duration == snap.duration &&
+                prev.title == snap.title && prev.artist == snap.artist
+            val wait = PowerPolicy.musicSendDelayMs(
+                sameTrackAndState = same,
+                nothingPlaying = snap.state == 0,
+                driftSeconds = snap.position - expectedPosition(prev, now),
+                sincePositionFixMs = if (lastPositionFixAt == 0L) Long.MAX_VALUE else now - lastPositionFixAt,
+            )
+            if (wait == PowerPolicy.MUSIC_NOTHING) return null
+            if (wait > 0L) {
+                handler.removeCallbacks(debounced)
+                handler.postDelayed(debounced, wait)
+                return null
+            }
+            if (same) lastPositionFixAt = now
+        }
         lastSent = snap
-        lastSentAt = SystemClock.elapsedRealtime()
+        lastSentAt = now
         return toMessage(snap)
+    }
+
+    /** Where the watch, which advances a playing track by itself, has counted to. */
+    private fun expectedPosition(prev: Snapshot, now: Long): Long {
+        if (prev.state != 1) return prev.position
+        val counted = prev.position + (now - lastSentAt) / 1000L
+        return if (prev.duration > 0) counted.coerceAtMost(prev.duration) else counted
     }
 
     fun handleAction(action: String) {
@@ -126,16 +161,6 @@ class MediaBridge(
         val audio = context.getSystemService(AudioManager::class.java) ?: return
         audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
         audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
-    }
-
-    private fun equivalent(prev: Snapshot, now: Snapshot): Boolean {
-        if (prev.state != now.state || prev.duration != now.duration ||
-            prev.title != now.title || prev.artist != now.artist
-        ) return false
-        if (now.state == 0) return true
-        val elapsed = (SystemClock.elapsedRealtime() - lastSentAt) / 1000L
-        val expected = if (prev.state == 1) prev.position + elapsed else prev.position
-        return abs(expected - now.position) <= POSITION_TOLERANCE_S
     }
 
     private fun toMessage(s: Snapshot): OutMessage =
@@ -181,6 +206,6 @@ class MediaBridge(
     }
 
     companion object {
-        private const val POSITION_TOLERANCE_S = 3L
+        private const val DEBOUNCE_MS = 500L
     }
 }

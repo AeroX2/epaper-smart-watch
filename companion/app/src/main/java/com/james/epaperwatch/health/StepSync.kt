@@ -144,19 +144,11 @@ object StepSync {
 
     private suspend fun writeLocked(app: Context, prefs: Prefs, days: Map<LocalDate, Int>) {
         if (!prefs.healthSync) return
-        if (availability(app) != Availability.AVAILABLE) {
-            report(prefs, "Health Connect is not available")
-            return
-        }
-        val client = HealthConnectClient.getOrCreate(app)
-        if (WRITE_STEPS !in client.permissionController.getGrantedPermissions()) {
-            report(prefs, "Permission to write steps is missing")
-            return
-        }
         val zone = ZoneId.systemDefault()
         val now = Instant.now()
         val completed = prefs.healthWritten.toMutableMap()
-        val device = Device(manufacturer = "DIY", model = "E-Paper Watch", type = Device.TYPE_WATCH)
+        // First what there is to write: an unchanged step count (most STATUS messages while
+        // the watch is not being worn) must not cost a single Health Connect call.
         val windows = ArrayList<Pair<StepWindow, Int>>()
         for ((day, steps) in days) {
             if (!StepWindow.isWritable(steps)) continue // never a zero-step record
@@ -169,6 +161,16 @@ object StepSync {
             if (!unchanged) windows += window to steps
         }
         if (windows.isEmpty()) return
+        if (availability(app) != Availability.AVAILABLE) {
+            report(prefs, "Health Connect is not available")
+            return
+        }
+        val client = HealthConnectClient.getOrCreate(app)
+        if (WRITE_STEPS !in client.permissionController.getGrantedPermissions()) {
+            report(prefs, "Permission to write steps is missing")
+            return
+        }
+        val device = Device(manufacturer = "DIY", model = "E-Paper Watch", type = Device.TYPE_WATCH)
         val records = windows.map { (window, steps) ->
             StepsRecord(
                 startTime = window.start,

@@ -143,7 +143,7 @@ class MainActivity : Activity() {
         when (requestCode) {
             REQ_PAIR -> {
                 if (GattLink.hasConnectPermission(this)) {
-                    if (prefs.isPaired) WatchLinkService.start(this) else pair()
+                    if (prefs.isPaired) WatchLinkService.reconnect(this) else pair()
                 } else {
                     toast("Nearby devices permission is needed to talk to the watch")
                 }
@@ -186,7 +186,7 @@ class MainActivity : Activity() {
         if (missing.isNotEmpty()) {
             requestPermissions(missing.toTypedArray(), REQ_PAIR)
         } else if (prefs.isPaired) {
-            WatchLinkService.start(this)
+            WatchLinkService.reconnect(this) // also ends a backoff wait or a given-up link
         } else {
             pair()
         }

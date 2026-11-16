@@ -12,8 +12,8 @@ import android.util.Log
 
 /**
  * One-shot timers that keep working in Doze, for the link service's slow periodic work
- * (weather refresh, calendar re-evaluation, time resync). `Handler.postDelayed` counts
- * uptime, which stands still in deep sleep.
+ * (weather refresh, calendar re-evaluation, time resync) and for long reconnect delays.
+ * `Handler.postDelayed` counts uptime, which stands still in deep sleep.
  *
  * Uses inexact `AlarmManager.setAndAllowWhileIdle` (no exact-alarm permission): the system
  * may deliver late, and in Doze at most about once every nine minutes per app, which is fine

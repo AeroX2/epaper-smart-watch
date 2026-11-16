@@ -8,18 +8,19 @@ import android.annotation.TargetApi
 /**
  * Bound by the system (API 31+) when the associated watch comes into BLE range, because we call
  * CompanionDeviceManager.startObservingDevicePresence(). Restarts the link service if the
- * process had been killed; the link's pending auto-connect then completes.
+ * process had been killed; the link's pending auto-connect then completes. The watch being
+ * seen is also the cue to end a reconnect backoff, or to try again after the link gave up.
  */
 @TargetApi(Build.VERSION_CODES.S)
 class WatchCompanionService : CompanionDeviceService() {
     @Deprecated("Replaced by onDeviceAppeared(AssociationInfo) on API 33+")
     override fun onDeviceAppeared(address: String) {
-        WatchLinkService.start(this)
+        WatchLinkService.reconnect(this)
     }
 
     @TargetApi(Build.VERSION_CODES.TIRAMISU)
     override fun onDeviceAppeared(associationInfo: AssociationInfo) {
-        WatchLinkService.start(this)
+        WatchLinkService.reconnect(this)
     }
 
     @Deprecated("Replaced by onDeviceDisappeared(AssociationInfo) on API 33+")
