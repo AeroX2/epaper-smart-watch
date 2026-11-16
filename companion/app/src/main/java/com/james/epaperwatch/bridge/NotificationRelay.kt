@@ -50,6 +50,9 @@ object NotificationRelay {
     private const val LABEL_TTL_MS = 6L * 60 * 60 * 1000
     private const val MAX_LABELS = 200
 
+    /** Minimum gap between two alerting re-posts of one notification. */
+    private const val UPDATE_ALERT_MIN_MS = 3_000L
+
     private val IGNORED_CATEGORIES = setOf(
         Notification.CATEGORY_PROGRESS,
         Notification.CATEGORY_TRANSPORT,
@@ -99,10 +102,25 @@ object NotificationRelay {
             WatchLinkService.send(if (live) message(id, message, alert = true) else entry.message)
             return
         }
-        // New content for a notification the watch already has: always silent.
+        // New content for a notification the watch already has. The stored copy is silent
+        // (it is what session-start replays send).
         existing.message = message(existing.id, message, alert = false)
         existing.postTime = sbn.postTime
         if (!send) return
+        // A re-post that Android itself would alert for (a new message in an existing chat:
+        // the app did not set ONLY_ALERT_ONCE) alerts the watch too, and goes out at once.
+        // Limited to one alert per key every few seconds so a misbehaving app cannot buzz
+        // the watch continuously; faster re-posts fall through to the silent update path.
+        val wouldAlertOnPhone =
+            live && (sbn.notification.flags and Notification.FLAG_ONLY_ALERT_ONCE) == 0
+        if (wouldAlertOnPhone &&
+            SystemClock.elapsedRealtime() - existing.sentAt >= UPDATE_ALERT_MIN_MS
+        ) {
+            existing.flushScheduled = false
+            markSent(existing)
+            WatchLinkService.send(message(existing.id, message, alert = true))
+            return
+        }
         val wait = if (live) {
             PowerPolicy.delayUntilAllowed(
                 SystemClock.elapsedRealtime(), existing.sentAt, PowerPolicy.NOTIFY_UPDATE_MIN_MS,
