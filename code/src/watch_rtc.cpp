@@ -35,6 +35,13 @@ uint8_t weekdayForDate(uint16_t year, uint8_t month, uint8_t day) {
   return static_cast<uint8_t>((days + 4) % 7);
 }
 
+
+// Backup registers not used by the Arduino core (DR1/DR4/DR10), STM32RTC
+// (DR6/DR7), or the DFU request (DR19).
+constexpr uint32_t OFFSET_MAGIC = 0x5A0FF5E7UL;
+#define WATCH_OFFSET_MAGIC_REGISTER (RTC->BKP12R)
+#define WATCH_OFFSET_VALUE_REGISTER (RTC->BKP13R)
+
 }  // namespace
 
 bool WatchRtc::begin(Print& out) {
@@ -51,6 +58,12 @@ bool WatchRtc::begin(Print& out) {
   if (!rtc_.isTimeSet()) {
     rtc_.setEpoch(compileEpoch());
     out.println(F("RTC was unset; initialized from firmware build time."));
+  }
+  // The magic is written whenever the time is set (phone or console) and is
+  // lost with the backup domain, so it doubles as "the time is real".
+  if (WATCH_OFFSET_MAGIC_REGISTER == OFFSET_MAGIC) {
+    utc_offset_ = static_cast<int32_t>(WATCH_OFFSET_VALUE_REGISTER);
+    time_trusted_ = true;
   }
   ready_ = true;
   out.print(lse_ready_ ? F("[PASS] ") : F("[WARN] "));
@@ -72,6 +85,8 @@ void WatchRtc::updateModel(WatchUiModel& model) {
   model.month = rtc_.getMonth();
   model.year = static_cast<uint16_t>(2000 + rtc_.getYear());
   model.weekday = weekdayForDate(model.year, model.month, model.day);
+  model.local_epoch = static_cast<uint32_t>(rtc_.getEpoch());
+  model.utc_offset_seconds = utc_offset_;
   model.time_valid = true;
 }
 
@@ -83,6 +98,8 @@ bool WatchRtc::setDateTime(uint16_t year, uint8_t month, uint8_t day,
   }
   rtc_.setDate(day, month, static_cast<uint8_t>(year - 2000));
   rtc_.setTime(hour, minute, second);
+  time_trusted_ = true;
+  storeOffset();
   return true;
 }
 
@@ -94,8 +111,54 @@ bool WatchRtc::setEpoch(time_t epoch_value) {
   return true;
 }
 
+bool WatchRtc::setUtc(uint32_t utc, int32_t offset_seconds) {
+  const int64_t local = static_cast<int64_t>(utc) + offset_seconds;
+  if (!ready_ || local < 946684800LL || local > 4102444799LL) {
+    return false;
+  }
+  rtc_.setEpoch(static_cast<time_t>(local));
+  utc_offset_ = offset_seconds;
+  time_trusted_ = true;
+  storeOffset();
+  return true;
+}
+
 time_t WatchRtc::epoch() {
   return ready_ ? rtc_.getEpoch() : 0;
+}
+
+void WatchRtc::setTransition(uint32_t transition_utc, int32_t offset_after) {
+  transition_utc_ = transition_utc;
+  transition_offset_ = offset_after;
+}
+
+bool WatchRtc::serviceTransition() {
+  if (transition_utc_ == 0 || !ready_) {
+    return false;
+  }
+  const int64_t local = static_cast<int64_t>(rtc_.getEpoch());
+  const int64_t utc_now = local - utc_offset_;
+  if (utc_now < static_cast<int64_t>(transition_utc_)) {
+    return false;
+  }
+  transition_utc_ = 0;
+  if (transition_offset_ == utc_offset_) {
+    return false;
+  }
+  rtc_.setEpoch(static_cast<time_t>(utc_now + transition_offset_));
+  utc_offset_ = transition_offset_;
+  storeOffset();
+  return true;
+}
+
+int32_t WatchRtc::utcOffset() const {
+  return utc_offset_;
+}
+
+void WatchRtc::storeOffset() {
+  HAL_PWR_EnableBkUpAccess();
+  WATCH_OFFSET_VALUE_REGISTER = static_cast<uint32_t>(utc_offset_);
+  WATCH_OFFSET_MAGIC_REGISTER = OFFSET_MAGIC;
 }
 
 uint64_t WatchRtc::milliseconds() {
@@ -113,6 +176,11 @@ void WatchRtc::restoreAfterBackupReset(time_t saved_epoch, uint32_t elapsed_ms,
                                  : STM32RTC::LSI_CLOCK);
   rtc_.begin(true, STM32RTC::HOUR_24);
   rtc_.setEpoch(saved_epoch + elapsed_ms / 1000);
+  // The backup-domain reset also cleared the stored UTC offset. Only put it
+  // back if the time was real: the magic also marks the time as trusted.
+  if (time_trusted_) {
+    storeOffset();
+  }
   ready_ = true;
   out.println(F("RTC restored after STM32WB radio backup-domain reset."));
 }
@@ -126,12 +194,18 @@ void WatchRtc::print(Print& out) {
   snprintf(value, sizeof(value), "%04u-%02u-%02u %02u:%02u:%02u",
            2000U + rtc_.getYear(), rtc_.getMonth(), rtc_.getDay(),
            rtc_.getHours(), rtc_.getMinutes(), rtc_.getSeconds());
-  out.print(F("RTC: "));
-  out.println(value);
+  out.print(F("RTC (local): "));
+  out.print(value);
+  out.print(F("  UTC offset s: "));
+  out.println(utc_offset_);
 }
 
 bool WatchRtc::usingLse() const {
   return lse_ready_;
+}
+
+bool WatchRtc::timeTrusted() const {
+  return time_trusted_;
 }
 
 time_t WatchRtc::compileEpoch() {

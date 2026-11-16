@@ -61,6 +61,63 @@ WatchScreen launcherScreen(int16_t index) {
   return static_cast<WatchScreen>(index);
 }
 
+// Settings rows, in list order. The list scrolls: SETTING_VISIBLE rows are
+// shown at the normal text size and the window follows the selection.
+enum SettingRow : uint8_t {
+  SETTING_BLUETOOTH,
+  SETTING_QUIET,
+  SETTING_LED_RING,
+  SETTING_VIBRATION,
+  SETTING_ALERT_TONE,
+  SETTING_FIND_PHONE,
+  SETTING_SECURE_LINK,
+  SETTING_FORGET_PHONE,
+  SETTING_COUNT,
+};
+constexpr uint8_t SETTING_VISIBLE = 5;
+
+constexpr const char* TONE_NAMES[] = {
+    "NONE", "CHIRP", "DOUBLE", "RISE", "FALL", "TRIPLE",
+};
+constexpr uint8_t TONE_NAME_COUNT = 6;
+
+struct LocalTime {
+  uint32_t day_index;
+  uint8_t hour;
+  uint8_t minute;
+  uint8_t weekday;
+};
+
+LocalTime localTime(uint32_t local_epoch) {
+  LocalTime value{};
+  value.day_index = local_epoch / 86400UL;
+  const uint32_t seconds = local_epoch % 86400UL;
+  value.hour = static_cast<uint8_t>(seconds / 3600);
+  value.minute = static_cast<uint8_t>((seconds / 60) % 60);
+  value.weekday = static_cast<uint8_t>((value.day_index + 4) % 7);
+  return value;
+}
+
+// Phone UTC epoch -> local epoch using the offset from the last TIME message.
+uint32_t utcToLocal(uint32_t utc, int32_t offset) {
+  const int64_t local = static_cast<int64_t>(utc) + offset;
+  return local < 0 ? 0 : static_cast<uint32_t>(local);
+}
+
+// "9:05", or "TUE 9:05" when not today.
+void formatLocalTime(char* buffer, size_t size, uint32_t local_epoch,
+                     uint32_t now_local_epoch) {
+  const LocalTime when = localTime(local_epoch);
+  const uint8_t hour_12 =
+      when.hour % 12 == 0 ? 12 : static_cast<uint8_t>(when.hour % 12);
+  if (when.day_index == now_local_epoch / 86400UL) {
+    snprintf(buffer, size, "%u:%02u", hour_12, when.minute);
+  } else {
+    snprintf(buffer, size, "%s %u:%02u", WEEKDAYS[when.weekday], hour_12,
+             when.minute);
+  }
+}
+
 }  // namespace
 
 void MonochromeCanvas::clear(bool black) {
@@ -392,9 +449,18 @@ WatchUiAction WatchUi::previous(WatchUiModel& model) {
   if (screen_ == WatchScreen::Music) {
     return WatchUiAction::MediaPrevious;
   }
+  if (screen_ == WatchScreen::Notifications) {
+    if (model.notification_count > 1) {
+      notification_index_ = notification_index_ == 0
+                                ? model.notification_count - 1
+                                : notification_index_ - 1;
+    }
+    return WatchUiAction::None;
+  }
   if (screen_ == WatchScreen::Settings) {
-    selected_setting_ =
-        selected_setting_ == 0 ? 3 : selected_setting_ - 1;
+    selected_setting_ = selected_setting_ == 0 ? SETTING_COUNT - 1
+                                               : selected_setting_ - 1;
+    forget_armed_ = false;
     return WatchUiAction::None;
   }
   if (screen_ == WatchScreen::Alarms) {
@@ -420,8 +486,17 @@ WatchUiAction WatchUi::next(WatchUiModel& model) {
   if (screen_ == WatchScreen::Music) {
     return WatchUiAction::MediaNext;
   }
+  if (screen_ == WatchScreen::Notifications) {
+    if (model.notification_count > 1) {
+      notification_index_ = static_cast<uint8_t>(
+          (notification_index_ + 1) % model.notification_count);
+    }
+    return WatchUiAction::None;
+  }
   if (screen_ == WatchScreen::Settings) {
-    selected_setting_ = static_cast<uint8_t>((selected_setting_ + 1) % 4);
+    selected_setting_ =
+        static_cast<uint8_t>((selected_setting_ + 1) % SETTING_COUNT);
+    forget_armed_ = false;
     return WatchUiAction::None;
   }
   if (screen_ == WatchScreen::Alarms) {
@@ -431,6 +506,7 @@ WatchUiAction WatchUi::next(WatchUiModel& model) {
 }
 
 void WatchUi::home() {
+  forget_armed_ = false;
   if (inside_) {
     inside_ = false;
   } else {
@@ -442,6 +518,7 @@ void WatchUi::showScreen(WatchScreen screen) {
   if (screen < WatchScreen::Count) {
     screen_ = screen;
     inside_ = false;
+    forget_armed_ = false;
   }
 }
 
@@ -457,8 +534,10 @@ WatchUiAction WatchUi::select(WatchUiModel& model) {
   }
   switch (screen_) {
     case WatchScreen::Notifications:
-      model.notification_present = false;
-      return WatchUiAction::NotificationDismissed;
+      // The application removes notificationIndex() and tells the phone.
+      return model.notification_count > 0
+                 ? WatchUiAction::NotificationDismissed
+                 : WatchUiAction::None;
     case WatchScreen::Timer:
       if (!model.timer_running && model.timer_remaining_seconds == 0) {
         model.timer_remaining_seconds = 5 * 60;
@@ -473,19 +552,49 @@ WatchUiAction WatchUi::select(WatchUiModel& model) {
       }
       return WatchUiAction::AlarmChanged;
     case WatchScreen::Music:
-      model.music_playing = !model.music_playing;
       return WatchUiAction::MediaPlayPause;
     case WatchScreen::Settings:
-      if (selected_setting_ == 0) {
-        return WatchUiAction::BluetoothToggle;
-      } else if (selected_setting_ == 1) {
-        model.quiet_mode = !model.quiet_mode;
-      } else if (selected_setting_ == 2) {
-        model.led_ring_on = !model.led_ring_on;
-      } else {
-        model.vibration_on = !model.vibration_on;
+      if (selected_setting_ != SETTING_FORGET_PHONE) {
+        forget_armed_ = false;
       }
-      return WatchUiAction::SettingsChanged;
+      switch (selected_setting_) {
+        case SETTING_BLUETOOTH:
+          return WatchUiAction::BluetoothToggle;
+        case SETTING_QUIET:
+          model.quiet_mode = !model.quiet_mode;
+          return WatchUiAction::PhoneSettingsChanged;
+        case SETTING_LED_RING:
+          model.led_ring_on = !model.led_ring_on;
+          return WatchUiAction::SettingsChanged;
+        case SETTING_VIBRATION:
+          model.vibration_on = !model.vibration_on;
+          return WatchUiAction::PhoneSettingsChanged;
+        case SETTING_ALERT_TONE:
+          model.alert_tone =
+              static_cast<uint8_t>((model.alert_tone + 1) % TONE_NAME_COUNT);
+          return WatchUiAction::AlertToneChanged;
+        case SETTING_FIND_PHONE:
+          return WatchUiAction::FindPhoneToggle;
+        case SETTING_SECURE_LINK:
+          if (!model.secure_link_available) {
+            return WatchUiAction::None;
+          }
+          model.secure_link = !model.secure_link;
+          return WatchUiAction::SecureLinkChanged;
+        case SETTING_FORGET_PHONE:
+          if (!model.phone_bonded) {
+            forget_armed_ = false;
+            return WatchUiAction::None;
+          }
+          if (!forget_armed_) {
+            forget_armed_ = true;  // a second select confirms
+            return WatchUiAction::None;
+          }
+          forget_armed_ = false;
+          return WatchUiAction::ForgetPhone;
+        default:
+          return WatchUiAction::None;
+      }
     default:
       return WatchUiAction::None;
   }
@@ -494,6 +603,16 @@ WatchUiAction WatchUi::select(WatchUiModel& model) {
 
 void WatchUi::render(const WatchUiModel& model) {
   canvas_.clear();
+  // An incoming call overlays whatever screen is current; when it ends the
+  // previous screen is simply drawn again. A ringing alarm takes precedence.
+  if (model.call_active && !model.alarm_ringing) {
+    drawCall(model);
+    return;
+  }
+  if (model.ota_screen != OtaScreen::None && !model.alarm_ringing) {
+    drawOta(model);
+    return;
+  }
   if (screen_ != WatchScreen::Clock && !inside_) {
     drawLauncher(model);
     return;
@@ -540,6 +659,20 @@ bool WatchUi::isInside() const {
   return inside_;
 }
 
+uint8_t WatchUi::notificationIndex() const {
+  return notification_index_;
+}
+
+void WatchUi::setNotificationIndex(uint8_t index) {
+  notification_index_ = index;
+}
+
+void WatchUi::clampNotificationIndex(uint8_t count) {
+  if (notification_index_ >= count) {
+    notification_index_ = count == 0 ? 0 : count - 1;
+  }
+}
+
 const char* WatchUi::screenName() const {
   static constexpr const char* NAMES[] = {
       "clock", "notifications", "timer",    "alarms",  "music",
@@ -573,13 +706,20 @@ void WatchUi::drawClock(const WatchUiModel& model) {
   canvas_.fontText(WatchAssets::Ui16, model.hour < 12 ? "AM" : "PM",
                    static_cast<int16_t>(122 + time_width / 2), 87);
 
+  // One quiet line for what is coming up next (calendar or phone alarm).
+  drawUpcoming(model, 110);
+
   // Status belongs at the edge, not in the primary information hierarchy.
   canvas_.icon(WatchIcon::Battery, 28, 133, 16);
-  if (model.weekday_alarm_on || model.weekend_alarm_on) {
+  if (model.weekday_alarm_on || model.weekend_alarm_on ||
+      model.next_alarm_utc != 0) {
     canvas_.icon(WatchIcon::Alarms, 212, 133, 16);
   }
-  if (model.notification_present) {
+  if (model.notification_count > 0) {
     canvas_.icon(WatchIcon::Notifications, 28, 160, 16);
+  }
+  if (model.bluetooth_connected) {
+    canvas_.icon(WatchIcon::Bluetooth, 212, 160, 16);
   }
   canvas_.line(48, 133, 192, 133);
 
@@ -639,8 +779,11 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
   char status[32] = {};
   switch (screen_) {
     case WatchScreen::Notifications:
-      snprintf(status, sizeof(status), "%s",
-               model.notification_present ? "1 NEW" : "ALL CLEAR");
+      if (model.notification_count > 0) {
+        snprintf(status, sizeof(status), "%u NEW", model.notification_count);
+      } else {
+        snprintf(status, sizeof(status), "ALL CLEAR");
+      }
       break;
     case WatchScreen::Timer:
       snprintf(status, sizeof(status), "%lu MIN%s",
@@ -653,7 +796,9 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
       break;
     case WatchScreen::Music:
       snprintf(status, sizeof(status), "%s",
-               model.music_playing ? "PLAYING" : "PAUSED");
+               model.music_state == MusicState::Playing  ? "PLAYING"
+               : model.music_state == MusicState::Paused ? "PAUSED"
+                                                         : "NOTHING PLAYING");
       break;
     case WatchScreen::Weather:
       snprintf(status, sizeof(status), "%s",
@@ -668,7 +813,12 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
                static_cast<unsigned long>(model.steps));
       break;
     case WatchScreen::Settings:
-      snprintf(status, sizeof(status), "WATCH OPTIONS");
+      if (model.bluetooth_connected && model.phone_status_valid) {
+        snprintf(status, sizeof(status), "PHONE %u%%",
+                 model.phone_battery_percent);
+      } else {
+        snprintf(status, sizeof(status), "WATCH OPTIONS");
+      }
       break;
     default:
       break;
@@ -696,20 +846,163 @@ void WatchUi::drawToggle(int16_t x, int16_t y, bool enabled) {
   canvas_.fillRect(enabled ? x + 17 : x + 3, y + 3, 8, 7);
 }
 
+void WatchUi::drawWrappedText(const BitmapFont& font, const char* text,
+                              int16_t center_x, int16_t y, int16_t max_width,
+                              uint8_t max_lines, int16_t line_height) {
+  if (text == nullptr) {
+    return;
+  }
+  const char* cursor = text;
+  for (uint8_t line = 0; line < max_lines; ++line) {
+    while (*cursor == ' ') {
+      ++cursor;
+    }
+    if (*cursor == '\0') {
+      return;
+    }
+    const int16_t line_y = static_cast<int16_t>(y + line * line_height);
+    if (line + 1 == max_lines) {
+      canvas_.centeredFittedFontText(font, cursor, center_x, line_y,
+                                     max_width);
+      return;
+    }
+    // Grow the line one character at a time, remembering the last word end
+    // that still fits; a single over-long word is hard-broken.
+    char buffer[64]{};
+    size_t length = 0;
+    size_t fit = 0;
+    while (cursor[length] != '\0' && length < sizeof(buffer) - 1) {
+      buffer[length] = cursor[length];
+      buffer[length + 1] = '\0';
+      if (canvas_.fontTextWidth(font, buffer) > max_width) {
+        break;
+      }
+      ++length;
+      if (cursor[length] == ' ' || cursor[length] == '\0') {
+        fit = length;
+      }
+    }
+    if (fit == 0) {
+      fit = length > 0 ? length : 1;
+    }
+    buffer[fit] = '\0';
+    canvas_.centeredFontText(font, buffer, center_x, line_y);
+    cursor += fit;
+  }
+}
+
 void WatchUi::drawNotifications(const WatchUiModel& model) {
-  drawCardFrame("MESSAGE 2 MIN", "DISMISS");
-  if (!model.notification_present) {
+  if (model.notification_count == 0) {
+    drawCardFrame("MESSAGES", "");
     canvas_.centeredFontText(WatchAssets::Bold22, "NO MESSAGES", 120, 91);
     return;
   }
-  canvas_.centeredFittedFontText(WatchAssets::Bold22,
-                                model.notification_sender, 120, 50, 170);
-  canvas_.centeredFittedFontText(WatchAssets::Ui16,
-                                model.notification_line_1, 120, 82, 188);
-  canvas_.centeredFittedFontText(WatchAssets::Ui16,
-                                model.notification_line_2, 120, 106, 188);
-  canvas_.line(43, 136, 197, 136);
-  canvas_.centeredFontText(WatchAssets::Ui16, "PHONE NOTIFICATION", 120, 151);
+  const uint8_t index = notification_index_ < model.notification_count
+                            ? notification_index_
+                            : model.notification_count - 1;
+  const WatchNotification& notification = model.notifications[index];
+  drawCardFrame(notification.app[0] != '\0' ? notification.app : "MESSAGE",
+                "DISMISS");
+  int16_t body_y = 50;
+  if (notification.title[0] != '\0') {
+    canvas_.centeredFittedFontText(WatchAssets::Bold22, notification.title,
+                                   120, 42, 176);
+    body_y = 72;
+  }
+  drawWrappedText(WatchAssets::Ui16, notification.text, 120, body_y, 184,
+                  body_y == 72 ? 4 : 5, 22);
+  if (model.notification_count > 1) {
+    char position[8];
+    snprintf(position, sizeof(position), "%u/%u", index + 1,
+             model.notification_count);
+    canvas_.centeredFontText(WatchAssets::Ui16, position, 120, 172);
+  }
+}
+
+void WatchUi::drawCall(const WatchUiModel& model) {
+  canvas_.centeredFontText(WatchAssets::Ui16, "INCOMING CALL", 120, 30);
+  canvas_.line(60, 56, 180, 56);
+  drawWrappedText(WatchAssets::Bold22,
+                  model.call_caller[0] != '\0' ? model.call_caller : "UNKNOWN",
+                  120, 76, 196, 2, 28);
+  canvas_.line(60, 146, 180, 146);
+  canvas_.centeredFontText(WatchAssets::Ui16, "SELECT  REJECT", 120, 160);
+  canvas_.centeredFontText(WatchAssets::Ui16, "BACK  HIDE", 120, 182);
+}
+
+void WatchUi::drawOta(const WatchUiModel& model) {
+  char buffer[32];
+  switch (model.ota_screen) {
+    case OtaScreen::Confirm:
+      canvas_.centeredFontText(WatchAssets::Ui16, "FIRMWARE UPDATE", 120, 30);
+      canvas_.line(60, 56, 180, 56);
+      canvas_.centeredFittedFontText(
+          WatchAssets::Bold22,
+          model.ota_version[0] != '\0' ? model.ota_version : "NEW VERSION",
+          120, 70, 190);
+      snprintf(buffer, sizeof(buffer), "%lu KB",
+               static_cast<unsigned long>((model.ota_size + 1023UL) / 1024UL));
+      canvas_.centeredFontText(WatchAssets::Ui16, buffer, 120, 104);
+      canvas_.line(60, 146, 180, 146);
+      canvas_.centeredFontText(WatchAssets::Ui16, "SELECT  INSTALL", 120, 160);
+      canvas_.centeredFontText(WatchAssets::Ui16, "BACK  DECLINE", 120, 182);
+      break;
+    case OtaScreen::Progress:
+      canvas_.centeredFontText(WatchAssets::Ui16, "RECEIVING UPDATE", 120, 34);
+      snprintf(buffer, sizeof(buffer), "%u%%", model.ota_percent);
+      canvas_.centeredFontText(WatchAssets::Bold36, buffer, 120, 74);
+      drawProgress(48, 128, 144, model.ota_percent, 12);
+      canvas_.centeredFontText(WatchAssets::Ui16, "KEEP PHONE CLOSE", 120,
+                               160);
+      break;
+    case OtaScreen::Verifying:
+      canvas_.centeredFontText(WatchAssets::Ui16, "FIRMWARE UPDATE", 120, 60);
+      canvas_.centeredFontText(WatchAssets::Bold22, "VERIFYING", 120, 100);
+      break;
+    case OtaScreen::Installing:
+      canvas_.centeredFontText(WatchAssets::Ui16, "INSTALLING UPDATE", 120,
+                               60);
+      canvas_.centeredFontText(WatchAssets::Bold22, "ABOUT 30 S", 120, 96);
+      canvas_.centeredFontText(WatchAssets::Ui16, "DO NOT UNPLUG", 120, 140);
+      break;
+    case OtaScreen::Failed:
+      canvas_.centeredFontText(WatchAssets::Ui16, "FIRMWARE UPDATE", 120, 60);
+      canvas_.centeredFontText(WatchAssets::Bold22, "FAILED", 120, 96);
+      canvas_.centeredFittedFontText(WatchAssets::Ui16, model.ota_detail, 120,
+                                     132, 180);
+      canvas_.centeredFontText(WatchAssets::Ui16, "ANY BUTTON", 120, 170);
+      break;
+    default:
+      break;
+  }
+}
+
+void WatchUi::drawUpcoming(const WatchUiModel& model, int16_t y) {
+  if (!model.time_valid) {
+    return;
+  }
+  const uint32_t now = model.local_epoch;
+  const uint32_t event =
+      model.event_utc != 0
+          ? utcToLocal(model.event_utc, model.utc_offset_seconds)
+          : 0;
+  const uint32_t alarm =
+      model.next_alarm_utc != 0
+          ? utcToLocal(model.next_alarm_utc, model.utc_offset_seconds)
+          : 0;
+  char when[16];
+  char line[48];
+  if (event != 0 && event >= now && event - now <= 86400UL) {
+    formatLocalTime(when, sizeof(when), event, now);
+    snprintf(line, sizeof(line), "%s %s", when, model.event_title);
+  } else if (alarm != 0 && alarm >= now && alarm - now <= 86400UL) {
+    formatLocalTime(when, sizeof(when), alarm, now);
+    snprintf(line, sizeof(line), "ALARM %s", when);
+  } else {
+    return;
+  }
+  // Narrow enough to clear the status icons at the ends of the divider.
+  canvas_.centeredFittedFontText(WatchAssets::Ui16, line, 120, y, 136);
 }
 
 void WatchUi::drawTimer(const WatchUiModel& model) {
@@ -748,35 +1041,58 @@ void WatchUi::drawAlarms(const WatchUiModel& model) {
   }
   if (model.alarm_ringing) {
     canvas_.centeredText("RINGING", 120, 174, 2);
+  } else if (model.next_alarm_utc != 0 && model.time_valid) {
+    const uint32_t alarm =
+        utcToLocal(model.next_alarm_utc, model.utc_offset_seconds);
+    if (alarm >= model.local_epoch) {
+      char when[16];
+      char line[32];
+      formatLocalTime(when, sizeof(when), alarm, model.local_epoch);
+      snprintf(line, sizeof(line), "PHONE %s", when);
+      canvas_.centeredFittedFontText(WatchAssets::Ui16, line, 120, 170, 150);
+    }
   }
 }
 
 void WatchUi::drawMusic(const WatchUiModel& model) {
-  drawCardFrame("PLAYING", "PLAY / PAUSE");
-  canvas_.centeredFittedFontText(WatchAssets::Bold22, model.music_title, 120,
-                                49, 174);
-  canvas_.centeredFittedFontText(WatchAssets::Ui16, model.music_artist, 120,
-                                77, 180);
-  const uint8_t progress =
-      model.music_duration_seconds == 0
-          ? 0
-          : static_cast<uint8_t>(
-                min(100UL, static_cast<unsigned long>(
-                               model.music_position_seconds) *
-                               100UL / model.music_duration_seconds));
-  drawProgress(42, 95, 156, progress);
-  char time_value[10];
-  snprintf(time_value, sizeof(time_value), "%u:%02u",
-           model.music_position_seconds / 60,
-           model.music_position_seconds % 60);
-  canvas_.fontText(WatchAssets::Ui16, time_value, 42, 112);
-  snprintf(time_value, sizeof(time_value), "%u:%02u",
-           model.music_duration_seconds / 60,
-           model.music_duration_seconds % 60);
-  canvas_.fontText(WatchAssets::Ui16, time_value, 168, 112);
+  const bool playing = model.music_state == MusicState::Playing;
+  drawCardFrame(playing ? "PLAYING" : "MUSIC", "PLAY / PAUSE");
+  if (model.music_state == MusicState::None) {
+    canvas_.centeredFontText(WatchAssets::Bold22, "NOTHING PLAYING", 120, 66);
+  } else {
+    canvas_.centeredFittedFontText(WatchAssets::Bold22, model.music_title, 120,
+                                   49, 174);
+    canvas_.centeredFittedFontText(WatchAssets::Ui16, model.music_artist, 120,
+                                   77, 180);
+    const uint32_t duration = model.music_duration_seconds;
+    const uint32_t position =
+        duration != 0 && model.music_position_seconds > duration
+            ? duration
+            : model.music_position_seconds;
+    const uint8_t progress =
+        duration == 0 ? 0
+                      : static_cast<uint8_t>(static_cast<uint64_t>(position) *
+                                             100U / duration);
+    drawProgress(42, 95, 156, progress);
+    char time_value[12];
+    snprintf(time_value, sizeof(time_value), "%lu:%02lu",
+             static_cast<unsigned long>(position / 60),
+             static_cast<unsigned long>(position % 60));
+    canvas_.fontText(WatchAssets::Ui16, time_value, 42, 112);
+    if (duration != 0) {
+      snprintf(time_value, sizeof(time_value), "%lu:%02lu",
+               static_cast<unsigned long>(duration / 60),
+               static_cast<unsigned long>(duration % 60));
+      canvas_.fontText(WatchAssets::Ui16, time_value,
+                       static_cast<int16_t>(
+                           198 - canvas_.fontTextWidth(WatchAssets::Ui16,
+                                                       time_value)),
+                       112);
+    }
+  }
   canvas_.text("|<", 54, 139, 2);
   canvas_.circle(120, 146, 22);
-  if (model.music_playing) {
+  if (playing) {
     canvas_.fillRect(113, 135, 5, 22);
     canvas_.fillRect(123, 135, 5, 22);
   } else {
@@ -785,9 +1101,10 @@ void WatchUi::drawMusic(const WatchUiModel& model) {
     }
   }
   canvas_.text(">|", 166, 139, 2);
-  canvas_.centeredFontText(WatchAssets::Ui16,
-                           model.music_playing ? "PLAYING 1/2" : "PAUSED 1/2",
-                           120, 178);
+  if (model.music_state != MusicState::None) {
+    canvas_.centeredFontText(WatchAssets::Ui16, playing ? "PLAYING" : "PAUSED",
+                             120, 178);
+  }
 }
 
 void WatchUi::drawWeather(const WatchUiModel& model) {
@@ -866,18 +1183,109 @@ void WatchUi::drawActivity(const WatchUiModel& model) {
 }
 
 void WatchUi::drawSettings(const WatchUiModel& model) {
-  drawCardFrame("SETTINGS", "SELECT");
-  const bool enabled[] = {model.bluetooth_connected, model.quiet_mode,
-                          model.led_ring_on, model.vibration_on};
-  const char* labels[] = {"BT", "QUIET", "LED", "VIBRA"};
-  for (uint8_t index = 0; index < 4; ++index) {
-    const int16_t x = index % 2 == 0 ? 60 : 121;
-    const int16_t y = index < 2 ? 49 : 113;
-    canvas_.rect(x, y, 58, 55);
-    if (index == selected_setting_) {
-      canvas_.rect(x + 2, y + 2, 54, 51);
-    }
-    canvas_.centeredText(labels[index], x + 29, y + 11, 1);
-    canvas_.centeredText(enabled[index] ? "ON" : "OFF", x + 29, y + 32, 1);
+  static constexpr const char* LABELS[SETTING_COUNT] = {
+      "BLUETOOTH",  "QUIET",      "LED RING",    "VIBRATION",
+      "ALERT TONE", "FIND PHONE", "SECURE LINK", "FORGET PHONE",
+  };
+  if (selected_setting_ >= SETTING_COUNT) {
+    selected_setting_ = 0;
   }
+  // Scroll just far enough to keep the selected row in the window.
+  if (selected_setting_ < settings_top_) {
+    settings_top_ = selected_setting_;
+  } else if (selected_setting_ >= settings_top_ + SETTING_VISIBLE) {
+    settings_top_ =
+        static_cast<uint8_t>(selected_setting_ - SETTING_VISIBLE + 1);
+  }
+  if (settings_top_ > SETTING_COUNT - SETTING_VISIBLE) {
+    settings_top_ = SETTING_COUNT - SETTING_VISIBLE;
+  }
+
+  char footer[16];
+  snprintf(footer, sizeof(footer), "%u/%u  SELECT", selected_setting_ + 1,
+           SETTING_COUNT);
+  drawCardFrame("SETTINGS", footer);
+
+  constexpr int16_t ROW_LEFT = 36;
+  constexpr int16_t ROW_WIDTH = 168;
+  constexpr int16_t LABEL_X = 42;
+  constexpr int16_t VALUE_RIGHT = 198;
+  constexpr int16_t TOGGLE_X = 170;
+  for (uint8_t row = 0; row < SETTING_VISIBLE; ++row) {
+    const uint8_t index = static_cast<uint8_t>(settings_top_ + row);
+    const int16_t y = static_cast<int16_t>(40 + row * 24);
+    canvas_.fontText(WatchAssets::Ui16, LABELS[index], LABEL_X, y + 3);
+    const char* value = nullptr;
+    switch (index) {
+      case SETTING_BLUETOOTH:
+        value = model.bluetooth_connected ? "LINK"
+                : model.bluetooth_enabled ? "ON"
+                                          : "OFF";
+        break;
+      case SETTING_QUIET:
+        drawToggle(TOGGLE_X, y + 5, model.quiet_mode);
+        break;
+      case SETTING_LED_RING:
+        drawToggle(TOGGLE_X, y + 5, model.led_ring_on);
+        break;
+      case SETTING_VIBRATION:
+        drawToggle(TOGGLE_X, y + 5, model.vibration_on);
+        break;
+      case SETTING_ALERT_TONE:
+        value = TONE_NAMES[model.alert_tone < TONE_NAME_COUNT
+                               ? model.alert_tone
+                               : 0];
+        break;
+      case SETTING_FIND_PHONE:
+        drawToggle(TOGGLE_X, y + 5, model.find_phone_active);
+        break;
+      case SETTING_SECURE_LINK:
+        if (model.secure_link_available) {
+          drawToggle(TOGGLE_X, y + 5, model.secure_link);
+        } else {
+          value = "N/A";
+        }
+        break;
+      case SETTING_FORGET_PHONE:
+        value = !model.phone_bonded ? "--" : forget_armed_ ? "OK?" : "";
+        break;
+      default:
+        break;
+    }
+    if (value != nullptr) {
+      canvas_.fontText(
+          WatchAssets::Ui16, value,
+          static_cast<int16_t>(
+              VALUE_RIGHT - canvas_.fontTextWidth(WatchAssets::Ui16, value)),
+          y + 3);
+    }
+    if (inside_ && index == selected_setting_) {
+      canvas_.rect(ROW_LEFT, y, ROW_WIDTH, 23);
+    }
+  }
+
+  // Small arrows show that the list continues above / below the window.
+  if (settings_top_ > 0) {
+    for (int16_t row = 0; row < 4; ++row) {
+      canvas_.line(120 - row, 35 + row, 120 + row, 35 + row);
+    }
+  }
+  if (settings_top_ + SETTING_VISIBLE < SETTING_COUNT) {
+    for (int16_t row = 0; row < 4; ++row) {
+      canvas_.line(117 + row, 161 + row, 123 - row, 161 + row);
+    }
+  }
+
+  char status[32];
+  if (!model.bluetooth_connected) {
+    snprintf(status, sizeof(status), "PHONE NOT CONNECTED");
+  } else if (!model.phone_status_valid) {
+    snprintf(status, sizeof(status), "PHONE CONNECTED");
+  } else {
+    snprintf(status, sizeof(status), "PHONE %u%%%s%s",
+             model.phone_battery_percent,
+             model.phone_charging ? " CHG" : "",
+             model.phone_dnd ? " DND" : "");
+  }
+  canvas_.centeredFittedFontText(WatchAssets::Ui16, status, 120, 168, 184);
 }

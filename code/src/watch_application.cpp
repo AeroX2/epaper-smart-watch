@@ -17,6 +17,8 @@ void copyPhoneText(char (&destination)[Size], const char* source) {
 
 }  // namespace
 
+WatchApplication* WatchApplication::instance_ = nullptr;
+
 WatchApplication::WatchApplication()
     : wire_(BoardPins::I2C_SDA, BoardPins::I2C_SCL),
       i2c_(wire_),
@@ -27,10 +29,11 @@ WatchApplication::WatchApplication()
                    BoardPins::DISPLAY_SCK),
       display_(display_spi_, BoardPins::DISPLAY_CS, BoardPins::DISPLAY_DC,
                BoardPins::DISPLAY_RESET, BoardPins::DISPLAY_BUSY),
+      ota_(flash_, ble_, model_),
       display_controller_(display_, ui_, model_, buttons_),
       diagnostics_(i2c_, accelerometer_, environment_, fuel_gauge_, display_,
                    buttons_, display_light_on_),
-      activity_(accelerometer_, diagnostics_, rtc_, ble_, model_),
+      activity_(accelerometer_, diagnostics_, rtc_, ble_, model_, config_),
       alarm_(rtc_, ble_, ui_, model_) {}
 
 void WatchApplication::configureGpio() {
@@ -78,6 +81,7 @@ void WatchApplication::printBanner() {
   Serial.print(F("Core clock: "));
   Serial.print(SystemCoreClock / 1000000);
   Serial.println(F(" MHz"));
+  watchdog_.printStatus(Serial);
 }
 
 void WatchApplication::printHelp() {
@@ -100,9 +104,12 @@ void WatchApplication::printHelp() {
   Serial.println(F("  [/]  previous/next UI screen or item"));
   Serial.println(F("  m/o  UI home/select"));
   Serial.println(F("  j  print the STM32 RTC date/time"));
-  Serial.println(F("  r  start BLE advertising (may take up to 10 seconds)"));
+  Serial.println(F("  r  start BLE advertising for the phone (up to 10 seconds)"));
+  Serial.println(F("  q  probe external flash (JEDEC ID), config store, update state"));
+  Serial.println(F("  t  play the next notification alert tone (1-5)"));
+  Serial.println(F("  p  forget the bonded phone (erase the stored link key)"));
   Serial.println(F("  f  reboot into resident STM32 USB DFU"));
-  Serial.println(F("  @  set RTC: @YYYY-MM-DDTHH:MM:SS then Enter"));
+  Serial.println(F("  @  set local RTC time: @YYYY-MM-DDTHH:MM:SS then Enter"));
   Serial.println(F("  !  set alarm: !HH:MM then Enter"));
   Serial.println(F("  h  show this help"));
   Serial.println();
@@ -140,6 +147,7 @@ void WatchApplication::enterDfu() {
     dfu_.request(Serial);
     return;
   }
+  activity_.saveNow(Serial);
   display_.shutdown();
   display_light_on_ = false;
   digitalWrite(BoardPins::DISPLAY_LIGHT, LOW);
@@ -173,6 +181,17 @@ void WatchApplication::updateUiSensors() {
             : 0;
   }
 
+  readBattery();
+  updateMusicPosition();
+
+  model_.led_ring_on = display_light_on_;
+  model_.bluetooth_enabled = ble_.ready();
+  model_.bluetooth_connected = ble_.connected();
+  model_.secure_link_available = config_.available();
+  model_.phone_bonded = ble_.bond().valid;
+}
+
+void WatchApplication::readBattery() {
   BatteryReading battery{};
   model_.battery_valid =
       diagnostics_.fuelGaugeReady() && fuel_gauge_.read(battery);
@@ -181,13 +200,20 @@ void WatchApplication::updateUiSensors() {
         constrain(lroundf(battery.state_of_charge_percent), 0L, 100L));
     model_.battery_millivolts =
         static_cast<uint16_t>(lroundf(battery.voltage_v * 1000.0f));
-  }
-
-  model_.led_ring_on = display_light_on_;
-  model_.bluetooth_connected = ble_.connected();
-  if (model_.battery_valid) {
     ble_.updateBattery(model_.battery_percent);
   }
+}
+
+void WatchApplication::updateMusicPosition() {
+  uint32_t position = music_base_position_;
+  if (model_.music_state == MusicState::Playing) {
+    position += (millis() - music_base_ms_) / 1000;
+  }
+  if (model_.music_duration_seconds != 0 &&
+      position > model_.music_duration_seconds) {
+    position = model_.music_duration_seconds;
+  }
+  model_.music_position_seconds = position;
 }
 
 void WatchApplication::renderUi() {
@@ -206,10 +232,151 @@ bool WatchApplication::startBluetooth() {
   }
   const time_t preserved_epoch = rtc_.epoch();
   const uint32_t started = millis();
-  const bool started_ok = ble_.begin(Serial);
+  // BLE.begin() cannot be fed from inside and spins forever if CPU2 never
+  // answers; give it the full watchdog window so a hang resets the watch.
+  WatchWatchdog::feed();
+  // The secure-link setting is sampled here: it takes effect when the radio
+  // starts, which is why changing it restarts a running radio.
+  const bool started_ok =
+      ble_.begin(Serial, model_.secure_link, helloFlags());
+  WatchWatchdog::feed();
   rtc_.restoreAfterBackupReset(preserved_epoch, millis() - started, Serial);
   model_.bluetooth_connected = ble_.connected();
   return started_ok;
+}
+
+void WatchApplication::restartBluetooth() {
+  if (!ble_.ready()) {
+    return;
+  }
+  ble_.end(Serial);
+  startBluetooth();
+}
+
+uint8_t WatchApplication::helloFlags() const {
+  uint8_t flags = 0;
+  if (model_.secure_link) {
+    flags |= HELLO_FLAG_SECURE;
+  }
+  if (ota_.supported()) {
+    flags |= HELLO_FLAG_OTA;
+  }
+  if (config_.available()) {
+    flags |= HELLO_FLAG_STORAGE;
+  }
+  return flags;
+}
+
+void WatchApplication::loadStoredSettings() {
+  StoredSettings settings{};
+  if (config_.loadSettings(settings)) {
+    model_.vibration_on = settings.vibration;
+    model_.quiet_mode = settings.quiet;
+    model_.alert_tone = settings.tone;
+    model_.secure_link = settings.secure_link;
+    Serial.println(F("Settings restored from flash."));
+  }
+  model_.secure_link_available = config_.available();
+  StoredBond bond{};
+  if (config_.loadBond(bond) && bond.valid) {
+    ble_.setBond(bond);
+  }
+  model_.phone_bonded = ble_.bond().valid;
+}
+
+void WatchApplication::persistSettings() {
+  StoredSettings settings{};
+  settings.vibration = model_.vibration_on;
+  settings.quiet = model_.quiet_mode;
+  settings.tone = model_.alert_tone;
+  settings.secure_link = model_.secure_link;
+  if (!config_.saveSettings(settings) && flash_.present()) {
+    Serial.println(F("[WARN] Settings could not be saved to flash."));
+  }
+  model_.secure_link_available = config_.available();
+}
+
+void WatchApplication::forgetPhone() {
+  if (!config_.eraseBond() && flash_.present()) {
+    Serial.println(F("[WARN] Stored link key could not be erased."));
+  }
+  ble_.setBond(StoredBond{});
+  model_.phone_bonded = false;
+  Serial.println(F("Bonded phone forgotten. Remove the bond on the phone too."));
+}
+
+void WatchApplication::printStorageStatus() {
+  flash_.printStatus(Serial);
+  config_.printStatus(Serial);
+  ota_.printStatus(Serial);
+  Serial.print(F("Secure link: "));
+  Serial.print(model_.secure_link ? F("ON") : F("OFF"));
+  Serial.print(F(", phone bonded: "));
+  Serial.print(ble_.bond().valid ? F("yes") : F("no"));
+  Serial.print(F(", link encrypted: "));
+  Serial.println(ble_.encrypted() ? F("yes") : F("no"));
+}
+
+void WatchApplication::displayWaitHook() {
+  WatchWatchdog::feed();
+  backgroundHook();
+}
+
+void WatchApplication::backgroundHook() {
+  if (instance_ != nullptr) {
+    instance_->backgroundService();
+  }
+}
+
+// Runs from inside blocking work (e-paper BUSY waits, the update read-back).
+// It may only do things that cannot start another blocking operation:
+// receive/acknowledge/queue BLE traffic and advance actuator timing. Phone
+// updates are NOT applied here and nothing here renders.
+void WatchApplication::backgroundService() {
+  if (in_background_) {
+    return;
+  }
+  const uint32_t now = millis();
+  if (now - last_background_ms_ < 20) {
+    return;
+  }
+  last_background_ms_ = now;
+  in_background_ = true;
+  ble_.poll();
+  alarm_.serviceOutput();
+  in_background_ = false;
+}
+
+void WatchApplication::otaDataThunk(const uint8_t* data, size_t length) {
+  if (instance_ != nullptr) {
+    instance_->ota_.handleData(data, length);
+  }
+}
+
+// Reset into the normal boot path so the resident bootloader installs the
+// staged image. The DFU-request backup register is deliberately NOT set.
+void WatchApplication::rebootForUpdate() {
+  Serial.println(F("Rebooting to install the staged firmware update..."));
+  activity_.saveNow(Serial);
+  display_.shutdown();
+  display_light_on_ = false;
+  digitalWrite(BoardPins::DISPLAY_LIGHT, LOW);
+  analogWrite(BoardPins::VIBRATION, 0);
+  noTone(BoardPins::BUZZER);
+  ble_.flush();
+  if (ble_.ready()) {
+    ble_.end(Serial);
+  }
+  // The bootloader only waits about 20 ms for the chip: leave it awake and
+  // make sure no erase or program is still in flight.
+  if (!flash_.prepareForReset(3000)) {
+    Serial.println(F("[WARN] External flash still busy before reset."));
+  }
+  Serial.flush();
+  delay(25);
+  NVIC_SystemReset();
+  while (true) {
+  }
 }
 
 void WatchApplication::applyUiAction(WatchUiAction action) {
@@ -218,16 +385,25 @@ void WatchApplication::applyUiAction(WatchUiAction action) {
       alarm_.timerChanged();
       break;
     case WatchUiAction::NotificationDismissed:
-      ble_.sendCommand("NOTIFICATION,DISMISSED");
+      dismissShownNotification();
       break;
     case WatchUiAction::MediaPrevious:
-      ble_.sendCommand("MEDIA,PREVIOUS");
+      ble_.send("MEDIA|PREV");
       break;
     case WatchUiAction::MediaPlayPause:
-      ble_.sendCommand("MEDIA,PLAY_PAUSE");
+      ble_.send("MEDIA|PLAY_PAUSE");
+      // Optimistic local toggle; the phone confirms with MUSIC on change.
+      updateMusicPosition();
+      if (model_.music_state != MusicState::None) {
+        music_base_position_ = model_.music_position_seconds;
+        music_base_ms_ = millis();
+        model_.music_state = model_.music_state == MusicState::Playing
+                                 ? MusicState::Paused
+                                 : MusicState::Playing;
+      }
       break;
     case WatchUiAction::MediaNext:
-      ble_.sendCommand("MEDIA,NEXT");
+      ble_.send("MEDIA|NEXT");
       break;
     case WatchUiAction::BluetoothToggle:
       if (ble_.ready()) {
@@ -236,6 +412,50 @@ void WatchApplication::applyUiAction(WatchUiAction action) {
         startBluetooth();
       }
       break;
+    case WatchUiAction::PhoneSettingsChanged:
+      if (model_.quiet_mode) {
+        alarm_.stopCallAlert();
+      }
+      persistSettings();
+      sendSettings();
+      break;
+    case WatchUiAction::AlertToneChanged:
+      persistSettings();
+      sendSettings();
+      // Preview the new choice even in quiet mode: the wearer asked for it.
+      alarm_.notifyAlert(false, model_.alert_tone);
+      break;
+    case WatchUiAction::SecureLinkChanged:
+      if (!model_.secure_link) {
+        // Turning the setting off erases the stored key (PROTOCOL.md).
+        forgetPhone();
+      }
+      persistSettings();
+      if (model_.secure_link && !config_.available()) {
+        // Never run "secure" on a setting or key that cannot be stored.
+        model_.secure_link = false;
+        Serial.println(F("[WARN] Secure link needs working flash: left OFF."));
+      }
+      Serial.print(F("Secure link "));
+      Serial.println(model_.secure_link ? F("ON") : F("OFF"));
+      restartBluetooth();
+      break;
+    case WatchUiAction::ForgetPhone:
+      forgetPhone();
+      if (ble_.secure()) {
+        // Drop the session that was encrypted with the erased key.
+        restartBluetooth();
+      }
+      break;
+    case WatchUiAction::FindPhoneToggle: {
+      const bool start = !model_.find_phone_active;
+      if (ble_.sendf("FIND_PHONE|%d", start ? 1 : 0)) {
+        model_.find_phone_active = start;
+      } else {
+        Serial.println(F("Find phone: no phone connected."));
+      }
+      break;
+    }
     default:
       break;
   }
@@ -250,84 +470,357 @@ void WatchApplication::applyUiSelection() {
   applyUiAction(ui_.select(model_));
 }
 
-void WatchApplication::processPhoneUpdates() {
-  PhoneUpdate update{};
-  if (!ble_.takeUpdate(update)) {
+void WatchApplication::storeNotification(uint16_t id, const char* app,
+                                         const char* title,
+                                         const char* text) {
+  WatchNotification* list = model_.notifications;
+  uint8_t count = model_.notification_count;
+  // New arrivals are not redrawn (see applyPhoneUpdate), so the paging index
+  // must keep pointing at the notification that is on screen; otherwise the
+  // next select would dismiss one the user has not seen.
+  // When Messages is not open, a new arrival simply becomes the first shown.
+  const bool viewing =
+      ui_.screen() == WatchScreen::Notifications && ui_.isInside();
+  if (!viewing) {
+    ui_.setNotificationIndex(0);
+  }
+  const uint8_t shown_index = ui_.notificationIndex();
+  const bool track_shown = viewing && shown_index < count;
+  const uint16_t shown_id = track_shown ? list[shown_index].id : 0;
+  const bool shown_replaced = track_shown && shown_id == id;
+  for (uint8_t index = 0; index < count; ++index) {
+    if (list[index].id == id) {
+      memmove(&list[index], &list[index + 1],
+              sizeof(WatchNotification) * (count - index - 1));
+      --count;
+      break;
+    }
+  }
+  if (count >= WatchUiModel::MAX_NOTIFICATIONS) {
+    count = WatchUiModel::MAX_NOTIFICATIONS - 1;  // drop the oldest
+  }
+  memmove(&list[1], &list[0], sizeof(WatchNotification) * count);
+  list[0].id = id;
+  copyPhoneText(list[0].app, app);
+  copyPhoneText(list[0].title, title);
+  copyPhoneText(list[0].text, text);
+  model_.notification_count = static_cast<uint8_t>(count + 1);
+
+  if (track_shown && !shown_replaced) {
+    for (uint8_t index = 1; index < model_.notification_count; ++index) {
+      if (list[index].id == shown_id) {
+        ui_.setNotificationIndex(index);
+        break;
+      }
+    }
+  }
+  ui_.clampNotificationIndex(model_.notification_count);
+}
+
+bool WatchApplication::removeNotification(uint16_t id) {
+  WatchNotification* list = model_.notifications;
+  const uint8_t count = model_.notification_count;
+  for (uint8_t index = 0; index < count; ++index) {
+    if (list[index].id == id) {
+      memmove(&list[index], &list[index + 1],
+              sizeof(WatchNotification) * (count - index - 1));
+      model_.notification_count = static_cast<uint8_t>(count - 1);
+      ui_.clampNotificationIndex(model_.notification_count);
+      return true;
+    }
+  }
+  return false;
+}
+
+void WatchApplication::dismissShownNotification() {
+  const uint8_t index = ui_.notificationIndex();
+  if (index >= model_.notification_count) {
     return;
   }
-  bool should_render = false;
+  const uint16_t id = model_.notifications[index].id;
+  removeNotification(id);
+  // id 0 is a local Sleep as Android message with no phone counterpart.
+  if (id != 0) {
+    ble_.sendf("NOTIFY_DISMISS|%u", id);
+  }
+}
+
+void WatchApplication::sendStatus() {
+  if (!ble_.connected()) {
+    return;
+  }
+  readBattery();
+  // The board has no charger-status input wired to the MCU: -1 = unknown.
+  const bool sent = ble_.sendf(
+      "STATUS|%d|%u|%lu|-1",
+      model_.battery_valid ? static_cast<int>(model_.battery_percent) : -1,
+      model_.battery_valid ? static_cast<unsigned>(model_.battery_millivolts)
+                           : 0U,
+      static_cast<unsigned long>(model_.steps));
+  if (sent) {
+    last_status_ms_ = millis();
+    last_status_battery_ =
+        model_.battery_valid ? static_cast<int16_t>(model_.battery_percent)
+                             : -1;
+  }
+}
+
+void WatchApplication::sendSettings() {
+  ble_.sendf("SETTINGS|%d|%d|%u", model_.vibration_on ? 1 : 0,
+             model_.quiet_mode ? 1 : 0,
+             static_cast<unsigned>(model_.alert_tone));
+}
+
+void WatchApplication::serviceHistory() {
+  // Leave queue room for ACK/NAK replies while the burst drains.
+  while (history_sending_ && ble_.outboundFree() > 2) {
+    if (history_next_ >= activity_.historyCount()) {
+      ble_.send("HISTORY_END");
+      history_sending_ = false;
+      break;
+    }
+    uint32_t date = 0;
+    uint32_t steps = 0;
+    if (activity_.historyEntry(history_next_, date, steps)) {
+      ble_.sendf("HISTORY|%lu|%lu", static_cast<unsigned long>(date),
+                 static_cast<unsigned long>(steps));
+    }
+    ++history_next_;
+  }
+}
+
+void WatchApplication::servicePhoneLink() {
+  if (ble_.takeDisconnected()) {
+    Serial.println(F("Phone disconnected."));
+    phone_session_ = false;
+    history_sending_ = false;
+    model_.find_phone_active = false;
+    model_.phone_status_valid = false;
+    bool redraw = ota_.onDisconnect(Serial);
+    if (model_.call_active) {
+      endCall();
+      redraw = true;
+    }
+    if (redraw && display_controller_.active()) {
+      renderUi();
+    }
+  }
+  if (!phone_session_ || !ble_.connected()) {
+    return;
+  }
+  if (ota_.transferActive()) {
+    return;  // STATUS and HISTORY are suspended during a firmware transfer
+  }
+  serviceHistory();
+  constexpr uint32_t STATUS_INTERVAL_MS = 10UL * 60UL * 1000UL;
+  const int16_t battery =
+      model_.battery_valid ? static_cast<int16_t>(model_.battery_percent) : -1;
+  if (battery != last_status_battery_ ||
+      millis() - last_status_ms_ >= STATUS_INTERVAL_MS) {
+    sendStatus();
+  }
+}
+
+void WatchApplication::endCall() {
+  model_.call_active = false;
+  alarm_.stopCallAlert();
+}
+
+bool WatchApplication::handleCallButton(bool select, bool back) {
+  if (select) {
+    ble_.send("CALL_REJECT");
+    endCall();
+    Serial.println(F("Call rejected."));
+    return true;
+  }
+  if (back) {
+    // Hide the call screen locally; the phone keeps ringing.
+    endCall();
+    return true;
+  }
+  alarm_.stopCallAlert();  // any other button just silences the watch
+  return false;
+}
+
+bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
+  const int32_t* n = update.number;
+  const WatchScreen screen = ui_.screen();
   switch (update.type) {
+    case PhoneUpdateType::Hello:
+      Serial.print(F("Phone HELLO, protocol "));
+      Serial.println(n[0]);
+      phone_session_ = true;
+      history_sending_ = false;
+      model_.find_phone_active = false;
+      sendStatus();
+      ota_.sendBootReport(Serial);
+      return false;
     case PhoneUpdateType::Time:
-      rtc_.setEpoch(update.epoch);
-      Serial.println(F("BLE time synchronization applied."));
-      should_render = ui_.screen() == WatchScreen::Clock;
-      break;
-    case PhoneUpdateType::Notification:
-      copyPhoneText(model_.notification_sender, update.sender);
-      copyPhoneText(model_.notification_line_1, update.line_1);
-      copyPhoneText(model_.notification_line_2, update.line_2);
-      model_.notification_present = true;
-      // A notification should neither steal the screen nor begin a multi-second
-      // e-paper refresh from inside BLE processing. The clock picks up its
-      // small pending-message indicator on the next minute/input refresh.
-      should_render = false;
-      break;
-    case PhoneUpdateType::ClearNotification:
-      model_.notification_present = false;
-      should_render = ui_.screen() == WatchScreen::Notifications;
-      break;
+      if (rtc_.setUtc(update.utc, n[0])) {
+        rtc_.setTransition(static_cast<uint32_t>(n[2]), n[1]);
+        rtc_.updateModel(model_);
+        Serial.print(F("BLE time synchronization applied, UTC offset "));
+        Serial.println(n[0]);
+      }
+      return screen == WatchScreen::Clock;
+    case PhoneUpdateType::Notify:
+      storeNotification(static_cast<uint16_t>(n[0]), update.text_a,
+                        update.text_b, update.text_c);
+      if (n[1] == 1) {
+        // New arrival: vibration follows its own setting, quiet mode only
+        // silences the tone. Still no e-paper refresh.
+        alarm_.notifyAlert(model_.vibration_on,
+                           model_.quiet_mode ? 0 : model_.alert_tone);
+      }
+      // A notification should neither steal the screen nor begin a
+      // multi-second e-paper refresh from inside BLE processing. The clock
+      // picks up its small pending-message indicator on the next
+      // minute/input refresh.
+      return false;
+    case PhoneUpdateType::NotifyClear:
+      if (n[0] == 0) {
+        model_.notification_count = 0;
+        ui_.clampNotificationIndex(0);
+        return screen == WatchScreen::Notifications;
+      }
+      return removeNotification(static_cast<uint16_t>(n[0])) &&
+             screen == WatchScreen::Notifications;
+    case PhoneUpdateType::Call:
+      if (n[0] == 1) {
+        // Calls are the one phone event that deliberately takes the screen.
+        model_.call_active = true;
+        copyPhoneText(model_.call_caller, update.text_a);
+        if (!model_.quiet_mode) {
+          alarm_.startCallAlert();
+        }
+        Serial.println(F("Incoming call."));
+        return true;
+      }
+      if (model_.call_active) {
+        endCall();
+        return true;
+      }
+      return false;
     case PhoneUpdateType::Weather:
       model_.phone_weather_valid = true;
-      model_.forecast_temperature_c = update.temperature_c;
-      model_.forecast_high_c = update.high_c;
-      model_.forecast_low_c = update.low_c;
-      copyPhoneText(model_.weather_condition, update.condition);
-      should_render = ui_.screen() == WatchScreen::Weather;
-      break;
+      model_.forecast_temperature_c = static_cast<int16_t>(n[0]);
+      model_.forecast_high_c = static_cast<int8_t>(n[1]);
+      model_.forecast_low_c = static_cast<int8_t>(n[2]);
+      model_.weather_code = static_cast<int16_t>(n[3]);
+      copyPhoneText(model_.weather_condition, update.text_a);
+      return screen == WatchScreen::Weather;
     case PhoneUpdateType::Music:
-      model_.music_playing = update.playing;
-      model_.music_position_seconds = update.position_seconds;
-      model_.music_duration_seconds = update.duration_seconds;
-      copyPhoneText(model_.music_title, update.title);
-      copyPhoneText(model_.music_artist, update.artist);
-      should_render = ui_.screen() == WatchScreen::Music;
-      break;
-    case PhoneUpdateType::ResetSteps:
+      model_.music_state = static_cast<MusicState>(n[0]);
+      music_base_position_ = static_cast<uint32_t>(n[1]);
+      music_base_ms_ = millis();
+      model_.music_duration_seconds = static_cast<uint32_t>(n[2]);
+      copyPhoneText(model_.music_title, update.text_a);
+      copyPhoneText(model_.music_artist, update.text_b);
+      updateMusicPosition();
+      return screen == WatchScreen::Music;
+    case PhoneUpdateType::NextAlarm:
+      model_.next_alarm_utc = update.utc;
+      return screen == WatchScreen::Alarms && ui_.isInside();
+    case PhoneUpdateType::Event:
+      model_.event_utc = update.utc;
+      copyPhoneText(model_.event_title, update.text_a);
+      return false;
+    case PhoneUpdateType::Phone:
+      model_.phone_status_valid = true;
+      model_.phone_battery_percent = static_cast<uint8_t>(n[0]);
+      model_.phone_charging = n[1] != 0;
+      model_.phone_dnd = n[2] != 0;
+      return false;
+    case PhoneUpdateType::Settings:
+      model_.vibration_on = n[0] != 0;
+      model_.quiet_mode = n[1] != 0;
+      if (n[2] >= 0) {
+        model_.alert_tone = static_cast<uint8_t>(n[2]);
+      }
+      if (model_.quiet_mode) {
+        alarm_.stopCallAlert();
+      }
+      persistSettings();  // writes flash only if something changed
+      return screen == WatchScreen::Settings && ui_.isInside();
+    case PhoneUpdateType::TonePreview:
+      alarm_.notifyAlert(false, static_cast<uint8_t>(n[0]));
+      return false;
+    case PhoneUpdateType::OtaBegin:
+      return ota_.handleBegin(static_cast<uint32_t>(n[0]), update.utc,
+                              update.text_a,
+                              model_.alarm_ringing || model_.call_active,
+                              Serial);
+    case PhoneUpdateType::OtaEnd:
+      if (ota_.handleEnd(Serial)) {
+        // The read-back takes several seconds: show why first. BLE stays
+        // serviced through the wait hook / idle hook meanwhile.
+        if (display_controller_.active()) {
+          renderUi();
+        }
+        ota_.verify(Serial);
+      }
+      return true;
+    case PhoneUpdateType::OtaAbort:
+      return ota_.handleAbort(Serial);
+    case PhoneUpdateType::FindWatch:
+      alarm_.startFindAlert(Serial);
+      return false;
+    case PhoneUpdateType::RequestStatus:
+      if (!ota_.transferActive()) {
+        sendStatus();
+      }
+      return false;
+    case PhoneUpdateType::RequestHistory:
+      if (ota_.transferActive()) {
+        return false;
+      }
+      history_sending_ = true;
+      history_next_ = 0;
+      serviceHistory();
+      return false;
+    case PhoneUpdateType::StepsReset:
       activity_.resetSteps(Serial);
-      should_render = ui_.screen() == WatchScreen::Activity;
-      break;
+      return screen == WatchScreen::Activity;
     case PhoneUpdateType::SleepStart:
       activity_.startSleepTracking(Serial);
-      break;
+      return false;
     case PhoneUpdateType::SleepStop:
       activity_.stopSleepTracking(Serial);
-      break;
+      return false;
     case PhoneUpdateType::SleepPause:
-      activity_.pauseSleepTrackingUntil(update.value, Serial);
-      break;
-    case PhoneUpdateType::SleepAlarmStart:
-      alarm_.scheduleSleepAlarm(update.value, Serial);
-      break;
+      activity_.pauseSleepTracking(n[0], Serial);
+      return false;
+    case PhoneUpdateType::SleepAlarm:
+      alarm_.scheduleSleepAlarm(n[0], Serial);
+      return false;
     case PhoneUpdateType::SleepAlarmStop:
-      should_render |= alarm_.stopSleepAlarm(Serial);
-      break;
-    case PhoneUpdateType::SleepNotification:
-      copyPhoneText(model_.notification_sender, "SLEEP AS ANDROID");
-      copyPhoneText(model_.notification_line_1, update.line_1);
-      copyPhoneText(model_.notification_line_2, update.line_2);
-      model_.notification_present = true;
-      should_render = false;
-      break;
-    case PhoneUpdateType::SleepHint:
-      for (uint32_t i = 0; i < min(update.value, 5UL); ++i) {
+      return alarm_.stopSleepAlarm(Serial);
+    case PhoneUpdateType::SleepNotify:
+      storeNotification(0, "SLEEP AS ANDROID", update.text_a, update.text_b);
+      return false;
+    case PhoneUpdateType::SleepHint: {
+      const int32_t repeats = n[0] < 5 ? n[0] : 5;
+      for (int32_t i = 0; i < repeats; ++i) {
         analogWrite(BoardPins::VIBRATION, 128);
         delay(80);
         analogWrite(BoardPins::VIBRATION, 0);
         delay(80);
       }
-      break;
+      return false;
+    }
     default:
-      break;
+      return false;
+  }
+}
+
+void WatchApplication::processPhoneUpdates() {
+  bool should_render = false;
+  PhoneUpdate update{};
+  // Bounded by the inbound queue size; render once for the whole batch.
+  for (uint8_t processed = 0;
+       processed < WatchBle::INBOUND_CAPACITY && ble_.takeUpdate(update);
+       ++processed) {
+    should_render |= applyPhoneUpdate(update);
   }
   if (should_render && display_controller_.active()) {
     renderUi();
@@ -436,6 +929,20 @@ void WatchApplication::handleCommand(char command) {
       break;
     case 'j': case 'J': rtc_.print(Serial); break;
     case 'r': case 'R': startBluetooth(); break;
+    case 'q': case 'Q': printStorageStatus(); break;
+    case 't': case 'T':
+      preview_tone_ = static_cast<uint8_t>(
+          preview_tone_ % WatchAlarm::TONE_COUNT + 1);
+      Serial.print(F("Alert tone "));
+      Serial.println(preview_tone_);
+      alarm_.notifyAlert(false, preview_tone_);
+      break;
+    case 'p': case 'P':
+      forgetPhone();
+      if (ble_.secure()) {
+        restartBluetooth();
+      }
+      break;
     case 'f': case 'F': enterDfu(); break;
     case 'h': case 'H': case '?': printHelp(); break;
     case '\r': case '\n': case ' ': case '\t': break;
@@ -451,6 +958,10 @@ void WatchApplication::handleButton(size_t index, bool long_press) {
   Serial.print(F("Button "));
   Serial.print(index + 1);
   Serial.println(long_press ? F(" long press") : F(" short press"));
+  if (alarm_.stopFindAlert()) {
+    Serial.println(F("Find my watch: stopped by button."));
+    return;
+  }
   if (model_.alarm_ringing) {
     if (index == 0 || (index == 3 && long_press)) {
       alarm_.dismiss(Serial);
@@ -458,6 +969,20 @@ void WatchApplication::handleButton(size_t index, bool long_press) {
       alarm_.snooze(Serial);
     }
     renderUi();
+    return;
+  }
+  if (model_.call_active) {
+    if (handleCallButton(index == 3, index == 0)) {
+      renderUi();
+    }
+    return;
+  }
+  if (ota_.screenShown()) {
+    // Select accepts and back declines the update prompt; nothing else is
+    // navigable while the update overlay is up.
+    if (ota_.handleButton(index == 3, index == 0, Serial)) {
+      renderUi();
+    }
     return;
   }
   if (long_press && index == 0) {
@@ -479,6 +1004,10 @@ void WatchApplication::handleChord(bool backslash, bool long_press) {
   Serial.print(F("Diagonal "));
   Serial.print(backslash ? F("\\") : F("/"));
   Serial.println(long_press ? F(" hold") : F(" pinch"));
+  if (alarm_.stopFindAlert()) {
+    Serial.println(F("Find my watch: stopped by button."));
+    return;
+  }
   if (model_.alarm_ringing) {
     if (long_press) {
       alarm_.dismiss(Serial);
@@ -486,6 +1015,21 @@ void WatchApplication::handleChord(bool backslash, bool long_press) {
       alarm_.snooze(Serial);
     }
     renderUi();
+    return;
+  }
+  if (model_.call_active) {
+    // Backslash hold = select (reject); slash hold = back (hide).
+    if (handleCallButton(backslash && long_press,
+                         !backslash && long_press)) {
+      renderUi();
+    }
+    return;
+  }
+  if (ota_.screenShown()) {
+    if (ota_.handleButton(backslash && long_press, !backslash && long_press,
+                          Serial)) {
+      renderUi();
+    }
     return;
   }
   if (backslash) {
@@ -529,6 +1073,12 @@ void WatchApplication::pollButtons() {
 
 void WatchApplication::setup() {
   configureGpio();
+  watchdog_.begin();
+  // Take the external flash pins early (the bootloader leaves them analog)
+  // so its chip select is never left floating; reported further down.
+  flash_.begin();
+  instance_ = this;
+  display_.setWaitHook(displayWaitHook);
   i2c_.begin();
 
   // Let the nPM1100 finish port detection before attaching the USB console.
@@ -541,27 +1091,69 @@ void WatchApplication::setup() {
 
   printBanner();
   rtc_.begin(Serial);
+  WatchWatchdog::feed();
+  // External flash: non-destructive probe, then settings/bond/steps and any
+  // firmware-update result. Everything below works without it (RAM only).
+  flash_.printStatus(Serial);
+  config_.begin(flash_, Serial);
+  loadStoredSettings();
+  ota_.begin(Serial);
+  ota_.setIdleHook(backgroundHook);
+  ble_.setOtaDataHandler(otaDataThunk);
+  WatchWatchdog::feed();
   diagnostics_.runAll(Serial);
+  WatchWatchdog::feed();
   activity_.begin(Serial);
   alarm_.begin();
   power_.begin(rtc_, Serial);
   printHelp();
   updateUiSensors();
+  WatchWatchdog::feed();
   display_controller_.begin(Serial);
 }
 
 void WatchApplication::loop() {
+  WatchWatchdog::feed();
   const uint8_t wake_events = power_.takeEvents();
 
   while (Serial.available() > 0) {
     handleSerialByte(static_cast<char>(Serial.read()));
   }
   ble_.poll();
+  model_.bluetooth_enabled = ble_.ready();
   model_.bluetooth_connected = ble_.connected();
   processPhoneUpdates();
+  servicePhoneLink();
+  if (ble_.takeBondChange()) {
+    // A phone has just paired: keep its key (flash work stays out of the
+    // BLE callback that reported it).
+    model_.phone_bonded = true;
+    Serial.println(F("Phone paired; storing the link key."));
+    if (!config_.saveBond(ble_.bond())) {
+      Serial.println(F("[WARN] Link key not saved; it is lost at reset."));
+    }
+  }
+  if (ota_.service(Serial) && display_controller_.active()) {
+    renderUi();
+  }
+  if (ota_.rebootDue()) {
+    rebootForUpdate();
+  }
   if (alarm_.service(Serial) && display_controller_.active()) {
     renderUi();
   }
+  if (rtc_.serviceTransition()) {
+    Serial.println(F("UTC offset change (daylight saving) applied."));
+    if (display_controller_.active()) {
+      renderUi();
+    }
+  }
+  if (model_.time_valid) {
+    // Rolls the step history at local midnight.
+    activity_.serviceDay(model_.local_epoch / 86400UL, rtc_.timeTrusted(),
+                         Serial);
+  }
+  activity_.serviceStorage(Serial);
   if ((wake_events & WATCH_WAKE_ACCELEROMETER) != 0) {
     activity_.serviceInterrupt(Serial);
   }
@@ -574,12 +1166,15 @@ void WatchApplication::loop() {
   if (display_controller_.clockMinuteChanged()) {
     renderUi();
   }
+  // Send anything queued by button handling or alarms before sleeping.
+  ble_.flush();
 
   // Button debouncing/holds and active actuator pulses need short deadlines.
   // Everything else sleeps until an interrupt or the one-second RTC safety
   // deadline; USB and STM32WB IPCC interrupts wake this sleep immediately.
   const uint32_t sleep_ms =
-      (buttons_.needsService() || alarm_.needsFastService())
+      (buttons_.needsService() || alarm_.needsFastService() ||
+       history_sending_)
           ? 10U
           : 1000U;
   power_.sleepFor(sleep_ms);

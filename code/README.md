@@ -34,9 +34,11 @@ current limit.
 | Display DC / RST_N / BUSY_N | PA8 / PA6 / PA2 |
 | Display frontlight control | PC3 |
 
-The external 32-Mbit XT25F32 QSPI flash is not used by the current firmware.
-Firmware updates go directly from USB DFU into the STM32 application slot, so
-the external flash and QSPI peripheral remain off.
+The external 32-Mbit XT25F32F flash (U4) on the QSPI pins holds the settings, the bond key, the
+step history and staged Bluetooth firmware updates; see "External flash storage" below and
+[`EXTERNAL_FLASH.md`](EXTERNAL_FLASH.md). The QUADSPI peripheral itself stays off: the firmware
+bit-bangs single-line SPI on those pins. USB DFU still writes straight into the STM32 application
+slot and remains the recovery path.
 
 ## Build, bootstrap, and update over USB
 
@@ -60,8 +62,10 @@ python tools/make_factory_image.py bootloader/.pio/build/watch_dfu_bootloader/fi
 Program `epaper-watch-factory.bin` once at `0x08000000`, using BOOT0 plus
 STM32CubeProgrammer or an ST-Link. This one physical bootstrap is unavoidable:
 the resident loader must exist before the running application can request it.
-The default `watch_direct` environment remains a known-safe address-zero
-recovery build. BOOT0 and SWD continue to work as recovery paths.
+The default environment is `watch` (linked for `0x08010000`), so a bare
+`pio run -t upload` cannot overwrite the loader. `watch_direct` remains an
+address-zero recovery build that replaces the loader; select it explicitly with
+`-e watch_direct`. BOOT0 and SWD continue to work as recovery paths.
 
 After the factory image is installed, close any serial monitor, build the
 relocated application, and update directly over USB:
@@ -73,8 +77,9 @@ python tools/usb_dfu_update.py COM26 .pio/build/watch/firmware.bin
 
 The updater validates that the image is linked for `0x08010000`, sends `f` to
 the watch over USB CDC, waits for the resident ST DFU device, then uses
-STM32CubeProgrammer to erase, program, verify, and start the application. No
-external-flash staging or custom host/device transfer protocol is involved.
+STM32CubeProgrammer to erase, program, verify, and start the application. The
+USB path involves no external-flash staging (that is only used by the Bluetooth
+update described below).
 Holding PCB button 1 (bottom-left) during reset also enters resident DFU if an
 application update is interrupted or the application vector table is invalid.
 
@@ -135,6 +140,12 @@ further, but should be introduced only with explicit clock, USB, and BLE resume 
 `a` runs every safe automatic test, `s` prints sensor values, `i` scans I2C, and `g` prints GPIO
 states. Use `v` for a short vibration pulse
 and `b` for a buzzer chirp. Press `h` to print the command list on the device.
+
+`q` re-probes the external flash without writing to it and prints its JEDEC ID (expected
+`0x0B4016`), status register, the config-store state (which sector copy and sequence number each
+record uses, and how many writes this boot), the Bluetooth-update state, and the secure-link /
+bond / encryption state. The same flash line is printed at boot. `t` plays the next notification
+alert tone (1-5) regardless of settings. `p` forgets the bonded phone (erases the stored link key).
 
 Press `f` to shut down the display booster, LED ring, vibration, buzzer, and BLE,
 then reboot into resident STM32 USB DFU. Ordinarily `tools/usb_dfu_update.py`
@@ -197,6 +208,40 @@ The step counter uses the BMA400's hardware step engine and interrupt rather tha
 acceleration sampling. Resetting steps records a new sensor-counter baseline without resetting the
 accelerometer itself.
 
+The Settings card is a scrolling list (five rows visible, arrows mark more rows above/below, the
+footer shows the position): Bluetooth, Quiet, LED ring, Vibration, Alert tone, Find phone, Secure
+link, Forget phone. Alert tone cycles NONE / CHIRP / DOUBLE / RISE / FALL / TRIPLE and plays the
+new choice. Secure link shows `N/A` without working external flash. Forget phone needs a second
+select (`OK?`) to confirm and shows `--` when no phone is bonded.
+
+## External flash storage
+
+`WatchFlash` (`watch_flash.cpp`) drives U4 by bit-banging SPI mode 0 on PA3 (CLK), PD3 (NCS),
+PD4 (IO0/MOSI) and PD5 (IO1/MISO), with PD6 (WP#) and PD7 (HOLD#) held high as GPIO. It uses only
+the single-line commands allowed by `EXTERNAL_FLASH.md`, every busy wait has a timeout and feeds
+the watchdog, and the chip is in deep power-down except while an operation (or a firmware
+transfer) holds it awake. A missing or dead chip reads as JEDEC `0xFFFFFF`/`0x000000` and every
+operation then fails immediately.
+
+`WatchConfigStore` (`watch_config.cpp`) keeps three records in `0x000000`-`0x005FFF`, each in a
+pair of 4 KiB sectors (A/B). A save erases the sector that does not hold the newest valid copy,
+writes the record there with the next sequence number and a CRC-32, and reads it back, so losing
+power at any point leaves the previous copy intact. The exact layout is documented at the top of
+`include/watch_config.h`.
+
+| Record | Sectors | Contents | Written |
+| --- | --- | --- | --- |
+| Settings | `0x0000` / `0x1000` | vibration, quiet, alert tone, secure link | only when a value changes |
+| Bond | `0x2000` / `0x3000` | bonded phone's identity address and link key | on pairing; erased by Forget phone or turning Secure link off |
+| Steps | `0x4000` / `0x5000` | today's day number and count, six archived days | at midnight roll-over, at most hourly while the count changes, about a minute after a step reset, and before a deliberate reboot |
+
+Without the flash (or after a write fails, until the next boot) everything keeps working from RAM
+exactly as before. At boot the archived days are restored. Today's stored count is added back only
+if its day equals the current local day; a count from an earlier day is archived as a finished
+day. If the RTC has only its build-time seed (never set since the backup domain lost power) the
+decision waits until the phone or the console sets the time, and nothing is rolled over or saved
+until then, so the step figure is always "steps today".
+
 ## Bluetooth and companion app
 
 BLE starts only when explicitly requested, preserving the lowest-power default and the USB/SWD
@@ -205,29 +250,103 @@ Press `r` in the serial console or select Bluetooth in Settings. The watch adver
 `E-Paper Watch`. STM32WB requires a compatible wireless coprocessor image; if startup fails,
 install the matching `stm32wbxx_BLE_HCILayer_fw.bin` on CPU2/FUS.
 
-The custom GATT service is `7BD10000-6B10-4A21-9D6A-3A56B35C1000`:
+The phone link implements protocol v2. [`PROTOCOL.md`](../PROTOCOL.md) at the repository root is
+the contract shared with the Android companion; this section only summarises the watch side.
 
 | Direction | Characteristic | Limit |
 | --- | --- | ---: |
 | Phone to watch | `7BD10001-6B10-4A21-9D6A-3A56B35C1000` | 160 bytes |
-| Watch to phone | `7BD10002-6B10-4A21-9D6A-3A56B35C1000` | 80 bytes |
+| Watch to phone | `7BD10002-6B10-4A21-9D6A-3A56B35C1000` | 160 bytes, sent as notifications of at most 20 |
+| OTA data (write with response) | `7BD10003-6B10-4A21-9D6A-3A56B35C1000` | 4-byte offset + up to 240 bytes |
 
-It also exposes the standard Battery Service. The current protocol is bounded UTF-8 text for easy
-bring-up:
+The custom service is `7BD10000-6B10-4A21-9D6A-3A56B35C1000`; the standard Battery Service is
+also exposed. Messages are printable ASCII with `|`-separated fields; any other byte received is
+replaced with `?`. The firmware version reported in the `HELLO` reply is `WATCH_FIRMWARE_VERSION`
+in `include/watch_version.h`.
 
-| Message | Purpose |
+`WatchBle` (`watch_ble.cpp`) does all framing without heap allocation:
+
+- Every phone write is `<seq>|TYPE|…`. It is parsed inside `BLE.poll()` into a fixed queue of
+  eight `PhoneUpdate` slots and answered with `ACK|seq`, or `NAK|seq|PARSE`, `UNKNOWN`, or `FULL`.
+  A repeat of the last accepted seq is re-ACKed but not applied twice; `HELLO` resets that memory
+  and is answered with `ACK`, `HELLO|2|<fw>|<flags>`, then `STATUS`. Flags: `1` secure link on,
+  `2` Bluetooth firmware update supported (`watch` build with usable flash), `4` external flash
+  storage working.
+- Watch-to-phone messages go through a sixteen-entry queue that is sent in order while the phone
+  is subscribed and cleared on disconnect. ACK/NAK replies displace the oldest queued message
+  if the queue is ever full. Fragmentation happens where the queue is drained
+  (`WatchBle::drainOutbound`): a message of at most 20 bytes is one notification; a longer one is
+  sent as `+`-prefixed chunks of 19 payload bytes ending with one `=`-prefixed chunk, and the next
+  message never starts before the last chunk has gone.
+- The link is also serviced during e-paper refreshes: the display's BUSY-wait hook feeds the
+  watchdog and, about every 20 ms, calls `WatchBle::poll()` (receive, ACK, queue, send) and the
+  actuator timing. Updates are still applied only by the main loop, and `poll()`/`flush()` refuse
+  nested entry, so `BLE.poll()` is never re-entered and a render is never started from the hook.
+- The main loop applies every queued update after each wake, then renders at most once.
+  Notifications, events, and phone status never start an e-paper refresh by themselves; screens
+  that show the changed data (Weather, Music, Settings, Messages after a clear) are redrawn.
+
+What the watch does with the link:
+
+| Feature | Watch behaviour |
 | --- | --- |
-| `TIME,<epoch-seconds>` | Set the RTC |
-| `NOTIFY,<app>\|<title>\|<body>` | Show a notification |
-| `CLEAR_NOTIFICATION` | Clear the notification card |
-| `WEATHER,<current>,<high>,<low>\|<condition>` | Update phone forecast |
-| `MUSIC,<playing>,<position>,<duration>\|<title>\|<artist>` | Update media card |
-| `STEPS,RESET` | Reset the in-RAM step count |
-| `SLEEP,START`, `SLEEP,STOP`, `SLEEP,PAUSE,<epoch>` | Sleep movement control |
-| `SLEEP,ALARM,<delay-ms>`, `SLEEP,ALARM_STOP` | Sleep alarm control |
+| Time | The RTC holds local time. `TIME\|utc\|offset` sets it to `utc + offset` and stores the offset in RAM and RTC backup registers 12/13 (rewritten after `BLE.begin()` resets the backup domain). `@YYYY-MM-DDTHH:MM:SS` on the console still sets local time directly. |
+| Notifications | Up to five, newest first; `NOTIFY` replaces an existing id. Inside Messages, previous/next page through them and select dismisses the shown one (`NOTIFY_DISMISS\|id`). With `alert` = 1 the watch gives one short vibration pulse (if Vibration is on) and plays the selected alert tone (unless Quiet is on or the tone is NONE); an alarm, find-my-watch or call alert keeps the actuators. No e-paper refresh is started. `TONE_PREVIEW\|n` plays tone n once. |
+| Calls | `CALL\|RING` overlays a call screen and rings (vibration if enabled, plus buzzer) unless quiet mode is on. Select rejects (`CALL_REJECT`), back hides the screen, other buttons silence it. `CALL\|END` restores the previous screen. |
+| Music | State none/playing/paused; the position advances locally while playing. Inside Music, previous/next/select send `MEDIA\|PREV`, `MEDIA\|NEXT`, `MEDIA\|PLAY_PAUSE`. |
+| Upcoming | The clock face shows the next calendar event (or else the phone's next alarm) within 24 h on one line under the time. The Alarms card also shows the phone alarm. |
+| Phone / link | The clock shows a Bluetooth icon while connected. Settings shows radio state, phone battery, charging, and Do Not Disturb. |
+| Find | Settings → Find phone sends `FIND_PHONE\|1`, and `\|0` on the next press. `FIND_WATCH` vibrates and buzzes for 10 s or until any button. |
+| Settings | Vibration, quiet mode and alert tone are applied from the phone (`SETTINGS\|v\|q\|tone`, tone optional) and sent back in the same form when changed on the watch. They are stored in external flash. |
+| Status / history | `STATUS\|battery\|mV\|steps\|-1` after `HELLO`, on request, when the battery percentage changes, and every 10 min. Steps roll over at local midnight into a history of six completed days; `REQUEST\|HISTORY` sends those plus today, oldest first, then `HISTORY_END`. The history survives resets when the external flash works. Both are suspended during a firmware transfer. |
+| Sleep as Android | `SLEEP_START`/`STOP`/`PAUSE`/`ALARM`/`ALARM_STOP`/`NOTIFY`/`HINT`; the watch sends `SLEEP_DATA\|max-delta-mg` every ten seconds while tracking, plus `SLEEP_SNOOZE`/`SLEEP_DISMISS` from the alarm. |
 
-Watch-to-phone messages include notification dismissal, media previous/play-pause/next, Sleep
-snooze/dismiss, and `SLEEP,DATA,<max-delta-mg>` every ten seconds while sleep tracking is active.
+### Secure link (optional, off by default)
+
+With Settings -> Secure link off, the link is unencrypted exactly as before and notification text
+travels in clear. Turning it on (needs working external flash; the radio restarts if it is
+running) makes the watch refuse everything on an unencrypted link:
+
+- Pairing is LE Secure Connections "Just Works" through STM32duinoBLE. It is accepted only while
+  no phone is bonded; the key is then stored in the config store, and afterwards only a phone that
+  can encrypt with that key is served. Forget phone (or `p`, or turning the setting off) erases
+  the key; the bond must then be removed on the phone as well.
+- The requirement is enforced by `WatchBle`, not by the library's encrypted-characteristic
+  permission, because that code path in STM32duinoBLE 1.4.2 copies a write of up to 244 bytes
+  into a 64-byte buffer. On an unencrypted link the watch therefore answers any write only with an
+  unacknowledged `HELLO|2|<fw>|<flags>` (flag `1` set) at most once a second, applies nothing,
+  accepts no OTA data and sends nothing else. The phone gets no ATT "insufficient encryption"
+  error and has to start bonding itself when it sees flag `1`.
+
+### Firmware update over Bluetooth
+
+Offered (`HELLO` flag `2`) only by the `watch` build with a usable external flash; `watch_direct`
+answers `OTA_STATE|UNSUPPORTED`. `WatchOta` (`watch_ota.cpp`) implements the watch side:
+
+1. `OTA_BEGIN|size|crc32|version` shows a confirmation screen. Select accepts, back declines,
+   60 s without an answer declines. `OTA_STATE|BUSY` if an update is already in progress or an
+   alarm/call is active; `ERROR|SIZE` if the size is outside 8..761856.
+2. On accept the header sector (`0x100000`) is erased and magic/format/size/CRC/header-CRC are
+   written, then `OTA_STATE|ACCEPT|240`.
+3. Each write to the OTA data characteristic must carry the next expected offset; anything else
+   is ignored and answered with `OTA_STATE|PROGRESS|<expected>`. Each 4 KiB sector of the staging
+   area is erased just before the first byte goes into it, and the data is programmed before the
+   write is acknowledged. `PROGRESS` is also sent every 16 KiB and at the end. 30 s without an
+   accepted chunk ends the transfer with `ERROR|TIMEOUT`.
+4. `OTA_END`: the staged copy is read back and its size, CRC-32 and vector table checked, the
+   header is re-read, and only then the `ready` word is programmed and verified. `OTA_STATE|READY`
+   is queued, an "INSTALLING UPDATE / ABOUT 30 S / DO NOT UNPLUG" screen is drawn (the bootloader
+   draws nothing while it installs), steps are saved, the flash is left awake and idle, and the
+   watch resets through the normal boot path at least 2 s after `READY`.
+5. `OTA_ABORT`, a disconnect, a timeout or any flash error discards the transfer by erasing the
+   header sector; the running firmware is never touched. The e-paper is refreshed only for the
+   prompt, 0/25/50/75 %, "verifying" and the final screen, and buttons are ignored during a
+   transfer.
+6. At boot the header is read. A bootloader `result` is reported once after the next `HELLO`
+   (`OTA_STATE|INSTALLED|1` or `FAILED|<code>`) and the header sector is then erased. A header
+   that is `ready` but has no result (bootloader without update support) is erased immediately and
+   reported as `FAILED|0`; a header without `ready` (interrupted transfer) is just erased.
+
 See the [Android companion documentation](../companion/README.md) for setup.
 
 Before running `d`, `w`, or `k`, verify that display bus-select jumper JP1 bridges BS to GND
@@ -248,8 +367,11 @@ verify if the controller logic works but the booster does not.
 5. Set a near-future alarm with `!HH:MM`, then test the same alarm controls.
 6. Press `r`; wait for `BLE advertising as "E-Paper Watch"`.
 7. Install/open the companion, grant nearby-device and notification permissions, and Connect.
-8. Test phone time, the demo notification, weather values, live Android notifications, and media
-   controls in that order.
+   Before that, check the boot log (or press `q`) for `External flash JEDEC ID 0x0B4016` and a
+   `Config store: ok` line; change a setting, reset, and confirm it is restored.
+8. Watch serial for `Phone HELLO, protocol 2` and the UTC offset from the time sync. Then test
+   live Android notifications (page and dismiss), an incoming call, weather, media controls,
+   find phone/watch, and the quiet/vibration settings sync.
 9. Start the companion's test tracking and watch serial for a movement sample every ten seconds.
 
 Power behavior should still be measured on the assembled watch, particularly with BLE connected
