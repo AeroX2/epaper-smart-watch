@@ -61,6 +61,7 @@
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_FS;
 /* USER CODE BEGIN EV */
+volatile uint32_t g_flash_ecc_faults = 0U;
 
 /* USER CODE END EV */
 
@@ -73,7 +74,16 @@ extern PCD_HandleTypeDef hpcd_USB_FS;
 void NMI_Handler(void)
 {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
-
+  /* A double ECC error on an internal-flash read (for example a doubleword
+   * whose programming was cut short by a power loss) raises NMI. Count it,
+   * clear the flag and resume, so the staged-update verify sees a mismatch
+   * and retries instead of hanging here. */
+  if ((FLASH->ECCR & FLASH_ECCR_ECCD) != 0U)
+  {
+    FLASH->ECCR |= FLASH_ECCR_ECCD;
+    g_flash_ecc_faults++;
+    return;
+  }
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
   while (1)

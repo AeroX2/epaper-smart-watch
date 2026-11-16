@@ -12,10 +12,12 @@ extern "C" {
 #include "usb_device.h"
 }
 
+#include "ota_format.h"
+#include "staged_update.h"
+
 namespace {
 
-constexpr uint32_t APP_START_ADDRESS = 0x08010000UL;
-constexpr uint32_t APP_END_ADDRESS = 0x080CA000UL;
+constexpr uint32_t APP_START_ADDRESS = ota::kAppStart;
 constexpr uint32_t DFU_REQUEST_MAGIC = 0x31465544UL;
 
 using ApplicationEntry = void (*)();
@@ -25,9 +27,7 @@ bool applicationIsValid() {
       APP_START_ADDRESS);
   const uint32_t reset = *reinterpret_cast<volatile const uint32_t*>(
       APP_START_ADDRESS + 4U);
-  return stack >= SRAM1_BASE && stack <= (SRAM1_BASE + 0x30000UL) &&
-         reset >= APP_START_ADDRESS && reset < APP_END_ADDRESS &&
-         (reset & 1U) != 0U;
+  return ota::vectorTableIsValid(stack, reset);
 }
 
 bool consumeDfuRequest() {
@@ -68,6 +68,11 @@ void configureSafeGpio() {
 }
 
 bool recoveryButtonPressed() {
+  /* The pull-up was enabled a few instructions ago. Give the pin time to
+   * charge through the ~40 k internal pull-up before sampling, otherwise a
+   * released button can still read low and strand the watch in DFU. */
+  for (volatile uint32_t settle = 0; settle < 2000U; settle = settle + 1U) {
+  }
   return (GPIOC->IDR & GPIO_PIN_10) == 0U;
 }
 
@@ -95,8 +100,18 @@ bool recoveryButtonPressed() {
 
 void bootDecision() {
   configureSafeGpio();
-  const bool enter_dfu = consumeDfuRequest() || recoveryButtonPressed();
-  if (!enter_dfu && applicationIsValid()) {
+  /* 1. DFU request / recovery button: straight to USB DFU, and the external
+   *    flash is not touched at all. */
+  if (consumeDfuRequest() || recoveryButtonPressed()) {
+    return;
+  }
+  /* 2. Staged update in external flash (code/EXTERNAL_FLASH.md). A failed
+   *    install leaves no runnable application: stay in USB DFU. */
+  if (runStagedUpdate() == StagedUpdateOutcome::kInstallFailed) {
+    return;
+  }
+  /* 3. Normal boot: application if valid, else USB DFU. */
+  if (applicationIsValid()) {
     jumpToApplication();
   }
 }
