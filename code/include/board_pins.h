@@ -41,4 +41,14 @@ constexpr uint32_t DISPLAY_RESET = PA6;
 constexpr uint32_t DISPLAY_BUSY = PA2;
 constexpr uint32_t DISPLAY_LIGHT = PC3;
 
+// U4 XT25F32F serial flash on the QUADSPI pins. The firmware bit-bangs
+// single-line SPI on them (see watch_flash.cpp); WP#/HOLD# are plain GPIO
+// outputs held high because the chip's QE bit is left at its factory 0.
+constexpr uint32_t FLASH_CLK = PA3;
+constexpr uint32_t FLASH_CS = PD3;
+constexpr uint32_t FLASH_MOSI = PD4;  // IO0
+constexpr uint32_t FLASH_MISO = PD5;  // IO1
+constexpr uint32_t FLASH_WP = PD6;    // IO2 / WP#
+constexpr uint32_t FLASH_HOLD = PD7;  // IO3 / HOLD#
+
 }  // namespace BoardPins
