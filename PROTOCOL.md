@@ -87,7 +87,7 @@ Phone → watch writes are not fragmented by the protocol: the ATT layer's prepa
 | `NOTIFY` | `id`, `app`(24), `title`(28), `text`(56), `alert` | Add or replace notification `id` (1–65535). Watch keeps the newest 5. `alert` `1` = a new arrival: vibrate / play the alert tone (subject to the watch's vibration, quiet and tone settings); `0` or missing = silent (session-start replays, and content updates that would not alert on the phone either). A re-post the phone itself alerts for, such as a new message in an existing chat, is sent with `1`. |
 | `NOTIFY_CLEAR` | `id` | Remove notification `id`; `0` clears all. |
 | `CALL` | `state`, `caller`(28) | `state` = `RING` or `END`. On `RING` the watch shows the call screen and alerts (unless quiet). `END` closes it. |
-| `WEATHER` | `temp`, `high`, `low`, `code`, `condition`(20) | Whole °C. `code` is a WMO weather code (Open-Meteo), `-1` if unknown. |
+| `WEATHER` | `temp`, `high`, `low`, `code`, `condition`(20), `sea_level` | Whole °C. `code` is a WMO weather code (Open-Meteo), `-1` if unknown. `sea_level` (optional) is the sea-level pressure at the phone's location in tenths of a hPa (`10132` = 1013.2 hPa); empty or missing = unknown. The watch uses it to turn its own pressure reading into an altitude. Values outside 8000–11000 are treated as unknown. |
 | `MUSIC` | `state`, `position`, `duration`, `title`(24), `artist`(24) | `state`: `0` none, `1` playing, `2` paused. `position`/`duration` in seconds at the moment of sending; while playing the watch advances position itself. `0|0|0||` = nothing playing. Sent on change only, not periodically. |
 | `NEXT_ALARM` | `utc` | Phone's next alarm clock, `0` = none. |
 | `EVENT` | `utc`, `title`(28) | Next calendar event starting within 24 h, `0|` = none. |

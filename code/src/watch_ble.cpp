@@ -657,6 +657,11 @@ WatchBle::ParseResult WatchBle::parse(char* const* fields, uint8_t count,
       return ParseResult::Parse;
     }
     copyField(update.text_a, field(5), 20);
+    // Optional sea-level pressure in tenths of a hPa; empty = unknown.
+    update.utc = 0;
+    if (field(6)[0] != '\0' && !parseUnsigned(field(6), update.utc)) {
+      return ParseResult::Parse;
+    }
     update.type = PhoneUpdateType::Weather;
   } else if (strcmp(type, "MUSIC") == 0) {
     if (!parseInteger(field(1), 0, 2, n[0]) ||

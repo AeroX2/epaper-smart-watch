@@ -1024,14 +1024,22 @@ void WatchUi::drawLakeClock(const WatchUiModel& model) {
     snprintf(temperature, sizeof(temperature), "%dC",
              model.temperature_tenths_c / 10);
     snprintf(humidity, sizeof(humidity), "%u%%", model.humidity_percent);
-    snprintf(altitude, sizeof(altitude), "%dm",
-             static_cast<int>(floorf(
-                 44330.0f *
-                     (1.0f - powf(model.pressure_hpa / 1013.25f, 0.1903f)) +
-                 0.5f)));
   } else {
     snprintf(temperature, sizeof(temperature), "--C");
     snprintf(humidity, sizeof(humidity), "--%%");
+  }
+  // Altitude needs the sea-level pressure of the day, which comes with the
+  // phone's weather. Without it the standard 1013.25 hPa can be 100 m out,
+  // so show nothing rather than a wrong figure.
+  if (model.environment_valid && model.phone_weather_valid &&
+      model.sea_level_pressure_tenths_hpa != 0) {
+    const float sea_level_pa = model.sea_level_pressure_tenths_hpa * 10.0f;
+    snprintf(altitude, sizeof(altitude), "%dm",
+             static_cast<int>(floorf(
+                 44330.0f *
+                     (1.0f - powf(model.pressure_pa / sea_level_pa, 0.1903f)) +
+                 0.5f)));
+  } else {
     snprintf(altitude, sizeof(altitude), "--m");
   }
   const BitmapFont& reading = WatchAssets::LakeReading18;

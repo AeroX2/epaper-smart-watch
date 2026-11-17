@@ -69,6 +69,9 @@ struct WatchUiModel {
   int16_t temperature_tenths_c = 0;
   uint8_t humidity_percent = 0;
   uint16_t pressure_hpa = 0;
+  uint32_t pressure_pa = 0;  // the same reading, unrounded
+  // Sea-level pressure from the phone's weather, tenths of a hPa; 0 = unknown.
+  uint16_t sea_level_pressure_tenths_hpa = 0;
   uint8_t battery_percent = 0;
   uint16_t battery_millivolts = 0;
   int16_t accel_x_mg = 0;

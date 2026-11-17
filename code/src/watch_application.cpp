@@ -290,6 +290,8 @@ void WatchApplication::updateUiSensors() {
           static_cast<int16_t>(lroundf(environment.temperature_c * 10.0f));
       model_.pressure_hpa =
           static_cast<uint16_t>(lroundf(environment.pressure_hpa));
+      model_.pressure_pa =
+          static_cast<uint32_t>(lroundf(environment.pressure_hpa * 100.0f));
       model_.humidity_percent =
           environment.has_humidity
               ? static_cast<uint8_t>(constrain(
@@ -853,7 +855,12 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
       model_.forecast_low_c = static_cast<int8_t>(n[2]);
       model_.weather_code = static_cast<int16_t>(n[3]);
       copyPhoneText(model_.weather_condition, update.text_a);
-      return screen == WatchScreen::Weather;
+      // The clock face shows an altitude worked out from this.
+      model_.sea_level_pressure_tenths_hpa =
+          (update.utc >= 8000 && update.utc <= 11000)
+              ? static_cast<uint16_t>(update.utc)
+              : 0;
+      return screen == WatchScreen::Weather || screen == WatchScreen::Clock;
     case PhoneUpdateType::Music:
       model_.music_state = static_cast<MusicState>(n[0]);
       music_base_position_ = static_cast<uint32_t>(n[1]);

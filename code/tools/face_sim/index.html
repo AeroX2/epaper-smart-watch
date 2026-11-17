@@ -694,8 +694,11 @@ const paper = night;          // drawn in the opposite colour to the shore
 const ok = m.environment_valid;
 const temperature = (ok ? Math.trunc(m.temperature_tenths_c / 10) : "--") + "C";
 const humidity = (ok ? m.humidity_percent : "--") + "%";
-const altitude = (ok ? Math.round(44330 *
-    (1 - Math.pow(m.pressure_hpa / 1013.25, 0.1903))) : "--") + "m";
+// Altitude needs the day's sea-level pressure, which comes with the phone's
+// weather. Without it the figure can be 100 m out, so show "--m".
+const seaLevelKnown = ok && m.phone_weather_valid && m.sea_level_pressure_tenths_hpa !== 0;
+const altitude = (seaLevelKnown ? Math.round(44330 *
+    (1 - Math.pow(m.pressure_pa / (m.sea_level_pressure_tenths_hpa * 10), 0.1903))) : "--") + "m";
 
 function vibrationIcon(cx, cy, black) {
   c.rect(cx - 3, cy - 6, 7, 12, black);
@@ -797,6 +800,8 @@ const FIELDS = [
     min: 0, max: 100 },
   { id: "pressure_hpa", label: "Sensor pressure (hPa)", type: "number", value: 1000,
     min: 300, max: 1100 },
+  { id: "sea_level_hpa", label: "Phone sea-level pressure (hPa, 0 = none)", type: "number",
+    value: 1013, min: 0, max: 1100 },
   { id: "sunrise", label: "Sunrise (simulator only)", type: "time", value: "06:00" },
   { id: "sunset", label: "Sunset (simulator only)", type: "time", value: "18:00" },
   { id: "vibration_on", label: "Vibration on", type: "checkbox", value: true },
@@ -885,6 +890,8 @@ function buildModel() {
     environment_valid: fieldValue("environment_valid"),
     temperature_tenths_c: fieldValue("temperature_c") * 10,
     humidity_percent: fieldValue("humidity_percent"), pressure_hpa: fieldValue("pressure_hpa"),
+    pressure_pa: fieldValue("pressure_hpa") * 100,
+    sea_level_pressure_tenths_hpa: fieldValue("sea_level_hpa") * 10,
     phone_weather_valid: fieldValue("phone_weather_valid"),
     forecast_temperature_c: fieldValue("forecast_temperature_c"),
     forecast_high_c: fieldValue("forecast_temperature_c") + 3,
