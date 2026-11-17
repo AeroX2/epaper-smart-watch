@@ -78,8 +78,7 @@ class WatchApplication {
   void parseCapturedCommand();
   void handleCommand(char command);
   void pollButtons();
-  void handleButton(size_t index, bool long_press);
-  void handleChord(bool backslash, bool long_press);
+  void handleButton(size_t index);
 
   // Power policy inputs (see WatchPower and the README power section).
   void setDisplayLight(bool on);
@@ -141,5 +140,9 @@ class WatchApplication {
   static constexpr uint32_t ENVIRONMENT_INTERVAL_MS = 5UL * 60UL * 1000UL;
   static constexpr uint32_t STATUS_INTERVAL_MS = 10UL * 60UL * 1000UL;
   uint32_t display_light_since_ms_ = 0;
+  // Double press of home on the clock face toggles the LED ring.
+  static constexpr uint32_t DOUBLE_PRESS_MS = 600;
+  bool home_press_armed_ = false;
+  uint32_t home_press_ms_ = 0;
   uint32_t environment_read_ms_ = 0;
 };

@@ -308,8 +308,11 @@ The four active-low buttons currently map as follows:
 | --- | --- | --- |
 | 2 | Top-left | Browse: next card. Inside: next value/item |
 | 3 | Top-right | Browse: previous card. Inside: previous value/item |
-| 1 | Bottom-left | Inside: back to card. Browse: return to clock |
+| 1 | Bottom-left | Inside: back to card. Browse: return to clock. Clock: press twice within 0.6 s to switch the LED ring on or off |
 | 4 | Bottom-right | Clock: open carousel. Browse: enter card. Inside: activate |
+
+Each press acts when the button is released. There are no long presses and no two-button gestures.
+While an alarm rings, bottom-left dismisses it and bottom-right snoozes it.
 
 Console equivalents are `[` for previous, `]` for next, `m` for home, `o` for select, and `u` to
 redraw the current screen. Button inputs use a 35 ms debounce interval. PB4 is restored to its

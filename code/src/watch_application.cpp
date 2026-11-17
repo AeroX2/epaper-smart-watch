@@ -122,8 +122,7 @@ void WatchApplication::printHelp() {
   Serial.println(F("Pattern tests require x and end in booster-off standby."));
   Serial.println(F("Boot clears the panel and renders the clock automatically."));
   Serial.println(F("Physical corners: TL=2 next, TR=3 previous, BL=1 home, BR=4 select."));
-  Serial.println(F("Diagonal \\: pinch=previous, hold=select."));
-  Serial.println(F("Diagonal /: pinch=next, hold=back/home."));
+  Serial.println(F("Home twice on the clock face: LED ring on/off."));
 }
 
 void WatchApplication::runVibrationTest() {
@@ -1138,16 +1137,21 @@ void WatchApplication::handleCommand(char command) {
   }
 }
 
-void WatchApplication::handleButton(size_t index, bool long_press) {
+void WatchApplication::handleButton(size_t index) {
   Serial.print(F("Button "));
   Serial.print(index + 1);
-  Serial.println(long_press ? F(" long press") : F(" short press"));
+  Serial.println(F(" press"));
+  // Only two home presses in a row on the clock face count as a double press.
+  const bool second_home_press =
+      index == 0 && home_press_armed_ &&
+      millis() - home_press_ms_ <= DOUBLE_PRESS_MS;
+  home_press_armed_ = false;
   if (alarm_.stopFindAlert()) {
     Serial.println(F("Find my watch: stopped by button."));
     return;
   }
   if (model_.alarm_ringing) {
-    if (index == 0 || (index == 3 && long_press)) {
+    if (index == 0) {
       alarm_.dismiss(Serial);
     } else if (index == 3) {
       alarm_.snooze(Serial);
@@ -1169,9 +1173,15 @@ void WatchApplication::handleButton(size_t index, bool long_press) {
     }
     return;
   }
-  if (long_press && index == 0) {
-    ui_.home();
-    renderUi();
+  if (index == 0 && ui_.screen() == WatchScreen::Clock) {
+    // Home does nothing on the clock face, so nothing is redrawn: a refresh
+    // would block the buttons for most of the double-press window.
+    if (second_home_press) {
+      toggleDisplayLight();
+    } else {
+      home_press_armed_ = true;
+      home_press_ms_ = millis();
+    }
     return;
   }
   switch (index) {
@@ -1184,75 +1194,12 @@ void WatchApplication::handleButton(size_t index, bool long_press) {
   renderUi();
 }
 
-void WatchApplication::handleChord(bool backslash, bool long_press) {
-  Serial.print(F("Diagonal "));
-  Serial.print(backslash ? F("\\") : F("/"));
-  Serial.println(long_press ? F(" hold") : F(" pinch"));
-  if (alarm_.stopFindAlert()) {
-    Serial.println(F("Find my watch: stopped by button."));
-    return;
-  }
-  if (model_.alarm_ringing) {
-    if (long_press) {
-      alarm_.dismiss(Serial);
-    } else {
-      alarm_.snooze(Serial);
-    }
-    renderUi();
-    return;
-  }
-  if (model_.call_active) {
-    // Backslash hold = select (reject); slash hold = back (hide).
-    if (handleCallButton(backslash && long_press,
-                         !backslash && long_press)) {
-      renderUi();
-    }
-    return;
-  }
-  if (ota_.screenShown()) {
-    if (ota_.handleButton(backslash && long_press, !backslash && long_press,
-                          Serial)) {
-      renderUi();
-    }
-    return;
-  }
-  if (backslash) {
-    if (long_press) {
-      applyUiSelection();
-    } else {
-      applyUiAction(ui_.previous(model_));
-    }
-  } else if (long_press) {
-    ui_.home();
-  } else {
-    applyUiAction(ui_.next(model_));
-  }
-  renderUi();
-}
-
 void WatchApplication::pollButtons() {
   WatchButtonEvent event{};
   if (!buttons_.poll(event)) {
     return;
   }
-  switch (event.type) {
-    case WatchButtonEventType::Button:
-      handleButton(event.button_index, event.long_press);
-      break;
-    case WatchButtonEventType::DiagonalBackslash:
-      handleChord(true, event.long_press);
-      break;
-    case WatchButtonEventType::DiagonalSlash:
-      handleChord(false, event.long_press);
-      break;
-    case WatchButtonEventType::HoldArmed:
-      if (model_.vibration_on && !model_.alarm_ringing) {
-        alarm_.pulseHaptic(120, 35);
-      }
-      break;
-    default:
-      break;
-  }
+  handleButton(event.button_index);
 }
 
 void WatchApplication::setup() {
