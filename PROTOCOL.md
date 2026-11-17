@@ -199,7 +199,7 @@ and the link must be encrypted with a bond before the watch will talk:
   transfer in progress yields `ERROR|SIZE`. `OTA_ABORT` has no reply beyond its ACK.
   `PROGRESS` is also sent once when the last byte has arrived. After `READY` the watch
   draws an "installing" screen and resets; the install takes about 15–30 s, and the
-  radio has to be switched on again at the watch afterwards.
+  watch switches its radio back on by itself if it was on before the update.
 - Notification alert tones are suppressed while an alarm, call or find-my-watch alert
   is sounding.
 

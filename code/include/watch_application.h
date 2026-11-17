@@ -42,6 +42,9 @@ class WatchApplication {
   void renderUi();
   bool startBluetooth();
   void restartBluetooth();
+  // Stores whether Bluetooth should be switched on again at the next boot.
+  void rememberBluetooth(bool on);
+  void restoreBluetooth();
   uint8_t helloFlags() const;
   void loadStoredSettings();
   void persistSettings();

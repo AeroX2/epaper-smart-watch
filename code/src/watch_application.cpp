@@ -365,6 +365,30 @@ bool WatchApplication::startBluetooth() {
   return started_ok;
 }
 
+void WatchApplication::rememberBluetooth(bool on) {
+  if (!config_.saveRadioOn(on) && flash_.present()) {
+    Serial.println(F("[WARN] Bluetooth state could not be saved to flash."));
+  }
+}
+
+// Boot: switch the radio back on if it was on when the watch last ran. Not
+// after a watchdog reset: if starting the radio is what hung, doing it again
+// on every boot would reset the watch in a loop. The stored state is left
+// alone, so the next clean boot tries again.
+void WatchApplication::restoreBluetooth() {
+  bool was_on = false;
+  if (!config_.loadRadioOn(was_on) || !was_on) {
+    return;
+  }
+  if (watchdog_.resetByWatchdog()) {
+    Serial.println(
+        F("[WARN] Bluetooth was on but is left off after a watchdog reset."));
+    return;
+  }
+  Serial.println(F("Bluetooth was on before the restart; switching it on."));
+  startBluetooth();
+}
+
 void WatchApplication::restartBluetooth() {
   if (!ble_.ready()) {
     return;
@@ -528,8 +552,9 @@ void WatchApplication::applyUiAction(WatchUiAction action) {
     case WatchUiAction::BluetoothToggle:
       if (ble_.ready()) {
         ble_.end(Serial);
-      } else {
-        startBluetooth();
+        rememberBluetooth(false);
+      } else if (startBluetooth()) {
+        rememberBluetooth(true);
       }
       break;
     case WatchUiAction::PhoneSettingsChanged:
@@ -1050,7 +1075,11 @@ void WatchApplication::handleCommand(char command) {
       renderUi();
       break;
     case 'j': case 'J': rtc_.print(Serial); break;
-    case 'r': case 'R': startBluetooth(); break;
+    case 'r': case 'R':
+      if (startBluetooth()) {
+        rememberBluetooth(true);
+      }
+      break;
     case 'q': case 'Q': printStorageStatus(); break;
     case 't': case 'T':
       preview_tone_ = static_cast<uint8_t>(
@@ -1255,6 +1284,7 @@ void WatchApplication::setup() {
   updateUiSensors();
   WatchWatchdog::feed();
   display_controller_.begin(Serial);
+  restoreBluetooth();
 }
 
 void WatchApplication::loop() {

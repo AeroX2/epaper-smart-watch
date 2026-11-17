@@ -276,11 +276,45 @@ bool WatchConfigStore::loadPowerMode(uint8_t& mode) {
 }
 
 bool WatchConfigStore::savePowerMode(uint8_t mode) {
-  uint8_t stored = 0;
-  if (loadPowerMode(stored) && stored == mode) {
+  // No record yet: the radio byte starts as "off".
+  uint8_t payload[POWER_LENGTH] = {1, 0, 0, 0};
+  const bool stored = load(KIND_POWER, payload, sizeof(payload));
+  if (!stored) {
+    payload[0] = 1;
+    payload[1] = payload[2] = payload[3] = 0;
+  }
+  if (stored && payload[0] == mode) {
     return true;  // unchanged: no flash wear
   }
-  const uint8_t payload[POWER_LENGTH] = {mode, 0, 0, 0};
+  payload[0] = mode;
+  return save(KIND_POWER, payload, sizeof(payload));
+}
+
+bool WatchConfigStore::loadRadioOn(bool& on) {
+  uint8_t payload[POWER_LENGTH];
+  if (!load(KIND_POWER, payload, sizeof(payload))) {
+    return false;
+  }
+  on = payload[1] == 1;
+  return true;
+}
+
+bool WatchConfigStore::saveRadioOn(bool on) {
+  // No record yet: keep the default deep-sleep mode (1, radio-off only).
+  uint8_t payload[POWER_LENGTH] = {1, 0, 0, 0};
+  const bool stored = load(KIND_POWER, payload, sizeof(payload));
+  if (!stored) {
+    payload[0] = 1;
+    payload[1] = payload[2] = payload[3] = 0;
+  }
+  const uint8_t value = on ? 1 : 0;
+  if (stored && payload[1] == value) {
+    return true;  // unchanged: no flash wear
+  }
+  if (payload[0] > 2) {
+    payload[0] = 1;
+  }
+  payload[1] = value;
   return save(KIND_POWER, payload, sizeof(payload));
 }
 

@@ -366,7 +366,9 @@ until then, so the step figure is always "steps today".
 
 BLE starts only when explicitly requested, preserving the lowest-power default and the USB/SWD
 recovery path.
-Press `r` in the serial console or select Bluetooth in Settings. The watch advertises as
+Press `r` in the serial console or select Bluetooth in Settings. The on/off choice is
+stored in the external flash and restored at boot, except after a watchdog reset (a radio
+start that hangs must not reset the watch in a loop; the next clean boot tries again). The watch advertises as
 `E-Paper Watch`. STM32WB requires a compatible wireless coprocessor image; if startup fails,
 install the matching `stm32wbxx_BLE_HCILayer_fw.bin` on CPU2/FUS.
 

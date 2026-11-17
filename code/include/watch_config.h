@@ -36,7 +36,8 @@ class WatchFlash;
 //                  6 x { u32 day, u32 steps }   (oldest first; day = local
 //                  epoch / 86400)
 //   power (4):     u8 deep_sleep_mode (0 off, 1 radio-off only, 2 always),
-//                  u8 reserved[3]
+//                  u8 radio_on (1 = Bluetooth was on; restore it at boot),
+//                  u8 reserved[2]
 //
 // When the flash is absent, or after a write fails, every save returns false
 // and the callers simply keep running from RAM.
@@ -87,6 +88,9 @@ class WatchConfigStore {
   // Deep-sleep mode (a DeepSleepMode value). No record = default.
   bool loadPowerMode(uint8_t& mode);
   bool savePowerMode(uint8_t mode);
+  // Whether Bluetooth was last switched on. No record = off.
+  bool loadRadioOn(bool& on);
+  bool saveRadioOn(bool on);
 
   void printStatus(Print& out);
 
