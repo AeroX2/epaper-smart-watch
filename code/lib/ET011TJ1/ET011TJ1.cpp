@@ -336,8 +336,7 @@ bool ET011TJ1::showFrameKw(const uint8_t* framebuffer,
   spi_.endTransaction();
   out.println(F("KW: previous frame sent"));
 
-  // New image: a one-line window, DTM4, then the capture's DTM2 0x00 per line.
-  const uint8_t line_end = 0x00;
+  // New image: a one-line window, DTM4, then a one-byte DTM2 per line.
   for (uint16_t y = 0; y < HEIGHT; ++y) {
     const uint8_t window[] = {
         0x00, static_cast<uint8_t>(y >> 8), static_cast<uint8_t>(y),
@@ -347,7 +346,19 @@ bool ET011TJ1::showFrameKw(const uint8_t* framebuffer,
     spi_.beginTransaction(spi_settings_);
     writeKwLine(CMD_DTM4, framebuffer + static_cast<size_t>(y) * stride_bytes);
     spi_.endTransaction();
-    writeCommandData(CMD_DTM2, &line_end, 1);
+    // The capture follows every line with a one-byte DTM2 write. That byte
+    // is 2-bpp data for the first four pixels of the window, and the
+    // captured 0x00 is four white pixels: it left a white strip down the
+    // left edge wherever the image was black there. Send the line's own
+    // first four pixels instead (11b = black, 00b = white with DDX = 0).
+    const uint8_t first = framebuffer[static_cast<size_t>(y) * stride_bytes];
+    uint8_t line_start = 0;
+    for (uint8_t pixel = 0; pixel < 4; ++pixel) {
+      if ((first & (0x80U >> pixel)) != 0) {
+        line_start |= static_cast<uint8_t>(0x03U << (6 - 2 * pixel));
+      }
+    }
+    writeCommandData(CMD_DTM2, &line_start, 1);
   }
   out.println(F("KW: new frame sent"));
 
