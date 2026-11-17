@@ -118,6 +118,64 @@ void formatLocalTime(char* buffer, size_t size, uint32_t local_epoch,
   }
 }
 
+// Mountain lake clock face. These mirror the L block of the "Mountain lake"
+// face in tools/face_sim: tune them there, then copy the numbers here.
+namespace lake {
+// false restores the earlier clock face (WatchUi::drawClassicClock).
+constexpr bool ENABLED = true;
+constexpr int16_t BATTERY_Y = 10;
+constexpr int16_t BATTERY_WIDTH = 28;
+constexpr int16_t BATTERY_HEIGHT = 13;
+constexpr int16_t DATE_TOP = 29;   // row where the date's capitals start
+constexpr int16_t TIME_TOP = 48;   // row where the time's digits start
+constexpr int16_t COLON_RADIUS = 5;
+constexpr int16_t COLON_SPREAD = 10;  // digit middle to each dot's centre
+constexpr int16_t COLON_NUDGE = 0;    // rows to raise both dots
+constexpr int16_t EVENT_TOP = 99;
+constexpr int16_t EVENT_MAX_WIDTH = 150;
+constexpr int16_t SKY_TOP = 110;   // first row of the dusk and dawn bands
+constexpr int16_t SHORE_Y = 164;   // waterline
+constexpr float LEFT_PEAK_X = 70;
+constexpr float LEFT_PEAK_HEIGHT = 30;
+constexpr float LEFT_PEAK_LEFT = 20;
+constexpr float LEFT_PEAK_RIGHT = 120;
+constexpr float LEFT_SHOULDER_X = 104;
+constexpr float LEFT_SHOULDER_HEIGHT = 9;
+constexpr float RIGHT_PEAK_X = 150;
+constexpr float RIGHT_PEAK_HEIGHT = 34;
+constexpr float RIGHT_PEAK_LEFT = 96;
+constexpr float RIGHT_PEAK_RIGHT = 214;
+constexpr float REFLECTION = 0.6f;  // mirrored mountains, fraction as tall
+constexpr int16_t SUN_RADIUS = 9;
+constexpr float ARC_HEIGHT = 40;
+constexpr float ARC_LEFT = 24;
+constexpr float ARC_RIGHT = 216;
+constexpr int16_t BANK_Y = 188;    // top of the shore band
+constexpr int16_t ROW1_TOP = 194;  // temperature and humidity digits
+constexpr int16_t ROW2_TOP = 212;  // altitude digits
+constexpr int16_t READING_GAP = 10;
+constexpr int16_t ICON_GAP = 6;
+constexpr int16_t TWILIGHT_MINUTES = 30;  // each of four dusk / dawn steps
+// The phone does not send sunrise and sunset yet, so they are fixed.
+constexpr int16_t SUNRISE_MINUTES = 6 * 60;
+constexpr int16_t SUNSET_MINUTES = 18 * 60;
+
+constexpr int16_t STARS[][2] = {
+    {22, 70},   {30, 100},  {14, 112},  {215, 64},  {224, 96},  {206, 112},
+    {60, 116},  {100, 112}, {176, 114}, {36, 128},  {222, 126}, {18, 140},
+    {130, 118}, {208, 142}, {46, 146},  {196, 150},
+};
+constexpr int16_t BIG_STARS[][2] = {{26, 86}, {214, 82}, {44, 114}, {186, 122}};
+// x, rows below the waterline, length
+constexpr int16_t RIPPLES[][3] = {
+    {28, 12, 14}, {60, 20, 12}, {130, 21, 16}, {168, 18, 10}, {76, 15, 8},
+};
+// x at the shore, lean, height
+constexpr int16_t REEDS[][3] = {
+    {36, -3, 19}, {41, 1, 23}, {46, 4, 17}, {208, -2, 19}, {214, 3, 16},
+};
+}  // namespace lake
+
 }  // namespace
 
 void MonochromeCanvas::clear(bool black) {
@@ -212,6 +270,117 @@ void MonochromeCanvas::circle(int16_t center_x, int16_t center_y,
     } else {
       --x;
       error += static_cast<int16_t>(2 * (y - x) + 1);
+    }
+  }
+}
+
+void MonochromeCanvas::fillCircle(int16_t center_x, int16_t center_y,
+                                  int16_t radius, bool black) {
+  if (radius < 0) {
+    return;
+  }
+  for (int16_t dy = -radius; dy <= radius; ++dy) {
+    const int16_t half = static_cast<int16_t>(
+        sqrtf(static_cast<float>(radius * radius - dy * dy)));
+    line(center_x - half, center_y + dy, center_x + half, center_y + dy,
+         black);
+  }
+}
+
+bool MonochromeCanvas::shadeAt(Shade shade, int16_t x, int16_t y) {
+  switch (shade) {
+    case Shade::White:
+      return false;
+    case Shade::Dither12:
+      return ((x & 3) == 0 && (y & 3) == 0) || ((x & 3) == 2 && (y & 3) == 2);
+    case Shade::Dither25:
+      return (x & 1) == 0 && (y & 1) == 0;
+    case Shade::Dither50:
+      return ((x + y) & 1) == 0;
+    case Shade::Dither75:
+      return !((x & 1) == 0 && (y & 1) == 0);
+    case Shade::Rows2:
+      return (y & 1) == 0;
+    case Shade::Rows3:
+      return y % 3 == 0;
+    case Shade::Rows3Inverse:
+      return y % 3 != 0;
+    case Shade::Black:
+    default:
+      return true;
+  }
+}
+
+// Shaded fills are backgrounds, so like clear() they run to the edge of the
+// framebuffer rather than stopping at the 236 px circle pixel() keeps to.
+// Otherwise a fill that reaches the rim leaves a sliver of the cleared
+// colour where the glass shows a little more than that circle.
+void MonochromeCanvas::backgroundPixel(int16_t x, int16_t y, bool black) {
+  if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
+    return;
+  }
+  uint8_t& packed = pixels_[static_cast<size_t>(y) * STRIDE + x / 8];
+  const uint8_t mask = static_cast<uint8_t>(0x80U >> (x & 7));
+  if (black) {
+    packed |= mask;
+  } else {
+    packed &= static_cast<uint8_t>(~mask);
+  }
+}
+
+void MonochromeCanvas::shadeRect(int16_t x, int16_t y, int16_t width,
+                                 int16_t height, Shade shade) {
+  for (int16_t row = y; row < y + height; ++row) {
+    for (int16_t column = x; column < x + width; ++column) {
+      backgroundPixel(column, row, shadeAt(shade, column, row));
+    }
+  }
+}
+
+void MonochromeCanvas::fillPolygon(const PolygonPoint* points, uint8_t count,
+                                   Shade shade) {
+  if (points == nullptr || count < 3 || count > MAX_POLYGON_POINTS) {
+    return;
+  }
+  float top = points[0].y;
+  float bottom = points[0].y;
+  for (uint8_t i = 1; i < count; ++i) {
+    top = fminf(top, points[i].y);
+    bottom = fmaxf(bottom, points[i].y);
+  }
+  const int16_t first_row =
+      static_cast<int16_t>(fmaxf(0.0f, floorf(top)));
+  const int16_t last_row =
+      static_cast<int16_t>(fminf(HEIGHT - 1.0f, ceilf(bottom)));
+  for (int16_t y = first_row; y <= last_row; ++y) {
+    // Where the middle of this row crosses the polygon's edges.
+    const float at = y + 0.5f;
+    float crossings[MAX_POLYGON_POINTS];
+    uint8_t found = 0;
+    for (uint8_t i = 0; i < count; ++i) {
+      const PolygonPoint& a = points[i];
+      const PolygonPoint& b = points[(i + 1) % count];
+      if ((a.y <= at && b.y > at) || (b.y <= at && a.y > at)) {
+        crossings[found++] = a.x + (at - a.y) * (b.x - a.x) / (b.y - a.y);
+      }
+    }
+    for (uint8_t i = 1; i < found; ++i) {  // insertion sort, left to right
+      const float value = crossings[i];
+      int8_t j = static_cast<int8_t>(i) - 1;
+      while (j >= 0 && crossings[j] > value) {
+        crossings[j + 1] = crossings[j];
+        --j;
+      }
+      crossings[j + 1] = value;
+    }
+    for (uint8_t i = 0; i + 1 < found; i += 2) {
+      const int16_t from = static_cast<int16_t>(
+          fmaxf(0.0f, floorf(crossings[i] + 0.5f)));
+      const int16_t to = static_cast<int16_t>(
+          fminf(static_cast<float>(WIDTH), floorf(crossings[i + 1] + 0.5f)));
+      for (int16_t x = from; x < to; ++x) {
+        backgroundPixel(x, y, shadeAt(shade, x, y));
+      }
     }
   }
 }
@@ -689,6 +858,307 @@ const uint8_t* WatchUi::framebuffer() const {
 }
 
 void WatchUi::drawClock(const WatchUiModel& model) {
+  if (lake::ENABLED) {
+    drawLakeClock(model);
+  } else {
+    drawClassicClock(model);
+  }
+}
+
+// Mountain lake face: a still picture that changes through the day. The sun
+// crosses the sky, the sky darkens around sunset, and the face inverts at
+// night with a moon and stars. Designed and tuned in tools/face_sim (the
+// "Mountain lake" face); the numbers in namespace lake mirror its L block.
+void WatchUi::drawLakeClock(const WatchUiModel& model) {
+  using Shade = MonochromeCanvas::Shade;
+  using Point = MonochromeCanvas::PolygonPoint;
+  using namespace lake;
+
+  // ---- time of day: 0 day, 1-2 light dusk/dawn, 3-4 dark dusk/dawn, 5 night
+  const int16_t now = static_cast<int16_t>(model.hour * 60 + model.minute);
+  const int16_t rise = SUNRISE_MINUTES;
+  const int16_t set = SUNSET_MINUTES;
+  const int16_t T = TWILIGHT_MINUTES;
+  uint8_t step = 0;
+  if (now < rise) {
+    const int16_t before = rise - now;
+    step = before > 3 * T ? 5 : before > 2 * T ? 4 : before > T ? 3 : 2;
+  } else if (now < rise + T) {
+    step = 1;
+  } else {
+    const int16_t after = now - set;
+    step = after >= 3 * T   ? 5
+           : after >= 2 * T ? 4
+           : after >= T     ? 3
+           : after >= 0     ? 2
+           : after >= -T    ? 1
+                            : 0;
+  }
+  const bool night = step >= 3;  // inverted: white on black
+  const bool ink = !night;       // "black" argument for foreground drawing
+  const bool paper = night;      // and for drawing on the shore band
+  canvas_.clear(night);
+  const float S = SHORE_Y;
+  const float B = BANK_Y;
+
+  // ---- sky
+  if (night) {
+    for (const auto& star : STARS) {
+      canvas_.pixel(star[0], star[1], false);
+    }
+    for (const auto& star : BIG_STARS) {
+      canvas_.fillRect(star[0], star[1], 2, 2, false);
+    }
+  }
+  if (step >= 1 && step <= 4) {
+    static constexpr Shade BANDS[4][3] = {
+        {Shade::White, Shade::Dither12, Shade::Dither25},
+        {Shade::Dither12, Shade::Dither25, Shade::Dither50},
+        {Shade::Dither75, Shade::Dither50, Shade::Dither25},
+        {Shade::Black, Shade::Dither75, Shade::Dither50},
+    };
+    const int16_t band_height = (SHORE_Y - SKY_TOP + 2) / 3;
+    for (uint8_t i = 0; i < 3; ++i) {
+      const Shade shade = BANDS[step - 1][i];
+      if (shade != (night ? Shade::Black : Shade::White)) {
+        canvas_.shadeRect(0, SKY_TOP + i * band_height, 240, band_height,
+                          shade);
+      }
+    }
+  }
+
+  // Sun by day, moon at full night, both on the same arc over the peaks.
+  bool body_visible = false;
+  int16_t body_x = 0;
+  int16_t body_y = 0;
+  const auto place_on_arc = [&](float fraction) {
+    body_x = static_cast<int16_t>(
+        floorf(ARC_LEFT + (ARC_RIGHT - ARC_LEFT) * fraction + 0.5f));
+    body_y = static_cast<int16_t>(floorf(
+        S - 2.0f - ARC_HEIGHT * sinf(3.14159265f * fraction) + 0.5f));
+    body_visible = true;
+  };
+  if (!night && now >= rise && now <= set) {
+    place_on_arc(static_cast<float>(now - rise) / (set - rise));
+    canvas_.fillCircle(body_x, body_y, SUN_RADIUS, true);
+    canvas_.fillCircle(body_x, body_y, SUN_RADIUS - 2, false);
+  } else if (step == 5) {
+    const int16_t night_length = 1440 - (set - rise);
+    place_on_arc(static_cast<float>((now - set + 1440) % 1440) / night_length);
+    canvas_.fillCircle(body_x, body_y, SUN_RADIUS, false);
+    canvas_.fillCircle(body_x + 4, body_y - 3, SUN_RADIUS - 1, true);
+  }
+
+  // ---- hills, mountains, water
+  const Point hills[] = {{0, S},        {0, S - 8},    {40, S - 16},
+                         {80, S - 11},  {120, S - 12}, {170, S - 15},
+                         {210, S - 11}, {240, S - 13}, {240, S}};
+  canvas_.fillPolygon(hills, 9, night ? Shade::Dither75 : Shade::Dither25);
+  const Point left_peak[] = {{LEFT_PEAK_LEFT, S},
+                             {LEFT_PEAK_X, S - LEFT_PEAK_HEIGHT},
+                             {LEFT_SHOULDER_X, S - LEFT_SHOULDER_HEIGHT},
+                             {LEFT_PEAK_RIGHT, S}};
+  canvas_.fillPolygon(left_peak, 4, Shade::Dither50);
+  const Point right_peak[] = {{RIGHT_PEAK_LEFT, S},
+                              {RIGHT_PEAK_X, S - RIGHT_PEAK_HEIGHT},
+                              {RIGHT_PEAK_RIGHT, S}};
+  canvas_.fillPolygon(right_peak, 3,
+                      night ? Shade::Dither25 : Shade::Dither75);
+  const auto snow_cap = [&](float x, float top) {
+    const Point cap[] = {{x, top},          {x - 9, top + 7}, {x - 4, top + 6},
+                         {x, top + 11},     {x + 5, top + 6}, {x + 9, top + 7}};
+    canvas_.fillPolygon(cap, 6, Shade::White);
+  };
+  snow_cap(LEFT_PEAK_X, S - LEFT_PEAK_HEIGHT);
+  snow_cap(RIGHT_PEAK_X, S - RIGHT_PEAK_HEIGHT);
+
+  const Point left_mirror[] = {
+      {LEFT_PEAK_LEFT, S},
+      {LEFT_PEAK_X, S + LEFT_PEAK_HEIGHT * REFLECTION},
+      {LEFT_SHOULDER_X, S + LEFT_SHOULDER_HEIGHT * REFLECTION},
+      {LEFT_PEAK_RIGHT, S}};
+  canvas_.fillPolygon(left_mirror, 4,
+                      night ? Shade::Rows3Inverse : Shade::Rows3);
+  const Point right_mirror[] = {
+      {RIGHT_PEAK_LEFT, S},
+      {RIGHT_PEAK_X, S + RIGHT_PEAK_HEIGHT * REFLECTION},
+      {RIGHT_PEAK_RIGHT, S}};
+  canvas_.fillPolygon(right_mirror, 3, Shade::Rows2);
+  canvas_.line(0, SHORE_Y, 239, SHORE_Y, ink);
+  for (const auto& ripple : RIPPLES) {
+    canvas_.line(ripple[0], SHORE_Y + ripple[1], ripple[0] + ripple[2],
+                 SHORE_Y + ripple[1], ink);
+  }
+  if (body_visible && body_y < SHORE_Y - 12) {
+    // Sun or moon glitter on the water.
+    static constexpr int16_t GLITTER[] = {12, 8, 14, 6};
+    for (uint8_t i = 0; i < 4; ++i) {
+      const int16_t y = SHORE_Y + 5 + i * 4;
+      canvas_.line(body_x - GLITTER[i] / 2, y, body_x + GLITTER[i] / 2, y,
+                   ink);
+    }
+  }
+
+  // ---- shore and reeds
+  const Point bank[] = {{0, B + 4},   {50, B - 2},  {90, B + 2},
+                        {130, B},     {170, B - 2}, {205, B + 3},
+                        {240, B - 1}, {240, 240},   {0, 240}};
+  canvas_.fillPolygon(bank, 9, night ? Shade::White : Shade::Black);
+  for (const auto& reed : REEDS) {
+    canvas_.line(reed[0], BANK_Y + 2, reed[0] + reed[1], BANK_Y - reed[2],
+                 ink);
+    canvas_.fillRect(reed[0] + reed[1] - 1, BANK_Y - reed[2] - 8, 3, 9, ink);
+  }
+
+  // ---- readings and status symbols on the shore
+  // Text is placed by the row where its digits start.
+  const auto line_y = [](const BitmapFont& font, int16_t top) {
+    return static_cast<int16_t>(
+        top - (font.ascent +
+               font.glyphs['0' - font.first_character].y_offset));
+  };
+  char temperature[8];
+  char humidity[8];
+  char altitude[10];
+  if (model.environment_valid) {
+    snprintf(temperature, sizeof(temperature), "%dC",
+             model.temperature_tenths_c / 10);
+    snprintf(humidity, sizeof(humidity), "%u%%", model.humidity_percent);
+    snprintf(altitude, sizeof(altitude), "%dm",
+             static_cast<int>(floorf(
+                 44330.0f *
+                     (1.0f - powf(model.pressure_hpa / 1013.25f, 0.1903f)) +
+                 0.5f)));
+  } else {
+    snprintf(temperature, sizeof(temperature), "--C");
+    snprintf(humidity, sizeof(humidity), "--%%");
+    snprintf(altitude, sizeof(altitude), "--m");
+  }
+  const BitmapFont& reading = WatchAssets::LakeReading18;
+  const int16_t reading_half = static_cast<int16_t>(
+      (reading.glyphs['0' - reading.first_character].height + 1) / 2);
+  const int16_t temperature_width =
+      canvas_.fontTextWidth(reading, temperature);
+  const int16_t row1_width = static_cast<int16_t>(
+      temperature_width + READING_GAP +
+      canvas_.fontTextWidth(reading, humidity));
+  const int16_t row1_left = static_cast<int16_t>(120 - row1_width / 2);
+  canvas_.fontText(reading, temperature, row1_left, line_y(reading, ROW1_TOP),
+                   paper);
+  canvas_.fontText(reading, humidity,
+                   row1_left + temperature_width + READING_GAP,
+                   line_y(reading, ROW1_TOP), paper);
+  const int16_t row1_middle = ROW1_TOP + reading_half;
+  if (model.bluetooth_connected) {
+    canvas_.icon(WatchIcon::Bluetooth, row1_left - ICON_GAP - 8, row1_middle,
+                 16, paper);
+  }
+  if (model.weekday_alarm_on || model.weekend_alarm_on ||
+      model.next_alarm_utc != 0) {
+    canvas_.icon(WatchIcon::Alarms, row1_left + row1_width + ICON_GAP + 8,
+                 row1_middle, 16, paper);
+  }
+
+  canvas_.centeredFontText(reading, altitude, 120, line_y(reading, ROW2_TOP),
+                           paper);
+  const int16_t row2_middle = ROW2_TOP + reading_half;
+  const int16_t half = static_cast<int16_t>(
+      canvas_.fontTextWidth(reading, altitude) / 2 + ICON_GAP + 8);
+  if (model.notification_count > 0) {
+    canvas_.icon(WatchIcon::Notifications, 120 - half, row2_middle, 16,
+                 paper);
+  }
+  if (model.vibration_on) {
+    // No vibration icon in the asset set yet: a phone with shake marks.
+    const int16_t cx = 120 + half;
+    const int16_t cy = row2_middle;
+    canvas_.rect(cx - 3, cy - 6, 7, 12, paper);
+    canvas_.line(cx - 6, cy - 3, cx - 6, cy + 3, paper);
+    canvas_.line(cx + 6, cy - 3, cx + 6, cy + 3, paper);
+    canvas_.line(cx - 8, cy - 1, cx - 8, cy + 1, paper);
+    canvas_.line(cx + 8, cy - 1, cx + 8, cy + 1, paper);
+  }
+
+  // ---- battery, date, time, next event
+  const int16_t bx = 120 - BATTERY_WIDTH / 2;
+  const int16_t by = BATTERY_Y;
+  canvas_.rect(bx, by, BATTERY_WIDTH, BATTERY_HEIGHT, ink);
+  canvas_.rect(bx + 1, by + 1, BATTERY_WIDTH - 2, BATTERY_HEIGHT - 2, ink);
+  // Knock the corner pixels out: slightly rounded.
+  canvas_.pixel(bx, by, !ink);
+  canvas_.pixel(bx + BATTERY_WIDTH - 1, by, !ink);
+  canvas_.pixel(bx, by + BATTERY_HEIGHT - 1, !ink);
+  canvas_.pixel(bx + BATTERY_WIDTH - 1, by + BATTERY_HEIGHT - 1, !ink);
+  canvas_.fillRect(
+      bx + 2, by + 2,
+      static_cast<int16_t>(((BATTERY_WIDTH - 4) *
+                                clampPercent(model.battery_percent) +
+                            50) /
+                           100),
+      BATTERY_HEIGHT - 4, ink);
+  canvas_.fillRect(bx + BATTERY_WIDTH, by + 4, 2, BATTERY_HEIGHT - 8, ink);
+
+  char buffer[48];
+  snprintf(buffer, sizeof(buffer), "%s %u %s", WEEKDAYS[model.weekday % 7],
+           model.day,
+           MONTHS[(model.month >= 1 && model.month <= 12) ? model.month - 1
+                                                          : 0]);
+  canvas_.centeredFontText(WatchAssets::LakeDate20, buffer, 120,
+                           line_y(WatchAssets::LakeDate20, DATE_TOP), ink);
+
+  // The colon is two round dots centred on the middle of the digits, not
+  // the font's glyph (square dots, and low on the baseline).
+  const BitmapFont& clock = WatchAssets::LakeClock62;
+  char hours[4];
+  char minutes[4];
+  snprintf(hours, sizeof(hours), "%02u", model.hour % 24);
+  snprintf(minutes, sizeof(minutes), "%02u", model.minute % 60);
+  const int16_t hours_width = canvas_.fontTextWidth(clock, hours);
+  const int16_t colon_width = canvas_.fontTextWidth(clock, ":");
+  const int16_t time_left = static_cast<int16_t>(
+      120 - (hours_width + colon_width +
+             canvas_.fontTextWidth(clock, minutes)) /
+                2);
+  canvas_.fontText(clock, hours, time_left, line_y(clock, TIME_TOP), ink);
+  canvas_.fontText(clock, minutes, time_left + hours_width + colon_width,
+                   line_y(clock, TIME_TOP), ink);
+  const int16_t colon_x = time_left + hours_width + colon_width / 2;
+  const int16_t colon_middle = static_cast<int16_t>(
+      TIME_TOP + clock.glyphs['0' - clock.first_character].height / 2 -
+      COLON_NUDGE);
+  canvas_.fillCircle(colon_x, colon_middle - COLON_SPREAD, COLON_RADIUS, ink);
+  canvas_.fillCircle(colon_x, colon_middle + COLON_SPREAD, COLON_RADIUS, ink);
+
+  // What is coming up next (calendar or phone alarm), in 24-hour time.
+  if (model.time_valid) {
+    const uint32_t local = model.local_epoch;
+    const uint32_t event =
+        model.event_utc != 0
+            ? utcToLocal(model.event_utc, model.utc_offset_seconds)
+            : 0;
+    const uint32_t alarm =
+        model.next_alarm_utc != 0
+            ? utcToLocal(model.next_alarm_utc, model.utc_offset_seconds)
+            : 0;
+    buffer[0] = '\0';
+    if (event != 0 && event >= local && event - local <= 86400UL) {
+      const LocalTime when = localTime(event);
+      snprintf(buffer, sizeof(buffer), "%02u:%02u %s", when.hour, when.minute,
+               model.event_title);
+    } else if (alarm != 0 && alarm >= local && alarm - local <= 86400UL) {
+      const LocalTime when = localTime(alarm);
+      snprintf(buffer, sizeof(buffer), "%02u:%02u Alarm", when.hour,
+               when.minute);
+    }
+    if (buffer[0] != '\0') {
+      canvas_.centeredFittedFontText(
+          WatchAssets::LakeEvent16, buffer, 120,
+          line_y(WatchAssets::LakeEvent16, EVENT_TOP), EVENT_MAX_WIDTH, ink);
+    }
+  }
+}
+
+void WatchUi::drawClassicClock(const WatchUiModel& model) {
   char buffer[32];
   const char* weekday = WEEKDAYS[model.weekday % 7];
   const char* month = MONTHS[(model.month >= 1 && model.month <= 12)
@@ -1018,7 +1488,7 @@ void WatchUi::drawTimer(const WatchUiModel& model) {
                            model.timer_running ? "RUNNING" : "READY", 120,
                            127);
   canvas_.fillRect(57, 151, 126, 2);
-  canvas_.centeredFontText(WatchAssets::Ui16, "VIBRATE ON FINISH", 120, 165);
+  canvas_.centeredFontText(WatchAssets::Ui16, "RINGS ON FINISH", 120, 165);
 }
 
 void WatchUi::drawAlarms(const WatchUiModel& model) {

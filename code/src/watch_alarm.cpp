@@ -48,6 +48,8 @@ void WatchAlarm::begin() {
 
 void WatchAlarm::timerChanged() {
   timer_last_tick_ = millis();
+  timer_drawn_step_ = (model_.timer_remaining_seconds +
+                       TIMER_REDRAW_SECONDS - 1) / TIMER_REDRAW_SECONDS;
 }
 
 void WatchAlarm::scheduleSleepAlarm(int32_t delay_seconds, Print& out) {
@@ -98,6 +100,14 @@ uint32_t WatchAlarm::msUntilNextEvent(uint32_t now) {
         static_cast<uint64_t>(model_.timer_remaining_seconds) * 1000ULL;
     const uint32_t elapsed = now - timer_last_tick_;
     consider(elapsed >= total ? 0 : static_cast<uint32_t>(total - elapsed));
+    if (ui_.screen() == WatchScreen::Timer) {
+      // Wake for the next redraw of the countdown.
+      uint32_t to_step = model_.timer_remaining_seconds % TIMER_REDRAW_SECONDS;
+      if (to_step == 0) {
+        to_step = TIMER_REDRAW_SECONDS;
+      }
+      consider(elapsed >= to_step * 1000UL ? 0 : to_step * 1000UL - elapsed);
+    }
   }
   if (sleep_alarm_at_ != 0) {
     const int32_t remaining = static_cast<int32_t>(sleep_alarm_at_ - now);
@@ -346,6 +356,13 @@ bool WatchAlarm::service(Print& out) {
         ui_changed |= start(F("timer complete"), WatchScreen::Timer, out);
       } else {
         model_.timer_remaining_seconds -= elapsed_seconds;
+        const uint32_t step = (model_.timer_remaining_seconds +
+                               TIMER_REDRAW_SECONDS - 1) /
+                              TIMER_REDRAW_SECONDS;
+        if (step != timer_drawn_step_) {
+          timer_drawn_step_ = step;
+          ui_changed |= ui_.screen() == WatchScreen::Timer;
+        }
       }
     }
   }

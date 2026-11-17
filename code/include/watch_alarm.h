@@ -65,6 +65,10 @@ class WatchAlarm {
   WatchUiModel& model_;
 
   uint32_t timer_last_tick_ = 0;
+  // The running timer is redrawn every TIMER_REDRAW_SECONDS while its
+  // screen is showing; an e-paper update is too slow to do every second.
+  static constexpr uint32_t TIMER_REDRAW_SECONDS = 3;
+  uint32_t timer_drawn_step_ = 0;
   uint32_t sleep_alarm_at_ = 0;
   uint32_t alarm_feedback_at_ = 0;
   uint32_t actuator_off_at_ = 0;
