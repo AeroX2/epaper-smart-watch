@@ -119,7 +119,7 @@ class WeatherBridge(
         val lat = String.format(Locale.US, "%.2f", latitude)
         val lon = String.format(Locale.US, "%.2f", longitude)
         val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
-            "&current=temperature_2m,weather_code" +
+            "&current=temperature_2m,weather_code,pressure_msl" +
             "&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1"
         executor.execute {
             val result = try {
@@ -129,13 +129,13 @@ class WeatherBridge(
             }
             handler.post {
                 inFlight = false
-                result.onSuccess { (temp, high, low, code) ->
+                result.onSuccess { (temp, high, low, code, seaLevel) ->
                     val condition = conditionFor(code)
-                    prefs.weatherCache = "$temp|$high|$low|$code|$condition"
+                    prefs.weatherCache = "$temp|$high|$low|$code|$condition|$seaLevel"
                     prefs.weatherCacheTime = System.currentTimeMillis()
                     prefs.weatherError = null
                     WatchState.notifyChanged()
-                    onWeather(Out.weather(temp, high, low, code, condition))
+                    onWeather(Out.weather(temp, high, low, code, condition, seaLevel))
                 }.onFailure {
                     Log.w(TAG, "Weather fetch failed", it)
                     fail("Weather fetch failed: ${it.message ?: it.javaClass.simpleName}")
@@ -167,7 +167,11 @@ class WeatherBridge(
         val code = current.optInt("weather_code", -1)
         val high = daily.getJSONArray("temperature_2m_max").getDouble(0).roundToInt()
         val low = daily.getJSONArray("temperature_2m_min").getDouble(0).roundToInt()
-        return listOf(temp, high, low, code)
+        // Sea-level pressure in tenths of a hPa, 0 when the service leaves it out. The
+        // watch needs it to work out altitude from its own pressure sensor.
+        val seaLevel = current.optDouble("pressure_msl", Double.NaN)
+        val seaLevelTenths = if (seaLevel.isNaN()) 0 else (seaLevel * 10).roundToInt()
+        return listOf(temp, high, low, code, seaLevelTenths)
     }
 
     private fun fail(message: String) {
@@ -181,7 +185,8 @@ class WeatherBridge(
         val p = cache.split('|')
         if (p.size < 5) return null
         return Out.weather(p[0].toIntOrNull() ?: 0, p[1].toIntOrNull() ?: 0,
-            p[2].toIntOrNull() ?: 0, p[3].toIntOrNull() ?: -1, p[4])
+            p[2].toIntOrNull() ?: 0, p[3].toIntOrNull() ?: -1, p[4],
+            p.getOrNull(5)?.toIntOrNull() ?: 0)
     }
 
     private fun manualMessage(): OutMessage =

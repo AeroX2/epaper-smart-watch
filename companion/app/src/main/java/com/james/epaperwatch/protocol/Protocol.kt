@@ -124,7 +124,15 @@ object Out {
     fun callRing(caller: CharSequence?) = OutMessage("CALL", listOf("RING", t(caller, 28)), "CALL")
     fun callEnd() = OutMessage("CALL", listOf("END", ""), "CALL")
 
-    fun weather(temp: Int, high: Int, low: Int, code: Int, condition: CharSequence?) =
+    /**
+     * [seaLevelTenthsHpa] is the sea-level pressure in tenths of a hectopascal (10132 =
+     * 1013.2 hPa); the watch uses it to turn its own pressure reading into an altitude.
+     * Anything outside 8000..11000 is sent as an empty field, meaning unknown.
+     */
+    fun weather(
+        temp: Int, high: Int, low: Int, code: Int, condition: CharSequence?,
+        seaLevelTenthsHpa: Int = 0,
+    ) =
         OutMessage(
             "WEATHER",
             // The watch NAKs temperatures outside +-99 and codes outside -1..255.
@@ -134,6 +142,7 @@ object Out {
                 low.coerceIn(-99, 99).toString(),
                 (if (code in 0..255) code else -1).toString(),
                 t(condition, 20),
+                if (seaLevelTenthsHpa in 8000..11000) seaLevelTenthsHpa.toString() else "",
             ),
             "WEATHER",
         )
