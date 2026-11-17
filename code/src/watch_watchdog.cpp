@@ -7,10 +7,17 @@
 namespace {
 
 // BKP12/13 hold the UTC offset, BKP15 the Stop marker, BKP19 the DFU request.
+// BKP14: "CR" in the top half, watchdog resets in a row in the bottom byte.
+#define WATCH_CRASH_REGISTER (RTC->BKP14R)
+#define WATCH_DFU_REQUEST_REGISTER (RTC->BKP19R)
 #define WATCH_HANG_MAGIC_REGISTER (RTC->BKP16R)
 #define WATCH_HANG_PC_REGISTER (RTC->BKP17R)
 #define WATCH_HANG_LR_REGISTER (RTC->BKP18R)
 constexpr uint32_t HANG_MAGIC = 0x48414E47UL;  // "HANG"
+constexpr uint32_t CRASH_MAGIC = 0x43520000UL;  // "CR"
+constexpr uint32_t CRASH_MAGIC_MASK = 0xFFFF0000UL;
+// Same value as watch_dfu.cpp and the resident bootloader.
+constexpr uint32_t DFU_REQUEST_MAGIC = 0x31465544UL;
 
 volatile uint32_t feed_count = 0;
 uint32_t seen_feed_count = 0;
@@ -125,6 +132,32 @@ void WatchWatchdog::begin() {
 
   LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_RTCAPB);
   LL_PWR_EnableBkUpAccess();
+
+  // Any other reset cause (power, pin, software, firmware update) ends the
+  // run of watchdog resets.
+  const uint32_t crash = WATCH_CRASH_REGISTER;
+  uint32_t resets = 0;
+  if (reset_by_watchdog_) {
+    resets = (crash & CRASH_MAGIC_MASK) == CRASH_MAGIC ? (crash & 0xFFU) : 0;
+    if (resets < 0xFFU) {
+      ++resets;
+    }
+  }
+  resets_in_a_row_ = static_cast<uint8_t>(resets);
+  WATCH_CRASH_REGISTER = CRASH_MAGIC | resets;
+#ifdef WATCH_HAS_RESIDENT_DFU
+  if (resets >= CRASH_LOOP_RESETS) {
+    // Start counting afresh after the update; keep the hang location, which
+    // the next application boot can no longer print as a watchdog reset.
+    WATCH_CRASH_REGISTER = CRASH_MAGIC;
+    WATCH_DFU_REQUEST_REGISTER = DFU_REQUEST_MAGIC;
+    __DSB();
+    NVIC_SystemReset();
+    while (true) {
+    }
+  }
+#endif
+
   if (WATCH_HANG_MAGIC_REGISTER == HANG_MAGIC) {
     if (reset_by_watchdog_) {
       hang_pc_ = WATCH_HANG_PC_REGISTER;
@@ -133,6 +166,15 @@ void WatchWatchdog::begin() {
     WATCH_HANG_MAGIC_REGISTER = 0;
   }
   startHangMonitor();
+}
+
+void WatchWatchdog::service() {
+  if (healthy_ || millis() < HEALTHY_AFTER_MS) {
+    return;
+  }
+  healthy_ = true;
+  LL_PWR_EnableBkUpAccess();
+  WATCH_CRASH_REGISTER = CRASH_MAGIC;
 }
 
 void WatchWatchdog::feed() {
@@ -155,5 +197,10 @@ void WatchWatchdog::printStatus(Print& out) const {
     } else {
       out.println(F("[WARN] The hang monitor recorded no location."));
     }
+    out.print(F("[WARN] Watchdog resets in a row: "));
+    out.print(resets_in_a_row_);
+    out.print(F(" (USB DFU at "));
+    out.print(CRASH_LOOP_RESETS);
+    out.println(F(")"));
   }
 }

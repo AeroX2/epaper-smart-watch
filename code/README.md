@@ -368,6 +368,17 @@ start-ups. The sensor test prints `[WARN] I2C interrupt storms broken since boot
 happened. The BME280 and MAX17048 libraries are also only started at an address that answers,
 because they can wait for the device without a timeout.
 
+### Crash loops
+
+A firmware that hangs on every boot never reaches its console, so it cannot be asked for USB DFU,
+and with a battery connected there is no way to reset it by hand. `WatchWatchdog::begin()` counts
+watchdog resets in a row in RTC backup register 14. On the third it requests the resident
+bootloader's USB DFU mode instead of starting the application again. The count is cleared once the
+firmware has stayed up for 60 s, and by any other kind of reset. The boot log prints it:
+`[WARN] Watchdog resets in a row: 2 (USB DFU at 3)`. The check runs at the very start of `setup()`;
+a crash before that is not caught. The resident bootloader has no timeout, so a watch that lands
+there on battery stays in DFU until it is updated, reset or flat.
+
 ## External flash storage
 
 `WatchFlash` (`watch_flash.cpp`) drives U4 by bit-banging SPI mode 0 on PA3 (CLK), PD3 (NCS),

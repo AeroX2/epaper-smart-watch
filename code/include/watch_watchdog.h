@@ -21,9 +21,21 @@ class WatchWatchdog {
   // a margin above that.
   static constexpr uint32_t TIMEOUT_MS = 20000;
 
+  // A firmware that hangs on every boot never reaches its console, so it
+  // cannot be asked to enter USB DFU. After this many watchdog resets in a
+  // row, begin() requests the resident bootloader's DFU mode instead of
+  // starting the application again.
+  static constexpr uint8_t CRASH_LOOP_RESETS = 3;
+  // The run of watchdog resets ends once the firmware has stayed up this long.
+  static constexpr uint32_t HEALTHY_AFTER_MS = 60000;
+
   // Records whether the previous reset came from the IWDG, then starts it.
+  // Does not return when it sends a crash-looping watch to USB DFU.
   void begin();
   static void feed();
+  // Call from the main loop; clears the crash-loop count once healthy.
+  void service();
+  uint8_t watchdogResetsInARow() const { return resets_in_a_row_; }
 
   bool resetByWatchdog() const { return reset_by_watchdog_; }
   // Where the firmware was stuck before the last watchdog reset, if the hang
@@ -42,6 +54,8 @@ class WatchWatchdog {
   void startHangMonitor();
 
   bool reset_by_watchdog_ = false;
+  uint8_t resets_in_a_row_ = 0;
+  bool healthy_ = false;
   uint32_t hang_pc_ = 0;
   uint32_t hang_lr_ = 0;
 };
