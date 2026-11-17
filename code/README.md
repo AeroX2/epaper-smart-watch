@@ -333,6 +333,28 @@ link, Forget phone. Alert tone cycles NONE / CHIRP / DOUBLE / RISE / FALL / TRIP
 new choice. Secure link shows `N/A` without working external flash. Forget phone needs a second
 select (`OK?`) to confirm and shows `--` when no phone is bonded.
 
+## Hang monitor
+
+The watchdog resets a hung watch after 20 s but cannot say where it hung. A slow LPTIM1 tick
+(`watch_watchdog.cpp`) notices when the watchdog has not been fed for 14 s and stores the
+interrupted program counter and link register in RTC backup registers 16-18. The next boot prints
+them:
+
+```text
+[WARN] Previous reset was caused by the watchdog: the firmware hung.
+[WARN] It was stuck at PC=0x801E89E LR=0x801100B
+```
+
+Turn the address into a function with the ELF of the same build:
+
+```text
+arm-none-eabi-addr2line -f -C -e .pio/build/watch/firmware.elf 0x801E89E
+```
+
+"The hang monitor recorded no location" means the hang ran with interrupts masked, or the backup
+domain was reset in between (starting the radio does that). LPTIM1 runs from PCLK1, so it stops in
+Stop mode and never wakes the watch from it. Console `%` hangs on purpose to test both.
+
 ## External flash storage
 
 `WatchFlash` (`watch_flash.cpp`) drives U4 by bit-banging SPI mode 0 on PA3 (CLK), PD3 (NCS),

@@ -109,6 +109,7 @@ void WatchApplication::printHelp() {
   Serial.println(F("  t  play the next notification alert tone (1-5)"));
   Serial.println(F("  p  forget the bonded phone (erase the stored link key)"));
   Serial.println(F("  f  reboot into resident STM32 USB DFU"));
+  Serial.println(F("  %  hang on purpose (tests the watchdog and hang monitor)"));
   Serial.println(F("  z  print the sleep policy / power diagnostics"));
   Serial.println(F("  0  deep sleep OFF   1  deep sleep while Bluetooth is off (default)"));
   Serial.println(F("  2  deep sleep also with the radio on (experimental)"));
@@ -1080,6 +1081,13 @@ void WatchApplication::handleCommand(char command) {
         rememberBluetooth(true);
       }
       break;
+    case '%':
+      // Deliberate hang: checks that the watchdog resets the watch and that
+      // the hang monitor reports this loop on the next boot.
+      Serial.println(F("Hanging on purpose; the watchdog resets in 20 s."));
+      Serial.flush();
+      for (;;) {
+      }
     case 'q': case 'Q': printStorageStatus(); break;
     case 't': case 'T':
       preview_tone_ = static_cast<uint8_t>(

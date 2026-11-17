@@ -2,6 +2,78 @@
 
 #include <IWatchdog.h>
 
+#include "stm32yyxx_ll_lptim.h"
+
+namespace {
+
+// BKP12/13 hold the UTC offset, BKP15 the Stop marker, BKP19 the DFU request.
+#define WATCH_HANG_MAGIC_REGISTER (RTC->BKP16R)
+#define WATCH_HANG_PC_REGISTER (RTC->BKP17R)
+#define WATCH_HANG_LR_REGISTER (RTC->BKP18R)
+constexpr uint32_t HANG_MAGIC = 0x48414E47UL;  // "HANG"
+
+volatile uint32_t feed_count = 0;
+uint32_t seen_feed_count = 0;
+uint32_t stale_ticks = 0;
+uint32_t record_after_ticks = 0;
+bool hang_recorded = false;
+
+}  // namespace
+
+extern "C" {
+
+// frame = the exception stack frame: r0-r3, r12, lr, pc, xpsr.
+void watchHangTick(const uint32_t* frame) {
+  LL_LPTIM_ClearFLAG_ARRM(LPTIM1);
+  const uint32_t feeds = feed_count;
+  if (feeds != seen_feed_count) {
+    seen_feed_count = feeds;
+    stale_ticks = 0;
+    hang_recorded = false;
+    return;
+  }
+  if (hang_recorded || ++stale_ticks < record_after_ticks) {
+    return;
+  }
+  hang_recorded = true;
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_RTCAPB);
+  LL_PWR_EnableBkUpAccess();
+  WATCH_HANG_PC_REGISTER = frame[6];
+  WATCH_HANG_LR_REGISTER = frame[5];
+  WATCH_HANG_MAGIC_REGISTER = HANG_MAGIC;
+}
+
+__attribute__((naked)) void LPTIM1_IRQHandler(void) {
+  __asm volatile(
+      "tst lr, #4\n"
+      "ite eq\n"
+      "mrseq r0, msp\n"
+      "mrsne r0, psp\n"
+      "b watchHangTick\n");
+}
+
+}  // extern "C"
+
+void WatchWatchdog::startHangMonitor() {
+  LL_RCC_SetLPTIMClockSource(LL_RCC_LPTIM1_CLKSOURCE_PCLK1);
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_LPTIM1);
+  // PCLK1 / 128 with a full 16-bit period: about 7.6 ticks a second at 64 MHz.
+  const uint32_t tick_hz_x16 = (HAL_RCC_GetPCLK1Freq() / 128UL) / 4096UL;
+  record_after_ticks = (HANG_RECORD_MS / 1000UL) * tick_hz_x16 / 16UL;
+  if (record_after_ticks < 8) {
+    record_after_ticks = 8;
+  }
+  LL_LPTIM_Disable(LPTIM1);
+  LL_LPTIM_SetClockSource(LPTIM1, LL_LPTIM_CLK_SOURCE_INTERNAL);
+  LL_LPTIM_SetPrescaler(LPTIM1, LL_LPTIM_PRESCALER_DIV128);
+  LL_LPTIM_EnableIT_ARRM(LPTIM1);  // only writable while disabled
+  LL_LPTIM_Enable(LPTIM1);
+  LL_LPTIM_SetAutoReload(LPTIM1, 0xFFFF);
+  LL_LPTIM_StartCounter(LPTIM1, LL_LPTIM_OPERATING_MODE_CONTINUOUS);
+  HAL_NVIC_SetPriority(LPTIM1_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(LPTIM1_IRQn);
+}
+
 void WatchWatchdog::begin() {
   // isReset(true) also clears the RCC reset flags so the next boot reports
   // only its own cause.
@@ -12,10 +84,22 @@ void WatchWatchdog::begin() {
   __HAL_DBGMCU_FREEZE_IWDG();
 
   IWatchdog.begin(TIMEOUT_MS * 1000UL);
+
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_RTCAPB);
+  LL_PWR_EnableBkUpAccess();
+  if (WATCH_HANG_MAGIC_REGISTER == HANG_MAGIC) {
+    if (reset_by_watchdog_) {
+      hang_pc_ = WATCH_HANG_PC_REGISTER;
+      hang_lr_ = WATCH_HANG_LR_REGISTER;
+    }
+    WATCH_HANG_MAGIC_REGISTER = 0;
+  }
+  startHangMonitor();
 }
 
 void WatchWatchdog::feed() {
   IWatchdog.reload();
+  ++feed_count;
 }
 
 void WatchWatchdog::printStatus(Print& out) const {
@@ -25,5 +109,13 @@ void WatchWatchdog::printStatus(Print& out) const {
   if (reset_by_watchdog_) {
     out.println(F(
         "[WARN] Previous reset was caused by the watchdog: the firmware hung."));
+    if (hang_pc_ != 0) {
+      out.print(F("[WARN] It was stuck at PC=0x"));
+      out.print(hang_pc_, HEX);
+      out.print(F(" LR=0x"));
+      out.println(hang_lr_, HEX);
+    } else {
+      out.println(F("[WARN] The hang monitor recorded no location."));
+    }
   }
 }

@@ -22,8 +22,22 @@ class WatchWatchdog {
   static void feed();
 
   bool resetByWatchdog() const { return reset_by_watchdog_; }
+  // Where the firmware was stuck before the last watchdog reset, if the hang
+  // monitor caught it (0 = nothing recorded).
+  uint32_t hangPc() const { return hang_pc_; }
+  uint32_t hangLr() const { return hang_lr_; }
   void printStatus(Print& out) const;
 
  private:
+  // Hang monitor: a slow LPTIM1 tick that notices when feed() has not been
+  // called for HANG_RECORD_MS and stores the interrupted program counter and
+  // link register in RTC backup registers, a few seconds before the IWDG
+  // resets the chip. The next boot prints them. LPTIM1 runs from PCLK1, so it
+  // stops in Stop mode and never wakes the watch from it.
+  static constexpr uint32_t HANG_RECORD_MS = 14000;
+  void startHangMonitor();
+
   bool reset_by_watchdog_ = false;
+  uint32_t hang_pc_ = 0;
+  uint32_t hang_lr_ = 0;
 };
