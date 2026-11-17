@@ -1,0 +1,32 @@
+ZRIM 8.080  button centre print height 2.185
+Left+Y wall n_in/n_out: t=-2.5 0.59/1.39  t=0 0.78/1.57  t=+2.5 0.64/1.44
+Left-Y wall n_in/n_out: t=-2.5 0.59/1.39  t=0 0.77/1.57  t=+2.5 0.64/1.44
+Right+Y wall n_in/n_out: t=-2.5 0.67/1.46  t=0 0.72/1.52  t=+2.5 0.45/1.26
+Right-Y wall n_in/n_out: t=-2.5 0.66/1.46  t=0 0.72/1.52  t=+2.5 0.45/1.26
+bare case volume 2028.3
+case-mixed assignment: Left+Y=A(flex-tongue), Left-Y=B(leaf-finger-diamond), Right+Y=C(captive-plunger), Right-Y=D(rect-repaired-sprues)
+case-mixed: solids=2 valid=True volume=2058.3 mesh_facets=11740
+  case-mixed interference with PCB_merged: 0.0000 mm^3
+  case-mixed interference with Display_merged: 0.0000 mm^3
+  case-mixed interference with Body001: 0.0000 mm^3
+case-A-flex-tongue: solids=1 valid=True volume=2037.3 mesh_facets=11614
+  case-A interference with PCB_merged: 0.0000 mm^3
+  case-A interference with Display_merged: 0.0000 mm^3
+  case-A interference with Body001: 0.0000 mm^3
+case-B-leaf-finger-diamond: solids=1 valid=True volume=2068.0 mesh_facets=12082
+  case-B interference with PCB_merged: 0.0000 mm^3
+  case-B interference with Display_merged: 0.0000 mm^3
+  case-B interference with Body001: 0.0000 mm^3
+case-C-captive-plunger: solids=5 valid=True volume=2058.4 mesh_facets=12114
+  case-C interference with PCB_merged: 0.0000 mm^3
+  case-C interference with Display_merged: 0.0000 mm^3
+  case-C interference with Body001: 0.0000 mm^3
+case-D-rect-repaired-sprues: solids=1 valid=True volume=2070.1 mesh_facets=11122
+  case-D interference with PCB_merged: 0.0000 mm^3
+  case-D interference with Display_merged: 0.0000 mm^3
+  case-D interference with Body001: 0.0000 mm^3
+case-E-door-tongue: solids=1 valid=True volume=2042.4 mesh_facets=12274
+  case-E interference with PCB_merged: 0.0000 mm^3
+  case-E interference with Display_merged: 0.0000 mm^3
+  case-E interference with Body001: 0.0000 mm^3
+done
