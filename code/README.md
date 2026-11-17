@@ -377,6 +377,13 @@ start-ups. The sensor test prints `[WARN] I2C interrupt storms broken since boot
 happened. The BME280 and MAX17048 libraries are also only started at an address that answers,
 because they can wait for the device without a timeout.
 
+The trigger was found afterwards: the Adafruit MAX17048 library sends the gauge's power-on-reset
+command every time it starts, and the gauge resets instead of acknowledging it. That NACK in the
+middle of a write set off the storm in 14 of 20 boots with a battery connected. `Max17048` now
+reads and writes the gauge's registers itself and never resets it (20 of 20 boots clean), which
+also lets the gauge keep its learned state of charge across firmware restarts. The storm breaker
+stays as a safety net.
+
 ### Crash loops
 
 A firmware that hangs on every boot never reaches its console, so it cannot be asked for USB DFU,

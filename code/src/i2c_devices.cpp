@@ -188,36 +188,73 @@ uint8_t Bme280::chipId() const {
 
 Max17048::Max17048(I2cBus& bus) : bus_(bus) {}
 
-bool Max17048::begin() {
-  if (!device_.begin(&bus_.wire())) {
+bool Max17048::readRegister(uint8_t reg, uint16_t& value) {
+  bus_.recoverIfStormed();
+  TwoWire& wire = bus_.wire();
+  wire.beginTransmission(MAX17048_I2CADDR_DEFAULT);
+  wire.write(reg);
+  if (wire.endTransmission(false) != 0 ||
+      wire.requestFrom(static_cast<uint8_t>(MAX17048_I2CADDR_DEFAULT),
+                       static_cast<uint8_t>(2)) != 2) {
     return false;
+  }
+  const uint8_t high = static_cast<uint8_t>(wire.read());
+  const uint8_t low = static_cast<uint8_t>(wire.read());
+  value = static_cast<uint16_t>(high << 8 | low);
+  return true;
+}
+
+// One 16-bit transfer; the gauge ignores single-byte register writes.
+bool Max17048::writeRegister(uint8_t reg, uint16_t value) {
+  bus_.recoverIfStormed();
+  TwoWire& wire = bus_.wire();
+  wire.beginTransmission(MAX17048_I2CADDR_DEFAULT);
+  wire.write(reg);
+  wire.write(static_cast<uint8_t>(value >> 8));
+  wire.write(static_cast<uint8_t>(value & 0xFF));
+  return wire.endTransmission() == 0;
+}
+
+bool Max17048::begin() {
+  ready_ = false;
+  uint16_t version = 0;
+  if (!readRegister(MAX1704X_VERSION_REG, version) || version == 0x0000 ||
+      version == 0xFFFF) {
+    return false;
+  }
+  // The gauge is not reset: it keeps tracking the cell across firmware
+  // restarts. After a real power-up it sets the reset indicator (status high
+  // byte, bit 0), which only needs clearing.
+  uint16_t status = 0;
+  if (readRegister(MAX1704X_STATUS_REG, status) &&
+      (status & 0x0100U) != 0) {
+    writeRegister(MAX1704X_STATUS_REG, status & ~0x0100U);
   }
   // HIBRT = 0xFFFF keeps the gauge in hibernate mode permanently: it samples
   // every 45 s instead of every 250 ms, which suits a load of well under
   // C/100 and cuts its supply current from about 23 uA to about 4 uA. With
   // the default thresholds every e-paper refresh (a >60 mV dip) would kick it
-  // back to active mode for six minutes. Written as one 16-bit transfer; the
-  // gauge ignores single-byte register writes.
-  TwoWire& wire = bus_.wire();
-  wire.beginTransmission(MAX17048_I2CADDR_DEFAULT);
-  wire.write(static_cast<uint8_t>(MAX1704X_HIBRT_REG));
-  wire.write(static_cast<uint8_t>(0xFF));
-  wire.write(static_cast<uint8_t>(0xFF));
-  hibernate_set_ = wire.endTransmission() == 0;
+  // back to active mode for six minutes.
+  hibernate_set_ = writeRegister(MAX1704X_HIBRT_REG, 0xFFFF);
+  ready_ = true;
   return true;
 }
 
 bool Max17048::read(BatteryReading& reading) {
-  if (!device_.isDeviceReady()) {
+  uint16_t vcell = 0;
+  uint16_t soc = 0;
+  uint16_t crate = 0;
+  uint16_t status = 0;
+  if (!ready_ || !readRegister(MAX1704X_VCELL_REG, vcell) ||
+      !readRegister(MAX1704X_SOC_REG, soc) ||
+      !readRegister(MAX1704X_CRATE_REG, crate) ||
+      !readRegister(MAX1704X_VERSION_REG, reading.version) ||
+      !readRegister(MAX1704X_STATUS_REG, status)) {
     return false;
   }
-
-  reading.voltage_v = device_.cellVoltage();
-  reading.state_of_charge_percent = device_.cellPercent();
-  reading.rate_percent_per_hour = device_.chargeRate();
-  reading.version = device_.getICversion();
-  reading.status = device_.getAlertStatus();
-  return !isnan(reading.voltage_v) &&
-         !isnan(reading.state_of_charge_percent) &&
-         !isnan(reading.rate_percent_per_hour);
+  reading.voltage_v = vcell * 78.125F / 1000000.0F;
+  reading.state_of_charge_percent = soc / 256.0F;
+  reading.rate_percent_per_hour = static_cast<int16_t>(crate) * 0.208F;
+  reading.status = (status >> 8) & 0x7F;
+  return true;
 }

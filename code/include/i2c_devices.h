@@ -88,6 +88,11 @@ class Bme280 {
   uint8_t chip_id_ = 0;
 };
 
+// Talks to the gauge directly. The Adafruit library's begin() sends the
+// power-on-reset command on every start: the gauge resets instead of
+// acknowledging it, and that NACK in mid-write is what set off the STM32 HAL
+// I2C interrupt storm in most boots. The reset also threw away the gauge's
+// learned state of charge. The library header is kept for register names.
 class Max17048 {
  public:
   explicit Max17048(I2cBus& bus);
@@ -98,7 +103,10 @@ class Max17048 {
   bool hibernating() const { return hibernate_set_; }
 
  private:
+  bool readRegister(uint8_t reg, uint16_t& value);
+  bool writeRegister(uint8_t reg, uint16_t value);
+
   I2cBus& bus_;
-  Adafruit_MAX17048 device_;
+  bool ready_ = false;
   bool hibernate_set_ = false;
 };
