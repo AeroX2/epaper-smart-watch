@@ -77,7 +77,9 @@ python tools/usb_dfu_update.py COM26 .pio/build/watch/firmware.bin
 
 The updater validates that the image is linked for `0x08010000`, sends `f` to
 the watch over USB CDC, waits for the resident ST DFU device, then uses
-STM32CubeProgrammer to erase, program, verify, and start the application. The
+`dfu-util` (from PATH, or the copy PlatformIO installs) to erase, program, read
+back and start the application. STM32CubeProgrammer v2.23 fails to erase through
+the resident loader, so it is not used here. The
 USB path involves no external-flash staging (that is only used by the Bluetooth
 update described below).
 Holding PCB button 1 (bottom-left) during reset also enters resident DFU if an
@@ -266,7 +268,7 @@ is off) and `2` also allows it with the radio on; the choice is stored in the ex
 
 Press `f` to shut down the display booster, LED ring, vibration, buzzer, and BLE,
 then reboot into resident STM32 USB DFU. Ordinarily `tools/usb_dfu_update.py`
-sends this command and invokes STM32CubeProgrammer automatically. The direct
+sends this command and runs `dfu-util` automatically. The direct
 recovery build deliberately refuses `f` because it has no resident loader.
 
 Pattern tests never run automatically. Start with `e`, which only resets the controller and checks

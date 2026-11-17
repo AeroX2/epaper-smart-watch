@@ -17,28 +17,29 @@ from firmware_layout import require_vector_origin
 
 APP_START = 0x08010000
 APP_END = 0x080CA000
-DFU_VID = "0x0483"
-DFU_PID = "0xDF11"
+DFU_VID = "0483"
+DFU_PID = "df11"
 
 
-def find_cube_programmer() -> pathlib.Path:
-    candidates = [
-        pathlib.Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-        / "STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe",
-        pathlib.Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
-        / "STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe",
-    ]
-    command = shutil.which("STM32_Programmer_CLI") or shutil.which(
-        "STM32_Programmer_CLI.exe"
+def find_dfu_util() -> pathlib.Path:
+    """dfu-util from PATH, or the copy PlatformIO installs for upload_protocol = dfu.
+
+    STM32CubeProgrammer is deliberately not used: v2.23 does not accept the
+    resident loader's memory map and fails with "failed to erase memory".
+    """
+    command = shutil.which("dfu-util") or shutil.which("dfu-util.exe")
+    candidates = [pathlib.Path(command)] if command else []
+    core = pathlib.Path(
+        os.environ.get("PLATFORMIO_CORE_DIR", pathlib.Path.home() / ".platformio")
     )
-    if command:
-        candidates.insert(0, pathlib.Path(command))
+    for name in ("dfu-util.exe", "dfu-util"):
+        candidates.append(core / "packages/tool-dfuutil/bin" / name)
     for candidate in candidates:
         if candidate.is_file():
             return candidate
     raise SystemExit(
-        "STM32CubeProgrammer CLI was not found. Install STM32CubeProgrammer "
-        "or add STM32_Programmer_CLI to PATH."
+        "dfu-util was not found. Install it, or run `pio run -e watch` once so "
+        "PlatformIO installs its own copy."
     )
 
 
@@ -86,25 +87,23 @@ def request_dfu(port: str) -> None:
         ) from exc
 
 
-def wait_for_dfu(programmer: pathlib.Path, timeout_seconds: float) -> None:
+def run_dfu_util(dfu_util: pathlib.Path, *arguments: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [str(dfu_util), "-d", f"{DFU_VID}:{DFU_PID}", *arguments],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+
+def wait_for_dfu(dfu_util: pathlib.Path, timeout_seconds: float) -> None:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        result = subprocess.run(
-            [
-                str(programmer),
-                "-c",
-                "port=USB1",
-                f"VID={DFU_VID}",
-                f"PID={DFU_PID}",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-        )
-        if result.returncode == 0:
+        result = run_dfu_util(dfu_util, "-l")
+        if "Found DFU" in result.stdout:
             print("Resident STM32 DFU connected.")
             return
         time.sleep(0.25)
@@ -114,32 +113,45 @@ def wait_for_dfu(programmer: pathlib.Path, timeout_seconds: float) -> None:
     )
 
 
-def program_application(programmer: pathlib.Path, image: bytes) -> None:
-    temporary_path: pathlib.Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as temporary:
-            temporary.write(image)
-            temporary_path = pathlib.Path(temporary.name)
-        command = [
-            str(programmer),
-            "-c",
-            "port=USB1",
-            f"VID={DFU_VID}",
-            f"PID={DFU_PID}",
-            "-d",
-            str(temporary_path),
-            f"0x{APP_START:08X}",
-            "-v",
-            "-s",
-            f"0x{APP_START:08X}",
-        ]
-        print(f"Programming and verifying {len(image)} bytes...")
-        result = subprocess.run(command, check=False)
-        if result.returncode != 0:
-            raise SystemExit(f"STM32CubeProgrammer failed with exit code {result.returncode}.")
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+def checked(result: subprocess.CompletedProcess, step: str) -> None:
+    if result.returncode != 0:
+        lines = result.stdout.replace("\r", "\n").splitlines()
+        tail = "\n".join(line for line in lines[-6:] if line.strip())
+        raise SystemExit(
+            f"dfu-util failed to {step} (exit code {result.returncode}):\n{tail}"
+        )
+
+
+def program_application(dfu_util: pathlib.Path, image: bytes) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        folder = pathlib.Path(directory)
+        source = folder / "application.bin"
+        readback = folder / "readback.bin"
+        source.write_bytes(image)
+        region = f"0x{APP_START:08X}"
+
+        print(f"Erasing and programming {len(image)} bytes...")
+        checked(
+            run_dfu_util(dfu_util, "-a", "0", "-s", region, "-D", str(source)),
+            "program the application",
+        )
+        # The read-back also carries the "leave" request that starts the
+        # application, so the watch only leaves the loader after its flash
+        # has been read. A mismatch is reported below; holding button 1 at
+        # power-up returns to the loader.
+        print("Verifying and starting the application...")
+        checked(
+            run_dfu_util(
+                dfu_util, "-a", "0", "-s", f"{region}:{len(image)}:leave",
+                "-U", str(readback),
+            ),
+            "read the application back",
+        )
+        if readback.read_bytes() != image:
+            raise SystemExit(
+                "Verification failed: the flash does not match the firmware. "
+                "Hold button 1 while powering up and run this tool again."
+            )
 
 
 def main() -> int:
@@ -149,11 +161,11 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=15.0)
     args = parser.parse_args()
 
-    programmer = find_cube_programmer()
+    dfu_util = find_dfu_util()
     image = load_application(args.firmware)
     request_dfu(args.port)
-    wait_for_dfu(programmer, args.timeout)
-    program_application(programmer, image)
+    wait_for_dfu(dfu_util, args.timeout)
+    program_application(dfu_util, image)
     print("USB DFU update verified; the watch is rebooting into the application.")
     return 0
 
