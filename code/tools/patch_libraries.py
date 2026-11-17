@@ -1,4 +1,4 @@
-"""PlatformIO pre-build script: fixes a pairing bug in STM32duinoBLE 1.4.2.
+"""PlatformIO pre-build script: fixes a pairing bug in STM32duinoBLE 1.4.2 and 1.5.0.
 
 ATTClass::getPeerEncrptingConnectionHandle() returns ATT_MAX_PEERS + 1 (9)
 for "no peer is pairing", and HCI.cpp treats any handle above ATT_MAX_PEERS

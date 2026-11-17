@@ -136,7 +136,15 @@ void ET011TJ1::prepare() {
   // A weak pull-down makes a disconnected BUSY_N fail the logic probe instead
   // of looking spuriously ready. A connected controller actively drives high.
   pinMode(busy_pin_, INPUT_PULLDOWN);
-  spi_.begin();
+  // Arduino core 3.0.0 only sets the SPI peripheral up when the requested
+  // settings differ from the last ones, and end() does not forget them. A
+  // plain begin() after holdInReset() would therefore leave SPI1 without its
+  // clock, and the first transfer would wait for ever. Asking for a different
+  // speed first forces a real initialisation with the wanted settings.
+  spi_.beginTransaction(SPISettings(SPI_HZ / 2, MSBFIRST, SPI_MODE0));
+  spi_.endTransaction();
+  spi_.beginTransaction(spi_settings_);
+  spi_.endTransaction();
   prepared_ = true;
   controller_awake_ = false;
   booster_on_ = false;
