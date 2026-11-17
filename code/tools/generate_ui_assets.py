@@ -29,6 +29,11 @@ FONT_SPECS = [
     ("Bold22", "AtkinsonHyperlegibleNext-ExtraBold.ttf", 22),
     ("Bold36", "AtkinsonHyperlegibleNext-ExtraBold.ttf", 36),
     ("Clock64", "AtkinsonHyperlegibleNext-ExtraBold.ttf", 64),
+    # Mountain lake clock face.
+    ("LakeEvent16", "archivo/Archivo-Medium.ttf", 16),
+    ("LakeReading18", "archivo/Archivo-ExtraBold.ttf", 18),
+    ("LakeDate20", "archivo/Archivo-ExtraBold.ttf", 20),
+    ("LakeClock62", "archivo/Archivo-ExtraBold.ttf", 62),
 ]
 
 ICON_NAMES = [
