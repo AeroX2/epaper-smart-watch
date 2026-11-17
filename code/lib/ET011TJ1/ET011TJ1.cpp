@@ -14,6 +14,8 @@ constexpr uint8_t CMD_DTM1 = 0x10;
 constexpr uint8_t CMD_DRF = 0x12;
 constexpr uint8_t CMD_DTM2 = 0x13;
 constexpr uint8_t CMD_DTMW = 0x14;
+constexpr uint8_t CMD_DTM3 = 0x15;
+constexpr uint8_t CMD_DTM4 = 0x16;
 constexpr uint8_t CMD_LUT_20 = 0x20;
 constexpr uint8_t CMD_LUT_22 = 0x22;
 constexpr uint8_t CMD_LUT_26 = 0x26;
@@ -69,6 +71,20 @@ constexpr uint8_t VENDOR_FULL_REFRESH[] = {
 // DTM1 must contain the previous frame and DTM2 the new frame. Unlike the ZIP
 // demo's first-image 0x08 mode, this avoids the conspicuous cleaning flash.
 constexpr uint8_t GC_FAST_REFRESH_MODE = 0x04;
+
+// Captured product register set for the 1-bpp path (showFrameKw). Two
+// values stay at this board's own, because the product mounts the panel the
+// other way round: PSR bit 2 (SHL; the capture has PSR = 0F 86 89) and the
+// gate driver settings (the capture's 89 89 CB CB 03 flips the image).
+constexpr uint8_t KW_PANEL_SETTINGS[] = {0x0B, 0x86, 0x89};
+constexpr uint8_t KW_LINE_PERIOD = 0x4F;
+// DDX = 0: a 1 bit is black, which is the framebuffer's own polarity.
+constexpr uint8_t KW_VCOM_DATA_INTERVAL[] = {0xA0, 0x20, 0x10};
+// Measured on the panel: DRF mode 0x00 runs the captured 12-frame waveform
+// (0.5 s at this line period) and shows the 1-bpp DTM3/DTM4 data correctly.
+// Mode 0x01, the datasheet's KW mode, ignores the table's length and runs
+// 1.9 s. The capture does not include the product's own DRF command.
+constexpr uint8_t KW_REFRESH_MODE = 0x00;
 constexpr uint8_t VENDOR_FULL_REFRESH_MODE = 0x08;
 
 }  // namespace
@@ -243,6 +259,120 @@ bool ET011TJ1::showFrameFast(const uint8_t* framebuffer,
   out.println(F("[PASS] Epson GC fast UI refresh completed"));
   holdInReset();
   out.println(F("ET011 controller returned to reset; booster is off"));
+  return true;
+}
+
+void ET011TJ1::writeKwLine(uint8_t command, const uint8_t* row) {
+  if (command != 0) {
+    digitalWrite(dc_pin_, LOW);
+    digitalWrite(cs_pin_, LOW);
+    spi_.transfer(command, SPI_TRANSMITONLY);
+    digitalWrite(cs_pin_, HIGH);
+  }
+  digitalWrite(dc_pin_, HIGH);
+  digitalWrite(cs_pin_, LOW);
+  for (uint16_t i = 0; i < WIDTH / 8; ++i) {
+    spi_.transfer(row[i], SPI_TRANSMITONLY);
+  }
+  digitalWrite(cs_pin_, HIGH);
+}
+
+bool ET011TJ1::showFrameKw(const uint8_t* framebuffer,
+                           const uint8_t* previous_framebuffer,
+                           size_t stride_bytes, Print& out) {
+  if (framebuffer == nullptr || previous_framebuffer == nullptr ||
+      stride_bytes < WIDTH / 8) {
+    out.println(F("[FAIL] Invalid ET011TJ1 KW framebuffer"));
+    return false;
+  }
+
+  prepare();
+  out.println(F("Display driver: captured KW update (DTM3 old / DTM4 new)"));
+
+  // The controller idles in reset, so releasing RST_N is the reset edge.
+  digitalWrite(cs_pin_, HIGH);
+  digitalWrite(reset_pin_, HIGH);
+  lowPowerDelay(10);
+  controller_awake_ = true;
+  if (!waitReady(1000)) {
+    out.println(F("[FAIL] BUSY_N stayed low after reset release"));
+    safeShutdown(out);
+    return false;
+  }
+
+  writeCommandData(CMD_BTST, BOOSTER_SOFT_START, sizeof(BOOSTER_SOFT_START));
+  writeCommandData(CMD_PWR, POWER_SETTINGS, sizeof(POWER_SETTINGS));
+  writeCommandData(CMD_PSR, KW_PANEL_SETTINGS, sizeof(KW_PANEL_SETTINGS));
+  writeCommandData(CMD_PFS, &POWER_OFF_SEQUENCE, 1);
+  writeCommandData(CMD_LPRD, &KW_LINE_PERIOD, 1);
+  writeCommandData(CMD_TSE, &INTERNAL_TEMPERATURE_SENSOR, 1);
+  writeCommandData(CMD_CDI, KW_VCOM_DATA_INTERVAL,
+                   sizeof(KW_VCOM_DATA_INTERVAL));
+  writeCommandData(CMD_TRES, RESOLUTION, sizeof(RESOLUTION));
+  writeCommandData(CMD_GDS, VENDOR_GATE_DRIVER_SETTINGS,
+                   sizeof(VENDOR_GATE_DRIVER_SETTINGS));
+  writeCommandData(CMD_VDCS, &VCOM_DC_LEVEL, 1);
+  writeCommandData(CMD_VBDS, &BORDER_DRIVER_VOLTAGE, 1);
+  writeCommandData(CMD_LVSEL, &LEVEL_SELECT, 1);
+  writeCommandData(CMD_GBS, GATE_BIAS_START, sizeof(GATE_BIAS_START));
+  writeCommandData(CMD_GSS, GATE_BIAS_STOP, sizeof(GATE_BIAS_STOP));
+  out.println(F("KW register set loaded"));
+
+  // Old image: one DTM3 command, then one chip-select frame per line.
+  writeCommandData(CMD_DTMW, FULL_WINDOW, sizeof(FULL_WINDOW));
+  spi_.beginTransaction(spi_settings_);
+  for (uint16_t y = 0; y < HEIGHT; ++y) {
+    writeKwLine(y == 0 ? CMD_DTM3 : 0,
+                previous_framebuffer + static_cast<size_t>(y) * stride_bytes);
+  }
+  spi_.endTransaction();
+  out.println(F("KW: previous frame sent"));
+
+  // New image: a one-line window, DTM4, then the capture's DTM2 0x00 per line.
+  const uint8_t line_end = 0x00;
+  for (uint16_t y = 0; y < HEIGHT; ++y) {
+    const uint8_t window[] = {
+        0x00, static_cast<uint8_t>(y >> 8), static_cast<uint8_t>(y),
+        0xEF, 0x00, 0x00,
+    };
+    writeCommandData(CMD_DTMW, window, sizeof(window));
+    spi_.beginTransaction(spi_settings_);
+    writeKwLine(CMD_DTM4, framebuffer + static_cast<size_t>(y) * stride_bytes);
+    spi_.endTransaction();
+    writeCommandData(CMD_DTM2, &line_end, 1);
+  }
+  out.println(F("KW: new frame sent"));
+
+  writeCommandData(CMD_LUT_20, ET011VendorReference::KW_LUT_20,
+                   sizeof(ET011VendorReference::KW_LUT_20));
+  writeCommandData(CMD_LUT_22, ET011VendorReference::KW_LUT_22,
+                   sizeof(ET011VendorReference::KW_LUT_22));
+  writeCommandData(CMD_LUT_26, ET011VendorReference::KW_LUT_26,
+                   sizeof(ET011VendorReference::KW_LUT_26));
+
+  if (!powerOn(out)) {
+    safeShutdown(out);
+    return false;
+  }
+  uint8_t refresh[sizeof(VENDOR_FULL_REFRESH)];
+  memcpy(refresh, VENDOR_FULL_REFRESH, sizeof(refresh));
+  refresh[0] = KW_REFRESH_MODE;
+  writeCommandData(CMD_DRF, refresh, sizeof(refresh));
+  out.println(F("KW refresh started..."));
+  if (!waitBusyCycle(1000, 20000)) {
+    out.print(F("[FAIL] KW DRF BUSY_N cycle timed out; level = "));
+    out.println(busyLevel());
+    safeShutdown(out);
+    return false;
+  }
+  out.println(F("KW refresh done"));
+  if (!powerOff(out)) {
+    safeShutdown(out);
+    return false;
+  }
+
+  out.println(F("[PASS] KW UI refresh completed"));
+  holdInReset();
   return true;
 }
 

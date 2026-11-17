@@ -291,7 +291,16 @@ console to redraw the current screen using the ordinary UI refresh policy.
 Press uppercase `U` to force a cleaning full refresh of the current UI (`white -> UI`) immediately;
 the same cleaning sequence also runs automatically after ten ordinary UI updates.
 Once active on the clock screen, it refreshes at minute boundaries. Every refresh returns the
-ET011TJ1 to booster-off standby.
+ET011TJ1 to reset with its booster off.
+
+An ordinary update takes about 0.75 s (`ET011TJ1::showFrameKw`): 0.17 s to release reset, load the
+registers and send the old and new frames as 1-bpp data (DTM3 / DTM4), 0.5 s for a 12-frame
+waveform, and 0.08 s to switch the booster off. The register set, data path and waveform come from
+a bus capture of a product that drives this panel once a second; the source direction bit and the
+gate driver settings stay at this board's values, otherwise the image is flipped. The refresh
+command uses mode `0x00`: measured here, mode `0x01` (the datasheet's black/white mode) ignores the
+table's length and runs 1.9 s. Console `y` switches ordinary updates back to the older GC fast
+update (1.1 s: it powers the controller up twice and runs a 31-frame waveform) for comparison.
 
 The four active-low buttons currently map as follows:
 

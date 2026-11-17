@@ -54,6 +54,15 @@ class ET011TJ1 {
                      const uint8_t* previous_framebuffer,
                      size_t stride_bytes, Print& out);
 
+  // Quick black/white update: the register set, 1-bpp data path (DTM3 old /
+  // DTM4 new) and short waveform captured from a product that drives this
+  // panel at one update a second. About 0.75 s in all, against 1.1 s for
+  // showFrameFast(), because the controller is not powered up twice and the
+  // waveform is 12 frames long. Same contract as showFrameFast().
+  bool showFrameKw(const uint8_t* framebuffer,
+                   const uint8_t* previous_framebuffer, size_t stride_bytes,
+                   Print& out);
+
   int busyLevel() const;
 
  private:
@@ -89,6 +98,8 @@ class ET011TJ1 {
                     bool inverted = false);
   void writeFramebuffer(uint8_t command, const uint8_t* framebuffer,
                         size_t stride_bytes, bool inverted = false);
+
+  void writeKwLine(uint8_t command, const uint8_t* row);
 
   bool waitReady(uint32_t timeout_ms);
   bool waitBusyCycle(uint32_t assert_timeout_ms, uint32_t ready_timeout_ms);

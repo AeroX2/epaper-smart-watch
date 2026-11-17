@@ -101,6 +101,7 @@ void WatchApplication::printHelp() {
   Serial.println(F("  l  toggle the display LED ring"));
   Serial.println(F("  u  render the current watch UI screen"));
   Serial.println(F("  U  force a full cleaning waveform on the current UI"));
+  Serial.println(F("  y  switch ordinary updates: quick 1-bpp (default) / GC fast"));
   Serial.println(F("  [/]  previous/next UI screen or item"));
   Serial.println(F("  m/o  UI home/select"));
   Serial.println(F("  j  print the STM32 RTC date/time"));
@@ -1055,6 +1056,13 @@ void WatchApplication::handleCommand(char command) {
       break;
     case 'l': case 'L': toggleDisplayLight(); break;
     case 'u': renderUi(); break;
+    case 'y': case 'Y':
+      display_controller_.setKwMode(!display_controller_.kwMode());
+      Serial.println(display_controller_.kwMode()
+                         ? F("Quick 1-bpp display update: ON")
+                         : F("Quick 1-bpp display update: OFF (GC fast)"));
+      renderUi();
+      break;
     case 'U':
       updateUiSensors();
       display_controller_.renderFull(Serial);

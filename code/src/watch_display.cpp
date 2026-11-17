@@ -50,8 +50,11 @@ bool WatchDisplayController::renderImpl(Print& out,
 
   const bool frame_shown = clean_refresh
       ? display_.showFrame(ui_.framebuffer(), WatchUi::framebufferStride(), out)
-      : display_.showFrameFast(ui_.framebuffer(), previous_framebuffer_,
-                               WatchUi::framebufferStride(), out);
+      : kw_mode_
+            ? display_.showFrameKw(ui_.framebuffer(), previous_framebuffer_,
+                                   WatchUi::framebufferStride(), out)
+            : display_.showFrameFast(ui_.framebuffer(), previous_framebuffer_,
+                                     WatchUi::framebufferStride(), out);
   if (!frame_shown) {
     out.println(F("Watch UI update stopped safely at the failed stage."));
     history_valid_ = false;
