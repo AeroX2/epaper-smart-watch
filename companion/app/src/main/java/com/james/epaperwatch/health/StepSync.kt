@@ -74,12 +74,26 @@ object StepSync {
         }
 
     /**
-     * Intent of the Health Connect permission screen for writing steps. The app has no
-     * `ComponentActivity`, so the library's `ActivityResultContract` is used directly:
-     * `startActivityForResult(permissionIntent(..))`, then [permissionGranted] on the result.
+     * Android 9-13 only: intent of the Health Connect app's permission screen for writing
+     * steps. The app has no `ComponentActivity`, so the library's `ActivityResultContract` is
+     * used directly: `startActivityForResult(permissionIntent(..))`, then [permissionGranted]
+     * on the result.
+     *
+     * On Android 14+ this intent cannot be started: there the contract only carries an
+     * androidx-internal action that `ComponentActivity` turns into a runtime permission
+     * request. A plain `Activity` must call `requestPermissions(arrayOf(WRITE_STEPS), ..)`
+     * itself, because health permissions are ordinary runtime permissions from Android 14.
      */
     fun permissionIntent(context: Context): Intent =
         permissionContract.createIntent(context, setOf(WRITE_STEPS))
+
+    /**
+     * Android 14+: Health Connect's page listing this app's health permissions, for when the
+     * system no longer shows the permission dialog (it stops after two refusals).
+     */
+    fun settingsIntent(context: Context): Intent =
+        Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS")
+            .putExtra(Intent.EXTRA_PACKAGE_NAME, context.packageName)
 
     fun permissionGranted(resultCode: Int, data: Intent?): Boolean =
         WRITE_STEPS in permissionContract.parseResult(resultCode, data)

@@ -1,10 +1,14 @@
 package com.james.epaperwatch.ui
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.text.InputType
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -47,18 +51,41 @@ class Ui(private val context: Context) {
     }
 
     fun button(text: String, primary: Boolean = true, action: () -> Unit): Button =
+        actionButton(text, primary) { action() }
+
+    /**
+     * A button whose action gets the button itself, so it can show that it is working (see
+     * [setBusy]). Every button ripples and gives a haptic tick when pressed, so a press is
+     * never silent.
+     */
+    fun actionButton(text: String, primary: Boolean = true, action: (Button) -> Unit): Button =
         Button(context).apply {
             this.text = text
             isAllCaps = false
             textSize = 14f
             setTextColor(if (primary) Color.WHITE else INK)
-            setBackgroundColor(if (primary) COBALT else LINE)
+            val fill = GradientDrawable().apply {
+                setColor(if (primary) COBALT else LINE)
+                cornerRadius = dp(6).toFloat()
+            }
+            val ripple = if (primary) Color.argb(110, 255, 255, 255) else Color.argb(70, 23, 26, 24)
+            background = RippleDrawable(ColorStateList.valueOf(ripple), fill, null)
             stateListAnimator = null
             setPadding(dp(12), dp(4), dp(12), dp(4))
-            setOnClickListener { action() }
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                action(this)
+            }
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50))
                 .apply { setMargins(0, dp(4), 0, dp(4)) }
         }
+
+    /** Shows [working] on a disabled, dimmed button; `null` restores [label] and enables it. */
+    fun setBusy(button: Button, label: CharSequence, working: CharSequence?) {
+        button.isEnabled = working == null
+        button.alpha = if (working == null) 1f else 0.55f
+        button.text = working ?: label
+    }
 
     fun row(vararg views: View): LinearLayout = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL

@@ -204,7 +204,46 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
 
     // ------------------------------------------------------------------ public API (main thread)
 
-    fun findWatch() = send(Out.findWatch())
+    /**
+     * Send [message] and report on the main thread whether the watch acknowledged it:
+     * `(true, null)`, or `(false, why)`. The UI uses it so that no button press is silent.
+     */
+    fun sendWithResult(message: OutMessage, onDone: (Boolean, String?) -> Unit) {
+        if (!sessionActive) {
+            onDone(false, "Watch is not connected")
+            return
+        }
+        if (ota.blocksTraffic) {
+            onDone(false, "A firmware update is running")
+            return
+        }
+        channel.send(message) { outcome, reason ->
+            val why = when (outcome) {
+                ReliableChannel.Outcome.ACKED -> null
+                ReliableChannel.Outcome.NAKED ->
+                    "The watch refused it" + (reason?.let { " ($it)" } ?: "")
+                ReliableChannel.Outcome.TIMED_OUT -> "The watch did not answer"
+                ReliableChannel.Outcome.CANCELLED -> "The connection dropped before it was sent"
+            }
+            handler.post { onDone(why == null, why) }
+        }
+    }
+
+    fun findWatch(onDone: (Boolean, String?) -> Unit = { _, _ -> }) =
+        sendWithResult(Out.findWatch(), onDone)
+
+    /** Movement sampling without a Sleep as Android session (the app's test buttons). */
+    fun startSleepTest(onDone: (Boolean, String?) -> Unit) =
+        sendWithResult(Out.sleepStart()) { ok, why ->
+            if (ok) WatchState.sleepStarted()
+            onDone(ok, why)
+        }
+
+    fun stopSleepTest(onDone: (Boolean, String?) -> Unit) =
+        sendWithResult(Out.sleepStop()) { ok, why ->
+            if (ok) WatchState.sleepStopped()
+            onDone(ok, why)
+        }
 
     /** The phone's copy of the watch settings changed. */
     fun sendSettings() = sendState(settingsMessage(), force = true)
@@ -214,14 +253,15 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         if (tone in 1..5) send(Out.tonePreview(tone))
     }
 
-    fun requestStatusAndHistory() {
+    fun requestStatusAndHistory(onDone: (Boolean, String?) -> Unit = { _, _ -> }) {
         send(Out.request("STATUS"))
-        send(Out.request("HISTORY"))
+        sendWithResult(Out.request("HISTORY"), onDone)
     }
 
-    /** Re-send the full session state. */
-    fun resync() {
+    /** Re-send the full session state; [onDone] fires when the watch has taken the last of it. */
+    fun resync(onDone: (Boolean, String?) -> Unit = { _, _ -> }) {
         if (sessionActive && !ota.blocksTraffic) sendSessionState()
+        sendWithResult(Out.request("STATUS"), onDone)
     }
 
     fun refreshWeather(force: Boolean = true) {

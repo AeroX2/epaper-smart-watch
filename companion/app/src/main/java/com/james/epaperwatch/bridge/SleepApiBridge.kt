@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import com.james.epaperwatch.data.WatchState
 import com.james.epaperwatch.protocol.InMessage
 import com.james.epaperwatch.protocol.Out
 import com.james.epaperwatch.protocol.OutMessage
@@ -62,10 +63,12 @@ class SleepApiBridge(
             START_TRACKING -> {
                 movementBatch.clear()
                 sendToWatch(Out.sleepStart())
+                WatchState.sleepStarted()
             }
             STOP_TRACKING -> {
                 flushMovement()
                 sendToWatch(Out.sleepStop())
+                WatchState.sleepStopped()
             }
             SET_PAUSE -> {
                 // TIMESTAMP is the epoch-ms the pause ends (0 = resume); the wire wants seconds.
@@ -114,6 +117,7 @@ class SleepApiBridge(
     }
 
     private fun onMovement(maxDeltaMg: Int) {
+        WatchState.sleepSample(maxDeltaMg.coerceAtLeast(0))
         // Sleep expects acceleration change in m/s². The watch sends milligravity.
         movementBatch += maxDeltaMg.coerceAtLeast(0) * 0.00980665f
         if (movementBatch.size >= requestedBatchSize) flushMovement()

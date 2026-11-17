@@ -63,6 +63,7 @@ class MainActivity : Activity() {
     private lateinit var toneButton: Button
     private lateinit var healthSwitch: Switch
     private lateinit var healthStatus: TextView
+    private lateinit var sleepStatus: TextView
     private lateinit var backgroundLocationButton: Button
     private lateinit var accessButton: Button
     private lateinit var forwardSwitch: Switch
@@ -166,6 +167,9 @@ class MainActivity : Activity() {
                 }
                 WatchLinkService.instance?.refreshWeather()
             }
+            REQ_HEALTH_RUNTIME -> {
+                if (granted) enableHealthSync() else healthPermissionRefused()
+            }
             REQ_BACKGROUND_LOCATION -> {
                 if (!PhoneLocation.hasBackgroundPermission(this)) {
                     toast("Without it the weather location is only refreshed while this app is open")
@@ -228,13 +232,39 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun withSession(action: (WatchLinkService) -> Unit) {
+    /**
+     * Runs a watch command with visible progress: the button shows [working] and is disabled
+     * until the watch acknowledges, then a toast says [done] or why it failed.
+     */
+    private fun watchAction(
+        button: Button,
+        working: String,
+        done: String,
+        action: (WatchLinkService, (Boolean, String?) -> Unit) -> Unit,
+    ) {
         val service = WatchLinkService.instance
         if (service == null || !service.sessionActive) {
             toast("Watch is not connected")
             return
         }
-        action(service)
+        val label = button.text
+        ui.setBusy(button, label, working)
+        action(service) { ok, why ->
+            if (isDestroyed) return@action
+            ui.setBusy(button, label, null)
+            toast(if (ok) done else why ?: "That did not work")
+            render()
+        }
+    }
+
+    /** A setting changed on the phone: send it, or say why the watch does not have it yet. */
+    private fun pushSettings() {
+        val service = WatchLinkService.instance
+        if (service != null && service.sessionActive) {
+            service.sendSettings()
+        } else {
+            toast("Saved on the phone. The watch is not connected.")
+        }
     }
 
     private fun saveWeather() {
@@ -277,6 +307,8 @@ class MainActivity : Activity() {
                 if (service != null && service.sessionActive) {
                     service.sendSettings()
                     service.previewTone(which) // lets the wearer hear it; "None" has no preview
+                } else {
+                    toast("Saved on the phone. The watch is not connected.")
                 }
                 dialog.dismiss()
                 render()
@@ -357,6 +389,10 @@ class MainActivity : Activity() {
                 if (isDestroyed) return@checkPermission
                 if (granted) {
                     enableHealthSync()
+                } else if (Build.VERSION.SDK_INT >= 34) {
+                    // Health permissions are runtime permissions from Android 14; the
+                    // library's intent only works through ComponentActivity there.
+                    requestPermissions(arrayOf(StepSync.WRITE_STEPS), REQ_HEALTH_RUNTIME)
                 } else {
                     try {
                         @Suppress("DEPRECATION")
@@ -373,7 +409,36 @@ class MainActivity : Activity() {
         prefs.healthSync = true
         prefs.healthStatus = null
         StepSync.syncNow(this)
+        toast("Step sync is on")
         render()
+    }
+
+    /** Android 14+: after two refusals the system stops asking, so offer the settings page. */
+    private fun healthPermissionRefused() {
+        AlertDialog.Builder(this)
+            .setTitle("Permission to write steps")
+            .setMessage(
+                "Health Connect did not give this app permission to write steps. You can " +
+                    "allow it in Health Connect, under this app's permissions, then switch " +
+                    "step sync on again.",
+            )
+            .setPositiveButton("Open Health Connect") { _, _ ->
+                try {
+                    startActivity(StepSync.settingsIntent(this))
+                } catch (_: Exception) {
+                    toast("Open Settings > Health Connect > App permissions")
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun sleepSummary(): String = when {
+        !WatchState.sleepTracking -> "Not tracking."
+        WatchState.sleepSamples == 0 ->
+            "Tracking: waiting for the first movement sample from the watch (about 10 seconds)."
+        else -> "Tracking: ${WatchState.sleepSamples} movement samples received, " +
+            "last ${WatchState.sleepLastMg} mg."
     }
 
     private fun healthSummary(): String {
@@ -461,6 +526,7 @@ class MainActivity : Activity() {
             (Protocol.TONE_NAMES.getOrNull(prefs.tone) ?: "watch default")
         healthSwitch.isChecked = prefs.healthSync
         healthStatus.text = healthSummary()
+        sleepStatus.text = sleepSummary()
         val access = WatchNotificationListener.isEnabled(this)
         accessButton.text = if (access) "Notification access: granted" else "Grant notification access"
         accessButton.setTextColor(if (access) Ui.INK else Ui.ALERT)
@@ -561,11 +627,23 @@ class MainActivity : Activity() {
         watchActions = ui.column().apply {
             setPadding(0, ui.dp(12), 0, 0)
             addView(ui.row(
-                ui.button("Find watch") { withSession { it.findWatch() } },
-                ui.button("Sync now", primary = false) { withSession { it.resync() } },
+                ui.actionButton("Find watch") { button ->
+                    watchAction(button, "Calling watch…", "The watch is ringing") { service, done ->
+                        service.findWatch(done)
+                    }
+                },
+                ui.actionButton("Sync now", primary = false) { button ->
+                    watchAction(button, "Syncing…", "Watch synced") { service, done ->
+                        service.resync(done)
+                    }
+                },
             ))
             addView(ui.row(
-                ui.button("Refresh status", primary = false) { withSession { it.requestStatusAndHistory() } },
+                ui.actionButton("Refresh status", primary = false) { button ->
+                    watchAction(button, "Refreshing…", "Status updated") { service, done ->
+                        service.requestStatusAndHistory(done)
+                    }
+                },
                 ui.button("Forget watch", primary = false) { forget() },
             ))
             addView(ui.button("Update watch firmware", primary = false) {
@@ -579,12 +657,12 @@ class MainActivity : Activity() {
         vibrationSwitch = ui.switchRow("Vibration") { _, on ->
             if (rendering) return@switchRow
             prefs.vibration = on
-            WatchLinkService.instance?.sendSettings()
+            pushSettings()
         }
         quietSwitch = ui.switchRow("Quiet mode", "No buzzer or vibration for alerts") { _, on ->
             if (rendering) return@switchRow
             prefs.quiet = on
-            WatchLinkService.instance?.sendSettings()
+            pushSettings()
         }
         root.addView(vibrationSwitch)
         root.addView(quietSwitch)
@@ -708,9 +786,19 @@ class MainActivity : Activity() {
                 "watch's movement sampler without a real session.",
         ))
         root.addView(ui.row(
-            ui.button("Test tracking", primary = false) { withSession { it.sendMessage(Out.sleepStart()) } },
-            ui.button("Stop test", primary = false) { withSession { it.sendMessage(Out.sleepStop()) } },
+            ui.actionButton("Test tracking", primary = false) { button ->
+                watchAction(button, "Starting…", "Tracking started: move the watch") { service, done ->
+                    service.startSleepTest(done)
+                }
+            },
+            ui.actionButton("Stop test", primary = false) { button ->
+                watchAction(button, "Stopping…", "Tracking stopped") { service, done ->
+                    service.stopSleepTest(done)
+                }
+            },
         ))
+        sleepStatus = ui.note("")
+        root.addView(sleepStatus)
 
         return ScrollView(this).apply {
             isFillViewport = true
@@ -732,6 +820,7 @@ class MainActivity : Activity() {
         private const val REQ_CALLS = 3
         private const val REQ_LOCATION = 4
         private const val REQ_BACKGROUND_LOCATION = 5
+        private const val REQ_HEALTH_RUNTIME = 6
         private const val REQ_HEALTH = 7101
         private const val UI_FIX_MAX_AGE_MS = 10L * 60 * 1000
 
