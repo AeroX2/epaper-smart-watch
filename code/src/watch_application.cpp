@@ -1297,6 +1297,9 @@ void WatchApplication::setup() {
 
 void WatchApplication::loop() {
   WatchWatchdog::feed();
+  if (i2c_.recoverIfStormed()) {
+    Serial.println(F("[WARN] I2C interrupt storm broken; bus restarted."));
+  }
   const uint8_t wake_events = power_.takeEvents();
 
   while (Serial.available() > 0) {

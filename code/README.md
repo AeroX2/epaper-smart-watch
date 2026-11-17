@@ -355,6 +355,19 @@ arm-none-eabi-addr2line -f -C -e .pio/build/watch/firmware.elf 0x801E89E
 domain was reset in between (starting the radio does that). LPTIM1 runs from PCLK1, so it stops in
 Stop mode and never wakes the watch from it. Console `%` hangs on purpose to test both.
 
+### I2C interrupt storms
+
+The same tick also ends a failure of the STM32 HAL I2C driver. Its interrupt handler can return
+without clearing the flag that raised it; the interrupt then fires again at once, for ever, and the
+main code never runs again, so the Wire library's own 100 ms timeout cannot expire. On this board
+it showed up as a hang in the boot-time sensor test, in anything from a third of boots to all of
+them. An honest I2C interrupt lasts microseconds, so when two ticks in a row (131 ms apart) find
+the CPU inside one, the tick masks that I2C's interrupts. The transfer in progress then times out
+and `I2cBus::recoverIfStormed()` restarts the bus, from the main loop and between the sensor
+start-ups. The sensor test prints `[WARN] I2C interrupt storms broken since boot: N` when it has
+happened. The BME280 and MAX17048 libraries are also only started at an address that answers,
+because they can wait for the device without a timeout.
+
 ## External flash storage
 
 `WatchFlash` (`watch_flash.cpp`) drives U4 by bit-banging SPI mode 0 on PA3 (CLK), PD3 (NCS),

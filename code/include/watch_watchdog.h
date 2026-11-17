@@ -10,6 +10,10 @@
 // The IWDG runs from the LSI and keeps counting in Sleep mode. Once started it
 // can only be stopped by a reset, which also leaves the resident bootloader
 // and its DFU mode unsupervised.
+// Number of times the hang monitor has broken an I2C interrupt storm (see
+// watch_watchdog.cpp). The bus is unusable after one until it is restarted.
+uint32_t watchI2cStormCount();
+
 class WatchWatchdog {
  public:
   // Longest time any single blocking call may run without a feed. BLE.begin()

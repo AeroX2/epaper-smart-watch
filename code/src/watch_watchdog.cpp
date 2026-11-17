@@ -18,13 +18,51 @@ uint32_t stale_ticks = 0;
 uint32_t record_after_ticks = 0;
 bool hang_recorded = false;
 
+// The STM32 HAL I2C interrupt handler can return without clearing the flag
+// that raised it (handle locked, or TXIS with nothing left to send). The
+// interrupt then fires again at once, for ever, and the main code never runs
+// again, so the Wire library's own 100 ms timeout cannot expire. An honest
+// I2C interrupt lasts microseconds: finding the CPU inside one on two ticks
+// in a row (131 ms apart) means a storm. Mask that I2C's interrupts so the
+// main code resumes and times out; I2cBus restarts the bus afterwards.
+volatile uint32_t i2c_storm_count = 0;
+uint32_t i2c_stuck_ticks = 0;
+
+void breakI2cStorm(uint32_t interrupted_exception) {
+  I2C_TypeDef* stuck = nullptr;
+  if (interrupted_exception == 16U + I2C1_EV_IRQn ||
+      interrupted_exception == 16U + I2C1_ER_IRQn) {
+    stuck = I2C1;
+  } else if (interrupted_exception == 16U + I2C3_EV_IRQn ||
+             interrupted_exception == 16U + I2C3_ER_IRQn) {
+    stuck = I2C3;
+  }
+  if (stuck == nullptr) {
+    i2c_stuck_ticks = 0;
+    return;
+  }
+  if (++i2c_stuck_ticks < 2) {
+    return;
+  }
+  i2c_stuck_ticks = 0;
+  stuck->CR1 &= ~(I2C_CR1_TXIE | I2C_CR1_RXIE | I2C_CR1_ADDRIE |
+                  I2C_CR1_NACKIE | I2C_CR1_STOPIE | I2C_CR1_TCIE |
+                  I2C_CR1_ERRIE);
+  ++i2c_storm_count;
+}
+
 }  // namespace
+
+uint32_t watchI2cStormCount() {
+  return i2c_storm_count;
+}
 
 extern "C" {
 
 // frame = the exception stack frame: r0-r3, r12, lr, pc, xpsr.
 void watchHangTick(const uint32_t* frame) {
   LL_LPTIM_ClearFLAG_ARRM(LPTIM1);
+  breakI2cStorm(frame[7] & 0x1FFU);
   const uint32_t feeds = feed_count;
   if (feeds != seen_feed_count) {
     seen_feed_count = feeds;

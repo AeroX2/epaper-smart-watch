@@ -34,12 +34,17 @@ class I2cBus {
   explicit I2cBus(TwoWire& wire);
 
   void begin();
+  // Restarts the bus if the hang monitor had to break an I2C interrupt storm
+  // since the last call. Returns true when it did.
+  bool recoverIfStormed();
+  uint32_t stormsRecovered() const { return storms_seen_; }
   bool probe(uint8_t address);
   uint8_t scan(Print& out);
   TwoWire& wire();
 
  private:
   TwoWire& wire_;
+  uint32_t storms_seen_ = 0;
 };
 
 class Bma400 {

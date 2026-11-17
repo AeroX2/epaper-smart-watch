@@ -29,15 +29,21 @@ void WatchDiagnostics::initializePeripherals() {
   // These library initializers reset their devices, so only retry sensors that
   // have not initialized successfully. Normal UI refreshes must not restart
   // the accelerometer, environmental sensor, or fuel gauge.
+  // A sensor library must not be started on a dead bus or at an address that
+  // does not answer: some of them wait for the device without a timeout.
+  i2c_.recoverIfStormed();
   if (!accelerometer_ready_) {
     accelerometer_ready_ = accelerometer_.begin();
   }
-  if (!environment_ready_) {
+  i2c_.recoverIfStormed();
+  if (!environment_ready_ && (i2c_.probe(0x76) || i2c_.probe(0x77))) {
     environment_ready_ = environment_.begin();
   }
-  if (!fuel_gauge_ready_) {
+  i2c_.recoverIfStormed();
+  if (!fuel_gauge_ready_ && i2c_.probe(MAX17048_I2CADDR_DEFAULT)) {
     fuel_gauge_ready_ = fuel_gauge_.begin();
   }
+  i2c_.recoverIfStormed();
 }
 
 bool WatchDiagnostics::printAccelerometer(Print& out) {
@@ -148,6 +154,10 @@ void WatchDiagnostics::runAll(Print& out) {
   printPass(out, i2c_count >= 3);
   out.print(F("I2C device count = "));
   out.println(i2c_count);
+  if (i2c_.stormsRecovered() != 0) {
+    out.print(F("[WARN] I2C interrupt storms broken since boot: "));
+    out.println(i2c_.stormsRecovered());
+  }
   uint8_t passed = 0;
   passed += printAccelerometer(out);
   passed += printEnvironment(out);

@@ -1,5 +1,7 @@
 #include "i2c_devices.h"
 
+#include "watch_watchdog.h"
+
 I2cBus::I2cBus(TwoWire& wire) : wire_(wire) {}
 
 void I2cBus::begin() {
@@ -7,7 +9,21 @@ void I2cBus::begin() {
   wire_.setClock(400000);
 }
 
+bool I2cBus::recoverIfStormed() {
+  const uint32_t storms = watchI2cStormCount();
+  if (storms == storms_seen_) {
+    return false;
+  }
+  storms_seen_ = storms;
+  // end() resets the HAL handle left busy by the broken transfer; begin()
+  // clocks out a slave that is still holding SDA and sets the bus up again.
+  wire_.end();
+  begin();
+  return true;
+}
+
 bool I2cBus::probe(uint8_t address) {
+  recoverIfStormed();
   wire_.beginTransmission(address);
   return wire_.endTransmission() == 0;
 }
