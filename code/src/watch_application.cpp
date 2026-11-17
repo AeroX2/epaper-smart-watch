@@ -121,7 +121,7 @@ void WatchApplication::printHelp() {
   Serial.println(F("Actuators only run on explicit v/b commands."));
   Serial.println(F("Pattern tests require x and end in booster-off standby."));
   Serial.println(F("Boot clears the panel and renders the clock automatically."));
-  Serial.println(F("Physical corners: TL=2 previous, TR=3 next, BL=1 home, BR=4 select."));
+  Serial.println(F("Physical corners: TL=2 next, TR=3 previous, BL=1 home, BR=4 select."));
   Serial.println(F("Diagonal \\: pinch=previous, hold=select."));
   Serial.println(F("Diagonal /: pinch=next, hold=back/home."));
 }
@@ -1176,8 +1176,8 @@ void WatchApplication::handleButton(size_t index, bool long_press) {
   }
   switch (index) {
     case 0: ui_.home(); break;
-    case 1: applyUiAction(ui_.previous(model_)); break;
-    case 2: applyUiAction(ui_.next(model_)); break;
+    case 1: applyUiAction(ui_.next(model_)); break;
+    case 2: applyUiAction(ui_.previous(model_)); break;
     case 3: applyUiSelection(); break;
     default: return;
   }

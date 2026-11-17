@@ -6,8 +6,8 @@ namespace {
 
 constexpr uint32_t BUTTON_PINS[] = {
     BoardPins::BUTTON_1,  // bottom-left: Home
-    BoardPins::BUTTON_2,  // top-left: Previous
-    BoardPins::BUTTON_3,  // top-right: Next
+    BoardPins::BUTTON_2,  // top-left: Next
+    BoardPins::BUTTON_3,  // top-right: Previous
     BoardPins::BUTTON_4,  // bottom-right: Select
 };
 

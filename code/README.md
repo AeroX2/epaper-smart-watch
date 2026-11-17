@@ -306,8 +306,8 @@ The four active-low buttons currently map as follows:
 
 | PCB button | Physical corner | Action |
 | --- | --- | --- |
-| 2 | Top-left | Browse: previous card. Inside: previous value/item |
-| 3 | Top-right | Browse: next card. Inside: next value/item |
+| 2 | Top-left | Browse: next card. Inside: next value/item |
+| 3 | Top-right | Browse: previous card. Inside: previous value/item |
 | 1 | Bottom-left | Inside: back to card. Browse: return to clock |
 | 4 | Bottom-right | Clock: open carousel. Browse: enter card. Inside: activate |
 
