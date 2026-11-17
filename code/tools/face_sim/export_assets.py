@@ -29,6 +29,10 @@ ICON_NAMES = [
 TTFS = {
     "regular": "AtkinsonHyperlegibleNext-Regular.ttf",
     "extrabold": "AtkinsonHyperlegibleNext-ExtraBold.ttf",
+    # Simulator only: a second typeface to try faces in. The firmware has no
+    # bitmaps for it until it is added to generate_ui_assets.py.
+    "archivo-regular": "archivo/Archivo-Medium.ttf",
+    "archivo-extrabold": "archivo/Archivo-ExtraBold.ttf",
 }
 
 
