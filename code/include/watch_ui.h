@@ -153,6 +153,32 @@ class MonochromeCanvas {
                 bool black = true);
   void circle(int16_t center_x, int16_t center_y, int16_t radius,
               bool black = true);
+  void fillCircle(int16_t center_x, int16_t center_y, int16_t radius,
+                  bool black = true);
+
+  // How much of a filled area is black. The dither patterns are fixed to
+  // the panel grid, so neighbouring areas line up. Shaded fills are opaque:
+  // they write the white pixels of the pattern as well as the black ones.
+  enum class Shade : uint8_t {
+    White,
+    Dither12,
+    Dither25,
+    Dither50,
+    Dither75,
+    Black,
+    Rows2,         // a black row every 2 rows
+    Rows3,         // a black row every 3 rows
+    Rows3Inverse,  // a white row every 3 rows
+  };
+  struct PolygonPoint {
+    float x;
+    float y;
+  };
+  static constexpr uint8_t MAX_POLYGON_POINTS = 12;
+  void shadeRect(int16_t x, int16_t y, int16_t width, int16_t height,
+                 Shade shade);
+  // Even-odd scanline fill; the polygon is closed automatically.
+  void fillPolygon(const PolygonPoint* points, uint8_t count, Shade shade);
 
   int16_t textWidth(const char* value, uint8_t scale = 1) const;
   void text(const char* value, int16_t x, int16_t y, uint8_t scale = 1,
@@ -175,6 +201,8 @@ class MonochromeCanvas {
  private:
   static uint8_t glyphColumn(char character, uint8_t column);
   static bool insidePanel(int16_t x, int16_t y);
+  static bool shadeAt(Shade shade, int16_t x, int16_t y);
+  void backgroundPixel(int16_t x, int16_t y, bool black);
   void character(char value, int16_t x, int16_t y, uint8_t scale,
                  bool black);
 
@@ -206,6 +234,8 @@ class WatchUi {
 
  private:
   void drawClock(const WatchUiModel& model);
+  void drawClassicClock(const WatchUiModel& model);
+  void drawLakeClock(const WatchUiModel& model);
   void drawLauncher(const WatchUiModel& model);
   void drawNotifications(const WatchUiModel& model);
   void drawTimer(const WatchUiModel& model);

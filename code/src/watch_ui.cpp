@@ -132,7 +132,7 @@ constexpr int16_t COLON_RADIUS = 5;
 constexpr int16_t COLON_SPREAD = 10;  // digit middle to each dot's centre
 constexpr int16_t COLON_NUDGE = 0;    // rows to raise both dots
 constexpr int16_t EVENT_TOP = 99;
-constexpr int16_t EVENT_MAX_WIDTH = 150;
+constexpr int16_t EVENT_MAX_WIDTH = 190;
 constexpr int16_t SKY_TOP = 110;   // first row of the dusk and dawn bands
 constexpr int16_t SHORE_Y = 164;   // waterline
 constexpr float LEFT_PEAK_X = 70;
@@ -161,11 +161,11 @@ constexpr int16_t SUNRISE_MINUTES = 6 * 60;
 constexpr int16_t SUNSET_MINUTES = 18 * 60;
 
 constexpr int16_t STARS[][2] = {
-    {22, 70},   {30, 100},  {14, 112},  {215, 64},  {224, 96},  {206, 112},
-    {60, 116},  {100, 112}, {176, 114}, {36, 128},  {222, 126}, {18, 140},
+    {22, 70},   {16, 100},  {14, 112},  {215, 64},  {224, 96},  {222, 112},
+    {60, 120},  {100, 122}, {176, 120}, {36, 128},  {222, 126}, {18, 140},
     {130, 118}, {208, 142}, {46, 146},  {196, 150},
 };
-constexpr int16_t BIG_STARS[][2] = {{26, 86}, {214, 82}, {44, 114}, {186, 122}};
+constexpr int16_t BIG_STARS[][2] = {{26, 86}, {214, 82}, {44, 120}, {186, 124}};
 // x, rows below the waterline, length
 constexpr int16_t RIPPLES[][3] = {
     {28, 12, 14}, {60, 20, 12}, {130, 21, 16}, {168, 18, 10}, {76, 15, 8},
