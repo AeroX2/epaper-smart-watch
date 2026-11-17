@@ -151,6 +151,8 @@ class WeatherBridge(
             connection.connectTimeout = 10_000
             connection.readTimeout = 10_000
             connection.setRequestProperty("Accept", "application/json")
+            // Open-Meteo answers HTTP 403 to Android's default "Dalvik/..." agent.
+            connection.setRequestProperty("User-Agent", USER_AGENT)
             val code = connection.responseCode
             if (code != HttpURLConnection.HTTP_OK) throw IllegalStateException("HTTP $code")
             return connection.inputStream.bufferedReader().use { it.readText() }
@@ -194,6 +196,7 @@ class WeatherBridge(
 
     companion object {
         private const val TAG = "WeatherBridge"
+        private const val USER_AGENT = "epaper-watch-companion/1.0"
         private const val STALE_LOCATION_MS = 3L * 60 * 60 * 1000
         private const val CACHE_VALID_MS = 3L * 60 * 60 * 1000
 
