@@ -782,6 +782,11 @@ void WatchUi::render(const WatchUiModel& model) {
     drawOta(model);
     return;
   }
+  if (model.notification_peek && model.notification_count > 0 &&
+      !model.alarm_ringing) {
+    drawNotificationPeek(model);
+    return;
+  }
   if (screen_ != WatchScreen::Clock && !inside_) {
     drawLauncher(model);
     return;
@@ -1395,6 +1400,23 @@ void WatchUi::drawNotifications(const WatchUiModel& model) {
              model.notification_count);
     canvas_.centeredFontText(WatchAssets::Ui16, position, 120, 172);
   }
+}
+
+// The newest notification, shown briefly over whatever screen is current
+// when it arrives with an alert. Same layout as the Messages card, without
+// its footer: any button just closes it.
+void WatchUi::drawNotificationPeek(const WatchUiModel& model) {
+  const WatchNotification& notification = model.notifications[0];
+  drawCardFrame(notification.app[0] != '\0' ? notification.app : "MESSAGE",
+                "");
+  int16_t body_y = 50;
+  if (notification.title[0] != '\0') {
+    canvas_.centeredFittedFontText(WatchAssets::Bold22, notification.title,
+                                   120, 42, 176);
+    body_y = 72;
+  }
+  drawWrappedText(WatchAssets::Ui16, notification.text, 120, body_y, 184,
+                  body_y == 72 ? 4 : 5, 22);
 }
 
 void WatchUi::drawCall(const WatchUiModel& model) {

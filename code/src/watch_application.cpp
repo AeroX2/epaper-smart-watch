@@ -227,6 +227,12 @@ uint32_t WatchApplication::sleepBudgetMs() {
     consider(250);  // prompt / chunk time-outs and the reboot delay
   }
   consider(alarm_.msUntilNextEvent(now));
+  if (peek_pending_) {
+    return 1;
+  }
+  if (model_.notification_peek) {
+    consider(remaining(NOTIFICATION_PEEK_MS, now - peek_since_ms_));
+  }
   if (display_controller_.active() && ui_.screen() == WatchScreen::Clock &&
       model_.time_valid) {
     consider(rtc_.msUntilNextMinute());  // the only time-dependent screen
@@ -815,14 +821,20 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
                         update.text_b, update.text_c);
       if (n[1] == 1) {
         // New arrival: vibration follows its own setting, quiet mode only
-        // silences the tone. Still no e-paper refresh.
+        // silences the tone.
         alarm_.notifyAlert(model_.vibration_on,
                            model_.quiet_mode ? 0 : model_.alert_tone);
+        Serial.print(F("Notification alert: "));
+        Serial.print(update.text_a);
+        Serial.print(F(" / "));
+        Serial.println(update.text_b);
+        // Show it for a few seconds, unless the Messages card is already
+        // open. The loop draws it once this batch of updates is done, so
+        // no e-paper refresh starts from inside BLE processing.
+        if (!(screen == WatchScreen::Notifications && ui_.isInside())) {
+          peek_pending_ = true;
+        }
       }
-      // A notification should neither steal the screen nor begin a
-      // multi-second e-paper refresh from inside BLE processing. The clock
-      // picks up its small pending-message indicator on the next
-      // minute/input refresh.
       return false;
     case PhoneUpdateType::NotifyClear:
       if (n[0] == 0) {
@@ -966,6 +978,40 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
     default:
       return false;
   }
+}
+
+// Draws a newly alerted notification over the current screen, and draws the
+// screen underneath again once NOTIFICATION_PEEK_MS has passed.
+void WatchApplication::serviceNotificationPeek() {
+  if (peek_pending_) {
+    peek_pending_ = false;
+    if (display_controller_.active() && model_.notification_count > 0 &&
+        !model_.call_active && !model_.alarm_ringing &&
+        !ota_.screenShown()) {
+      model_.notification_peek = true;
+      renderUi();
+      // Counted from when the refresh finished, so it is on screen for the
+      // whole time.
+      peek_since_ms_ = millis();
+    }
+    return;
+  }
+  if (model_.notification_peek &&
+      millis() - peek_since_ms_ >= NOTIFICATION_PEEK_MS) {
+    endNotificationPeek();
+  }
+}
+
+// Returns whether a peek was showing.
+bool WatchApplication::endNotificationPeek() {
+  if (!model_.notification_peek) {
+    return false;
+  }
+  model_.notification_peek = false;
+  if (display_controller_.active()) {
+    renderUi();
+  }
+  return true;
 }
 
 void WatchApplication::processPhoneUpdates() {
@@ -1157,6 +1203,10 @@ void WatchApplication::handleButton(size_t index) {
     Serial.println(F("Find my watch: stopped by button."));
     return;
   }
+  // Any button just closes a notification that is being shown briefly.
+  if (endNotificationPeek()) {
+    return;
+  }
   if (model_.alarm_ringing) {
     if (index == 0) {
       alarm_.dismiss(Serial);
@@ -1276,6 +1326,7 @@ void WatchApplication::loop() {
   model_.bluetooth_enabled = ble_.ready();
   model_.bluetooth_connected = ble_.connected();
   processPhoneUpdates();
+  serviceNotificationPeek();
   servicePhoneLink();
   if (ble_.takeBondChange()) {
     // A phone has just paired: keep its key (flash work stays out of the

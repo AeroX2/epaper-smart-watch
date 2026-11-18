@@ -111,6 +111,10 @@ struct WatchUiModel {
   WatchNotification notifications[MAX_NOTIFICATIONS]{};
   uint8_t notification_count = 0;
 
+  // The newest notification is shown over the current screen for a few
+  // seconds after it arrives with an alert (WatchApplication ends it).
+  bool notification_peek = false;
+
   bool call_active = false;
   char call_caller[29]{};
 
@@ -249,6 +253,7 @@ class WatchUi {
   void drawActivity(const WatchUiModel& model);
   void drawSettings(const WatchUiModel& model);
   void drawCall(const WatchUiModel& model);
+  void drawNotificationPeek(const WatchUiModel& model);
   void drawOta(const WatchUiModel& model);
   void drawUpcoming(const WatchUiModel& model, int16_t y);
   void drawWrappedText(const BitmapFont& font, const char* text,

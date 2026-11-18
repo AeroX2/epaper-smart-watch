@@ -132,6 +132,14 @@ class WatchApplication {
   uint32_t music_base_position_ = 0;
   uint32_t music_base_ms_ = 0;
 
+  // A notification that arrived with an alert is shown over the current
+  // screen this long, then the screen underneath is drawn again.
+  static constexpr uint32_t NOTIFICATION_PEEK_MS = 5000;
+  bool peek_pending_ = false;  // set by BLE processing, drawn by the loop
+  uint32_t peek_since_ms_ = 0;
+  void serviceNotificationPeek();
+  bool endNotificationPeek();
+
   // Front light switches itself off this long after it was turned on or a
   // button was last pressed.
   static constexpr uint32_t DISPLAY_LIGHT_TIMEOUT_MS = 30000;
