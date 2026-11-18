@@ -50,6 +50,8 @@
         </intent>
         <!-- Health Connect provider app (Android 9-13; part of the system from 14). -->
         <package android:name="com.google.android.apps.healthdata" />
+        <!-- Pixel Camera, for the watch's Camera app in Pixel Camera mode. -->
+        <package android:name="com.google.android.GoogleCamera" />
     </queries>
 
     <application
@@ -120,6 +122,21 @@
             android:name=".WatchLinkService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- Optional: presses Pixel Camera's shutter for the watch's Camera app. Enabled by
+             the user in Accessibility settings; limited to Pixel Camera by its config. -->
+        <service
+            android:name=".bridge.PixelCameraShutter"
+            android:exported="false"
+            android:label="@string/camera_shutter_service"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/camera_shutter_service" />
+        </service>
 
         <service
             android:name=".WatchNotificationListener"

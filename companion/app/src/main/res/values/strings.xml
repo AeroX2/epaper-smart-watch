@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">E-Paper Watch</string>
+    <string name="camera_shutter_service">Watch camera shutter</string>
+    <string name="camera_shutter_description">Lets the watch\'s Camera app press the shutter in Pixel Camera. It only looks at the Pixel Camera screen, only to find the shutter button, and only taps it when you press select on the watch. Nothing it sees is stored or sent anywhere.</string>
 </resources>

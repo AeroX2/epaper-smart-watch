@@ -30,6 +30,7 @@ import com.james.epaperwatch.WatchLinkService
 import com.james.epaperwatch.WatchNotificationListener
 import com.james.epaperwatch.bridge.CalendarBridge
 import com.james.epaperwatch.bridge.PhoneLocation
+import com.james.epaperwatch.bridge.PixelCameraShutter
 import com.james.epaperwatch.data.Prefs
 import com.james.epaperwatch.data.WatchState
 import com.james.epaperwatch.health.StepSync
@@ -69,6 +70,8 @@ class MainActivity : Activity() {
     private lateinit var forwardSwitch: Switch
     private lateinit var redactSwitch: Switch
     private lateinit var messagesOnlySwitch: Switch
+    private lateinit var cameraPixelSwitch: Switch
+    private lateinit var cameraPixelNote: TextView
     private lateinit var callsSwitch: Switch
     private lateinit var rejectSwitch: Switch
     private lateinit var calendarSwitch: Switch
@@ -534,6 +537,15 @@ class MainActivity : Activity() {
         forwardSwitch.isChecked = prefs.forwardNotifications
         redactSwitch.isChecked = prefs.redactCodes
         messagesOnlySwitch.isChecked = prefs.messagesOnly
+        cameraPixelSwitch.isChecked = prefs.cameraPixel
+        val shutterOn = PixelCameraShutter.isEnabled(this)
+        cameraPixelNote.text = when {
+            !prefs.cameraPixel -> "The watch uses this app's own camera screen."
+            shutterOn -> "Pixel Camera opens and the watch presses its shutter."
+            else -> "Turn on \"Watch camera shutter\" under Accessibility (tap the button). " +
+                "Until then the watch uses this app's own camera screen."
+        }
+        cameraPixelNote.setTextColor(if (prefs.cameraPixel && !shutterOn) Ui.ALERT else Ui.MUTED)
         callsSwitch.isChecked = prefs.forwardCalls
         rejectSwitch.isChecked = prefs.rejectCalls && hasCallPermission()
         rejectSwitch.isEnabled = Build.VERSION.SDK_INT >= 28
@@ -730,6 +742,26 @@ class MainActivity : Activity() {
             }
         }
         root.addView(rejectSwitch)
+
+        // ---- Camera ----
+        root.addView(ui.section("CAMERA", "The watch's Camera app"))
+        cameraPixelSwitch = ui.switchRow(
+            "Use Pixel Camera",
+            "Opens Pixel Camera and presses its shutter. Needs an accessibility service",
+        ) { _, on ->
+            if (rendering) return@switchRow
+            prefs.cameraPixel = on
+            if (on && !PixelCameraShutter.isEnabled(this)) {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+            render()
+        }
+        root.addView(cameraPixelSwitch)
+        cameraPixelNote = ui.note("")
+        root.addView(cameraPixelNote)
+        root.addView(ui.button("Accessibility settings", primary = false) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        })
 
         // ---- Calendar ----
         root.addView(ui.section("CALENDAR", "Next event"))

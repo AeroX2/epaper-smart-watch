@@ -44,6 +44,10 @@ class Prefs(context: Context) {
     var messagesOnly: Boolean
         get() = sp.getBoolean("messages_only", true)
         set(value) = sp.edit().putBoolean("messages_only", value).apply()
+    /** The watch's Camera app uses Pixel Camera (needs PixelCameraShutter) instead of our own. */
+    var cameraPixel: Boolean
+        get() = sp.getBoolean("camera_pixel", false)
+        set(value) = sp.edit().putBoolean("camera_pixel", value).apply()
     var redactCodes: Boolean
         get() = sp.getBoolean("redact_codes", true)
         set(value) = sp.edit().putBoolean("redact_codes", value).apply()

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only Pixel Camera's windows are visible to the service (packageNames). It needs the
+     window content to find the shutter button, and gestures as a fallback tap. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/camera_shutter_description"
+    android:notificationTimeout="200"
+    android:packageNames="com.google.android.GoogleCamera" />
