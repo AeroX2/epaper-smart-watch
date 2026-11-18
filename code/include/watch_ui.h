@@ -10,8 +10,6 @@ enum class WatchScreen : uint8_t {
   Timer,
   Alarms,
   Music,
-  Weather,
-  Sensors,
   Activity,
   FindPhone,
   Settings,
@@ -249,8 +247,6 @@ class WatchUi {
   void drawTimer(const WatchUiModel& model);
   void drawAlarms(const WatchUiModel& model);
   void drawMusic(const WatchUiModel& model);
-  void drawWeather(const WatchUiModel& model);
-  void drawSensors(const WatchUiModel& model);
   void drawActivity(const WatchUiModel& model);
   void drawSettings(const WatchUiModel& model);
   void drawFindPhone(const WatchUiModel& model);

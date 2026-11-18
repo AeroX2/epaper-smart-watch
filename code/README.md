@@ -308,11 +308,13 @@ The four active-low buttons currently map as follows:
 | --- | --- | --- |
 | 2 | Top-left | Browse: next card. Inside: next value/item |
 | 3 | Top-right | Browse: previous card. Inside: previous value/item |
-| 1 | Bottom-left | Inside: back to card. Browse: return to clock. Clock: press twice within 0.6 s to switch the LED ring on or off |
-| 4 | Bottom-right | Clock: open carousel. Browse: enter card. Inside: activate |
+| 4 | Bottom-right | Home: inside: back to card. Browse: return to clock. Clock: press twice within 0.6 s to switch the LED ring on or off |
+| 1 | Bottom-left | Select: clock: open carousel. Browse: enter card. Inside: activate |
 
 Each press acts when the button is released. There are no long presses and no two-button gestures.
-While an alarm rings, bottom-left dismisses it and bottom-right snoozes it.
+While an alarm rings, bottom-right (home) dismisses it and bottom-left (select) snoozes it. The
+roles are set by the order of `BUTTON_PINS` in `watch_buttons.cpp`. Holding PCB button 1 during
+reset for DFU is a bootloader feature and is unchanged.
 
 Console equivalents are `[` for previous, `]` for next, `m` for home, `o` for select, and `u` to
 redraw the current screen. Button inputs use a 35 ms debounce interval. PB4 is restored to its
@@ -324,7 +326,8 @@ entry. This keeps the button meanings deterministic: PREV/NEXT never trigger an 
 browsing, and never leave the current card while inside it.
 
 Implemented screens mirror the browser playground: clock, notification, timer, alarms, music,
-weather, sensors, activity, find phone, and settings. Temperature, humidity, pressure, acceleration, battery
+activity, find phone, and settings (the phone's weather and the BME280 readings appear on the
+clock face). Temperature, humidity, pressure, acceleration, battery
 percentage, battery voltage, time, timer state, alarms, and steps are live watch data. Phone
 notifications, forecast data, time sync, and music metadata/control use the companion BLE link.
 
@@ -546,11 +549,11 @@ verify if the controller logic works but the booster does not.
 
 1. Install the combined factory image once, then use `tools/usb_dfu_update.py` for later application builds.
 2. Confirm the automatic peripheral test completes and `j` reports a plausible retained time.
-3. Press `u` once. Use the top buttons (PCB 2/3) to browse the eight cards; bottom-left (PCB 1)
+3. Press `u` once. Use the top buttons (PCB 2/3) to browse the seven cards; bottom-right (PCB 4)
    returns to the clock.
-4. Browse to Timer, press bottom-right (PCB 4) to enter it, adjust with the top buttons, then press
-   bottom-right to start. Bottom-left backs out to the Timer card; a second press returns to the clock. Verify vibration/buzzer at zero,
-   button 4 snoozes, and button 1 dismisses.
+4. Browse to Timer, press bottom-left (PCB 1) to enter it, adjust with the top buttons, then press
+   bottom-left to start. Bottom-right backs out to the Timer card; a second press returns to the clock. Verify vibration/buzzer at zero,
+   button 1 snoozes, and button 4 dismisses.
 5. Set a near-future alarm with `!HH:MM`, then test the same alarm controls.
 6. Press `r`; wait for `BLE advertising as "E-Paper Watch"`.
 7. Install/open the companion, grant nearby-device and notification permissions, and Connect.

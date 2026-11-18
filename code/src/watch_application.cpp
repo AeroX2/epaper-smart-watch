@@ -288,8 +288,7 @@ void WatchApplication::updateUiSensors() {
   // at most every few minutes unless a screen with live values is up.
   const WatchScreen screen = ui_.screen();
   const uint32_t now = millis();
-  if (screen == WatchScreen::Sensors || screen == WatchScreen::Weather ||
-      !model_.environment_valid ||
+  if (!model_.environment_valid ||
       now - environment_read_ms_ >= ENVIRONMENT_INTERVAL_MS) {
     environment_read_ms_ = now;
     EnvironmentReading environment{};
@@ -878,7 +877,7 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
           (update.utc >= 8000 && update.utc <= 11000)
               ? static_cast<uint16_t>(update.utc)
               : 0;
-      return screen == WatchScreen::Weather || screen == WatchScreen::Clock;
+      return screen == WatchScreen::Clock;
     case PhoneUpdateType::Music:
       model_.music_state = static_cast<MusicState>(n[0]);
       music_base_position_ = static_cast<uint32_t>(n[1]);

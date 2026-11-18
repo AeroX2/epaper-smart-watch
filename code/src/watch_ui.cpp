@@ -41,14 +41,13 @@ const BitmapFont& fontForScale(uint8_t scale) {
 
 constexpr const char* SCREEN_LABELS[] = {
     "CLOCK", "MESSAGES", "TIMER", "ALARMS", "MUSIC",
-    "WEATHER", "SENSORS", "ACTIVITY", "FIND PHONE", "SETTINGS",
+    "ACTIVITY", "FIND PHONE", "SETTINGS",
 };
 
 constexpr WatchIcon SCREEN_ICONS[] = {
     WatchIcon::Notifications, WatchIcon::Notifications, WatchIcon::Timer,
-    WatchIcon::Alarms,        WatchIcon::Music,         WatchIcon::Weather,
-    WatchIcon::Sensors,       WatchIcon::Activity,      WatchIcon::Phone,
-    WatchIcon::Settings,
+    WatchIcon::Alarms,        WatchIcon::Music,         WatchIcon::Activity,
+    WatchIcon::Phone,         WatchIcon::Settings,
 };
 static_assert(sizeof(SCREEN_LABELS) / sizeof(SCREEN_LABELS[0]) ==
                   static_cast<size_t>(WatchScreen::Count),
@@ -1019,12 +1018,6 @@ void WatchUi::render(const WatchUiModel& model) {
     case WatchScreen::Music:
       drawMusic(model);
       break;
-    case WatchScreen::Weather:
-      drawWeather(model);
-      break;
-    case WatchScreen::Sensors:
-      drawSensors(model);
-      break;
     case WatchScreen::Activity:
       drawActivity(model);
       break;
@@ -1065,7 +1058,7 @@ void WatchUi::clampNotificationIndex(uint8_t count) {
 const char* WatchUi::screenName() const {
   static constexpr const char* NAMES[] = {
       "clock", "notifications", "timer",    "alarms",  "music",
-      "weather", "sensors",       "activity", "find phone", "settings",
+      "activity", "find phone", "settings",
   };
   const uint8_t index = static_cast<uint8_t>(screen_);
   return index < static_cast<uint8_t>(WatchScreen::Count)
@@ -1504,14 +1497,6 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
                : model.music_state == MusicState::Paused ? "PAUSED"
                                                          : "NOTHING PLAYING");
       break;
-    case WatchScreen::Weather:
-      snprintf(status, sizeof(status), "%s",
-               model.phone_weather_valid ? model.weather_condition
-                                         : "PHONE DATA");
-      break;
-    case WatchScreen::Sensors:
-      snprintf(status, sizeof(status), "LIVE READINGS");
-      break;
     case WatchScreen::Activity:
       snprintf(status, sizeof(status), "%lu STEPS",
                static_cast<unsigned long>(model.steps));
@@ -1844,78 +1829,36 @@ void WatchUi::drawMusic(const WatchUiModel& model) {
                        112);
     }
   }
-  canvas_.text("|<", 54, 139, 2);
-  canvas_.circle(120, 146, 22);
+  using Point = MonochromeCanvas::PolygonPoint;
+  using Shade = MonochromeCanvas::Shade;
+  constexpr int16_t CY = 146;
+  // Previous: bar then a left-pointing triangle; next mirrors it.
+  canvas_.fillRect(57, CY - 9, 3, 19);
+  const Point previous[] = {{75.5f, CY - 9.5f}, {75.5f, CY + 10.5f},
+                            {60.0f, CY + 0.5f}};
+  canvas_.fillPolygon(previous, 3, Shade::Black);
+  canvas_.fillRect(180, CY - 9, 3, 19);
+  const Point next[] = {{164.5f, CY - 9.5f}, {164.5f, CY + 10.5f},
+                        {180.0f, CY + 0.5f}};
+  canvas_.fillPolygon(next, 3, Shade::Black);
+
+  // Play / pause: white symbol in a filled circle.
+  canvas_.fillCircle(120, CY, 23);
   if (playing) {
-    canvas_.fillRect(113, 135, 5, 22);
-    canvas_.fillRect(123, 135, 5, 22);
+    canvas_.fillRect(111, CY - 10, 6, 21, false);
+    canvas_.fillRect(123, CY - 10, 6, 21, false);
   } else {
-    for (int16_t row = 0; row < 23; ++row) {
-      canvas_.line(113, 135 + row, 113 + row * 3 / 4, 135 + row);
-    }
+    // Its centroid sits on the circle centre, so it looks centred.
+    const Point play[] = {{113.0f, CY - 11.5f}, {113.0f, CY + 12.5f},
+                          {134.0f, CY + 0.5f}};
+    canvas_.fillPolygon(play, 3, Shade::White);
   }
-  canvas_.text(">|", 166, 139, 2);
   if (model.music_state != MusicState::None) {
     canvas_.centeredFontText(WatchAssets::Ui16, playing ? "PLAYING" : "PAUSED",
                              120, 178);
   }
 }
 
-void WatchUi::drawWeather(const WatchUiModel& model) {
-  drawCardFrame("SYDNEY", "PHONE DATA");
-  char buffer[20];
-  if (model.phone_weather_valid) {
-    snprintf(buffer, sizeof(buffer), "%dC", model.forecast_temperature_c);
-  } else if (model.environment_valid) {
-    snprintf(buffer, sizeof(buffer), "%dC", model.temperature_tenths_c / 10);
-  } else {
-    snprintf(buffer, sizeof(buffer), "--C");
-  }
-  canvas_.centeredText(buffer, 120, 50, 5);
-  canvas_.centeredFittedFontText(WatchAssets::Ui16, model.weather_condition,
-                                120, 94, 178);
-  if (model.phone_weather_valid) {
-    snprintf(buffer, sizeof(buffer), "H %dC  L %dC", model.forecast_high_c,
-             model.forecast_low_c);
-  } else {
-    snprintf(buffer, sizeof(buffer), "PHONE FORECAST --");
-  }
-  canvas_.centeredText(buffer, 120, 112, 1);
-  canvas_.text("12H", 58, 143, 1);
-  canvas_.text("19C", 58, 157, 1);
-  canvas_.text("15H", 108, 143, 1);
-  canvas_.text("18C", 108, 157, 1);
-  canvas_.text("18H", 158, 143, 1);
-  canvas_.text("16C", 158, 157, 1);
-  canvas_.centeredText("RAIN 10%", 120, 181, 1);
-}
-
-void WatchUi::drawSensors(const WatchUiModel& model) {
-  drawCardFrame("SENSORS", "AMBIENT AIR");
-  char buffer[24];
-  canvas_.text("PRESS", 47, 58, 1);
-  snprintf(buffer, sizeof(buffer), model.environment_valid ? "%u HPA" : "--",
-           model.pressure_hpa);
-  canvas_.text(buffer, 130, 58, 1);
-  canvas_.line(47, 79, 193, 79);
-
-  canvas_.text("TEMP", 47, 93, 1);
-  if (model.environment_valid) {
-    snprintf(buffer, sizeof(buffer), "%d.%d C",
-             model.temperature_tenths_c / 10,
-             abs(model.temperature_tenths_c % 10));
-  } else {
-    snprintf(buffer, sizeof(buffer), "--");
-  }
-  canvas_.text(buffer, 130, 93, 1);
-  canvas_.line(47, 114, 193, 114);
-
-  canvas_.text("HUMID", 47, 128, 1);
-  snprintf(buffer, sizeof(buffer), model.environment_valid ? "%u%% RH" : "--",
-           model.humidity_percent);
-  canvas_.text(buffer, 130, 128, 1);
-  canvas_.line(47, 149, 193, 149);
-}
 
 void WatchUi::drawActivity(const WatchUiModel& model) {
   drawCardFrame("ACTIVITY", "10K GOAL");
