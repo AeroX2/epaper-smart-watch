@@ -1,5 +1,6 @@
 #include "watch_ui.h"
 
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -175,6 +176,204 @@ constexpr int16_t REEDS[][3] = {
     {36, -3, 19}, {41, 1, 23}, {46, 4, 17}, {208, -2, 19}, {214, 3, 16},
 };
 }  // namespace lake
+
+// Notification pop-up layout (code/tools/face_sim, "Notification pop-up").
+// Text is placed by the row where its capitals start, and every line is only
+// as wide as the round panel allows at its height.
+namespace peek {
+constexpr int16_t APP_TOP = 22;
+constexpr int16_t TITLE_TOP = 44;  // highest row the title may start on
+constexpr uint8_t TITLE_LINES = 2;
+constexpr int16_t TITLE_LINE_HEIGHT = 22;
+constexpr int16_t GAP_AFTER_TITLE = 10;
+constexpr int16_t BODY_LINE_HEIGHT = 25;
+constexpr int16_t BOTTOM = 216;  // nothing is drawn below this row
+constexpr int16_t MARGIN = 6;    // kept clear of the round edge
+constexpr float RADIUS = 118.0f;
+constexpr uint8_t MAX_LINES = 8;
+
+struct Line {
+  const BitmapFont* font;
+  int16_t top;
+  bool cut;
+  char text[64];
+};
+struct Layout {
+  Line lines[MAX_LINES];
+  uint8_t count;
+};
+
+const BitmapGlyph& glyphOf(const BitmapFont& font, char value) {
+  uint8_t character = static_cast<uint8_t>(value);
+  if (character < font.first_character || character > font.last_character) {
+    character = '?';
+  }
+  return font.glyphs[character - font.first_character];
+}
+
+int16_t capHeight(const BitmapFont& font) {
+  return glyphOf(font, 'H').height;
+}
+
+// Distance from the y passed to fontText to the top of the capitals.
+int16_t capOffset(const BitmapFont& font) {
+  return static_cast<int16_t>(font.ascent + glyphOf(font, 'H').y_offset);
+}
+
+int16_t spanWidth(const BitmapFont& font, const char* value, size_t length) {
+  int16_t width = 0;
+  for (size_t i = 0; i < length && value[i] != '\0'; ++i) {
+    width += glyphOf(font, value[i]).x_advance;
+  }
+  return width;
+}
+
+// The widest a line can be when it spans rows top..top+height.
+int16_t chord(int16_t top, int16_t height) {
+  const float far = fmaxf(fabsf(top - 120.0f), fabsf(top + height - 120.0f));
+  if (far >= RADIUS) {
+    return 0;
+  }
+  return static_cast<int16_t>(floorf(2.0f * sqrtf(RADIUS * RADIUS - far * far))) -
+         2 * MARGIN;
+}
+
+// Word wraps text into out, starting at row start. Words break after a
+// hyphen when that part fits; the last line is cut with "...". Returns the
+// number of lines added.
+uint8_t wrap(Layout& out, const BitmapFont& font, const char* text,
+             int16_t start, int16_t line_height, uint8_t max_lines,
+             int16_t cap_extra) {
+  const int16_t cap = capHeight(font);
+  const int16_t dots = spanWidth(font, "...", 3);
+  const char* cursor = text;
+  uint8_t used = 0;
+  while (used < max_lines && out.count < MAX_LINES) {
+    while (*cursor == ' ') {
+      ++cursor;
+    }
+    if (*cursor == '\0') {
+      break;
+    }
+    const int16_t top = static_cast<int16_t>(start + used * line_height);
+    const int16_t width = chord(top, static_cast<int16_t>(cap + cap_extra));
+    Line& line = out.lines[out.count];
+    line.font = &font;
+    line.top = top;
+    line.cut = false;
+    const char* line_start = cursor;
+    size_t take = 0;
+    if (used + 1 == max_lines) {
+      const size_t length = strlen(cursor);
+      take = length;
+      if (spanWidth(font, cursor, length) > width) {
+        while (take > 0 && spanWidth(font, cursor, take) + dots > width) {
+          --take;
+        }
+        line.cut = true;
+      }
+      while (take > 0 && cursor[take - 1] == ' ') {
+        --take;
+      }
+      cursor += length;
+    } else {
+      size_t end = 0;
+      for (;;) {
+        size_t word = end;
+        while (cursor[word] == ' ') {
+          ++word;
+        }
+        if (cursor[word] == '\0') {
+          break;
+        }
+        size_t word_end = word;
+        while (cursor[word_end] != '\0' && cursor[word_end] != ' ') {
+          ++word_end;
+        }
+        if (spanWidth(font, cursor, word_end) <= width) {
+          end = word_end;
+          continue;
+        }
+        size_t hyphen = 0;
+        for (size_t i = word + 1; i + 1 < word_end; ++i) {
+          if (cursor[i] == '-') {
+            hyphen = i;
+          }
+        }
+        if (hyphen != 0 && spanWidth(font, cursor, hyphen + 1) <= width) {
+          end = hyphen + 1;
+        } else if (end == 0) {
+          // One word wider than the line: break it.
+          end = word_end;
+          while (end > word + 1 && spanWidth(font, cursor, end) > width) {
+            --end;
+          }
+        }
+        break;
+      }
+      take = end;
+      cursor += end;
+    }
+    if (take > sizeof(line.text) - 4) {
+      take = sizeof(line.text) - 4;
+    }
+    memcpy(line.text, line_start, take);
+    line.text[take] = '\0';
+    if (line.cut) {
+      strcat(line.text, "...");
+    }
+    ++out.count;
+    ++used;
+  }
+  return used;
+}
+
+// Lays the title and body out with the title's first line at row start.
+void layout(Layout& out, const WatchNotification& notification,
+            int16_t start) {
+  out.count = 0;
+  int16_t next = start;
+  const BitmapFont& title_font = WatchAssets::Bold22;
+  const BitmapFont& body_font = WatchAssets::Ui20;
+  if (notification.title[0] != '\0') {
+    const uint8_t used = wrap(out, title_font, notification.title, start,
+                              TITLE_LINE_HEIGHT, TITLE_LINES, 4);
+    if (used > 0) {
+      next = static_cast<int16_t>(start + (used - 1) * TITLE_LINE_HEIGHT +
+                                  capHeight(title_font) + GAP_AFTER_TITLE);
+    }
+  }
+  int16_t body_lines =
+      static_cast<int16_t>((BOTTOM - next - capHeight(body_font)) /
+                               BODY_LINE_HEIGHT + 1);
+  if (body_lines < 1) {
+    body_lines = 1;
+  }
+  wrap(out, body_font, notification.text, next, BODY_LINE_HEIGHT,
+       static_cast<uint8_t>(body_lines), 5);
+}
+
+int16_t bottomOf(const Layout& layout) {
+  int16_t bottom = TITLE_TOP;
+  for (uint8_t i = 0; i < layout.count; ++i) {
+    const Line& line = layout.lines[i];
+    const int16_t line_bottom =
+        static_cast<int16_t>(line.top + capHeight(*line.font));
+    if (i == 0 || line_bottom > bottom) {
+      bottom = line_bottom;
+    }
+  }
+  return bottom;
+}
+
+uint8_t cutCount(const Layout& layout) {
+  uint8_t cuts = 0;
+  for (uint8_t i = 0; i < layout.count; ++i) {
+    cuts += layout.lines[i].cut ? 1 : 0;
+  }
+  return cuts;
+}
+}  // namespace peek
 
 }  // namespace
 
@@ -1403,20 +1602,50 @@ void WatchUi::drawNotifications(const WatchUiModel& model) {
 }
 
 // The newest notification, shown briefly over whatever screen is current
-// when it arrives with an alert. Same layout as the Messages card, without
-// its footer: any button just closes it.
+// when it arrives with an alert; any button closes it. The app name sits at
+// the top in capitals, the title takes up to two lines and the body is in a
+// larger font than the Messages card. Short notifications move down towards
+// the middle of the panel, where the lines are wider.
 void WatchUi::drawNotificationPeek(const WatchUiModel& model) {
   const WatchNotification& notification = model.notifications[0];
-  drawCardFrame(notification.app[0] != '\0' ? notification.app : "MESSAGE",
-                "");
-  int16_t body_y = 50;
-  if (notification.title[0] != '\0') {
-    canvas_.centeredFittedFontText(WatchAssets::Bold22, notification.title,
-                                   120, 42, 176);
-    body_y = 72;
+
+  char app[sizeof(notification.app)]{};
+  const char* app_source =
+      notification.app[0] != '\0' ? notification.app : "Message";
+  for (size_t i = 0; i + 1 < sizeof(app) && app_source[i] != '\0'; ++i) {
+    app[i] = static_cast<char>(toupper(static_cast<unsigned char>(app_source[i])));
   }
-  drawWrappedText(WatchAssets::Ui16, notification.text, 120, body_y, 184,
-                  body_y == 72 ? 4 : 5, 22);
+  const BitmapFont& small = WatchAssets::Ui16;
+  canvas_.centeredFittedFontText(
+      small, app, 120, peek::APP_TOP - peek::capOffset(small),
+      peek::chord(peek::APP_TOP, peek::capHeight(small) + 4));
+
+  // Static: two layouts are about 1 KB, too much for the stack.
+  static peek::Layout base;
+  static peek::Layout moved;
+  peek::layout(base, notification, peek::TITLE_TOP);
+  const peek::Layout* chosen = &base;
+  if (base.count > 0) {
+    const int16_t height =
+        static_cast<int16_t>(peek::bottomOf(base) - peek::TITLE_TOP);
+    const uint8_t base_cuts = peek::cutCount(base);
+    for (int16_t start = static_cast<int16_t>(
+             peek::TITLE_TOP + (peek::BOTTOM - peek::TITLE_TOP - height) / 2);
+         start > peek::TITLE_TOP; start -= 2) {
+      // Never move so far that more text gets cut off than at the top.
+      peek::layout(moved, notification, start);
+      if (peek::bottomOf(moved) <= peek::BOTTOM &&
+          peek::cutCount(moved) <= base_cuts && moved.count <= base.count) {
+        chosen = &moved;
+        break;
+      }
+    }
+  }
+  for (uint8_t i = 0; i < chosen->count; ++i) {
+    const peek::Line& line = chosen->lines[i];
+    canvas_.centeredFontText(*line.font, line.text, 120,
+                             line.top - peek::capOffset(*line.font));
+  }
 }
 
 void WatchUi::drawCall(const WatchUiModel& model) {

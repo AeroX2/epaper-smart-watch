@@ -44,6 +44,7 @@ struct BitmapIcon {
 
 namespace WatchAssets {
 extern const BitmapFont Ui16;
+extern const BitmapFont Ui20;
 extern const BitmapFont Bold22;
 extern const BitmapFont Bold36;
 extern const BitmapFont Clock64;

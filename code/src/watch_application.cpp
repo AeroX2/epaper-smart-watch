@@ -108,6 +108,7 @@ void WatchApplication::printHelp() {
   Serial.println(F("  r  start BLE advertising for the phone (up to 10 seconds)"));
   Serial.println(F("  q  probe external flash (JEDEC ID), config store, update state"));
   Serial.println(F("  t  play the next notification alert tone (1-5)"));
+  Serial.println(F("  n  show the next sample notification pop-up"));
   Serial.println(F("  p  forget the bonded phone (erase the stored link key)"));
   Serial.println(F("  f  reboot into resident STM32 USB DFU"));
   Serial.println(F("  %  hang on purpose (tests the watchdog and hang monitor)"));
@@ -1180,6 +1181,24 @@ void WatchApplication::handleCommand(char command) {
     case '0': setDeepSleepMode(DeepSleepMode::Off); break;
     case '1': setDeepSleepMode(DeepSleepMode::RadioOffOnly); break;
     case '2': setDeepSleepMode(DeepSleepMode::Always); break;
+    case 'n': case 'N': {
+      // Shows the next sample notification as a pop-up (no phone needed).
+      static constexpr const char* SAMPLES[][3] = {
+          {"Messages", "Alexandra Montgomery-Smith",
+           "Running about ten minutes late, save me a seat please!"},
+          {"Gmail", "Your order has shipped", "Arriving Thursday"},
+          {"Calendar", "", "Team stand-up in 10 minutes, room 4.02"},
+          {"WhatsApp", "Mum", "ok"},
+      };
+      static uint8_t sample = 0;
+      const char* const* chosen = SAMPLES[sample];
+      sample = static_cast<uint8_t>((sample + 1) % 4);
+      storeNotification(0, chosen[0], chosen[1], chosen[2]);
+      peek_pending_ = true;
+      Serial.print(F("Sample notification: "));
+      Serial.println(chosen[0]);
+      break;
+    }
     case 'h': case 'H': case '?': printHelp(); break;
     case '\r': case '\n': case ' ': case '\t': break;
     default:
