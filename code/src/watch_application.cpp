@@ -246,6 +246,9 @@ uint32_t WatchApplication::sleepBudgetMs() {
   if (model_.find_phone_active) {
     consider(remaining(FIND_PHONE_RING_MS, now - find_phone_since_ms_));
   }
+  if (select_press_armed_) {
+    consider(remaining(DOUBLE_PRESS_MS + 1, now - select_press_ms_));
+  }
   if (display_light_on_) {
     consider(remaining(DISPLAY_LIGHT_TIMEOUT_MS,
                        now - display_light_since_ms_));
@@ -1034,6 +1037,22 @@ void WatchApplication::serviceNotificationPeek() {
   }
 }
 
+// A single select on the clock (with music loaded) opens the app menu once
+// no second press came within DOUBLE_PRESS_MS.
+void WatchApplication::serviceSelectPress() {
+  if (!select_press_armed_ || millis() - select_press_ms_ <= DOUBLE_PRESS_MS) {
+    return;
+  }
+  select_press_armed_ = false;
+  if (ui_.screen() != WatchScreen::Clock || model_.notification_peek) {
+    return;
+  }
+  applyUiSelection();
+  if (display_controller_.active()) {
+    renderUi();
+  }
+}
+
 void WatchApplication::serviceFindPhone() {
   if (!model_.find_phone_active ||
       millis() - find_phone_since_ms_ < FIND_PHONE_RING_MS) {
@@ -1262,6 +1281,10 @@ void WatchApplication::handleButton(size_t index) {
       index == 0 && home_press_armed_ &&
       millis() - home_press_ms_ <= DOUBLE_PRESS_MS;
   home_press_armed_ = false;
+  const bool second_select_press = index == 3 && select_press_armed_ &&
+                                   millis() - select_press_ms_ <= DOUBLE_PRESS_MS;
+  // Any other press, or a late second one, drops a pending menu open.
+  select_press_armed_ = false;
   if (alarm_.stopFindAlert()) {
     Serial.println(F("Find my watch: stopped by button."));
     return;
@@ -1315,10 +1338,16 @@ void WatchApplication::handleButton(size_t index) {
   }
   if (index == 3 && ui_.screen() == WatchScreen::Clock &&
       model_.music_state != MusicState::None) {
-    // Play/pause from the clock: the face does not show music, so nothing
-    // needs redrawing.
-    applyUiSelection();
-    Serial.println(F("Clock: music play/pause."));
+    // With music loaded, a double press plays or pauses it. A single press
+    // still opens the app menu, once the double-press window has passed
+    // (serviceSelectPress). The face does not show music: no redraw.
+    if (second_select_press) {
+      applyUiAction(WatchUiAction::MediaPlayPause);
+      Serial.println(F("Clock: music play/pause."));
+    } else {
+      select_press_armed_ = true;
+      select_press_ms_ = millis();
+    }
     return;
   }
   switch (index) {
@@ -1408,6 +1437,7 @@ void WatchApplication::loop() {
   processPhoneUpdates();
   serviceNotificationPeek();
   serviceFindPhone();
+  serviceSelectPress();
   servicePhoneLink();
   if (ble_.takeBondChange()) {
     // A phone has just paired: keep its key (flash work stays out of the

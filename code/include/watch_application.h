@@ -158,5 +158,10 @@ class WatchApplication {
   static constexpr uint32_t DOUBLE_PRESS_MS = 600;
   bool home_press_armed_ = false;
   uint32_t home_press_ms_ = 0;
+  // Double press of select on the clock plays/pauses music; a single press
+  // opens the app menu after the window (only while music is loaded).
+  bool select_press_armed_ = false;
+  uint32_t select_press_ms_ = 0;
+  void serviceSelectPress();
   uint32_t environment_read_ms_ = 0;
 };

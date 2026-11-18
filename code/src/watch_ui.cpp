@@ -913,11 +913,8 @@ void WatchUi::showScreen(WatchScreen screen) {
 
 WatchUiAction WatchUi::select(WatchUiModel& model) {
   if (screen_ == WatchScreen::Clock) {
-    // With music loaded on the phone, select on the clock plays or pauses
-    // it; next and previous still open the app menu.
-    if (model.music_state != MusicState::None) {
-      return WatchUiAction::MediaPlayPause;
-    }
+    // A double press here plays or pauses music; WatchApplication handles
+    // that and only calls select() for a single press.
     screen_ = WatchScreen::Notifications;
     inside_ = false;
     return WatchUiAction::None;
