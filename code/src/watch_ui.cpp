@@ -1690,8 +1690,8 @@ void WatchUi::drawWrappedText(const BitmapFont& font, const char* text,
 void WatchUi::drawNotifications(const WatchUiModel& model) {
   if (model.notification_count == 0) {
     drawTitle("MESSAGES");
-    textAt(WatchAssets::LakeDate20, "ALL CLEAR", 120, 96);
-    textAt(WatchAssets::Ui16, "No notifications", 120, 126);
+    textAt(WatchAssets::LakeDate20, "ALL CLEAR", 120, 110);
+    textAt(WatchAssets::Ui16, "No notifications", 120, 140);
     return;
   }
   const uint8_t index = notification_index_ < model.notification_count
@@ -1867,40 +1867,40 @@ void WatchUi::drawTimer(const WatchUiModel& model) {
   snprintf(buffer, sizeof(buffer), "%02lu:%02lu",
            static_cast<unsigned long>(minutes),
            static_cast<unsigned long>(seconds));
-  textAt(WatchAssets::LakeClock62, buffer, 120, 78);
+  textAt(WatchAssets::LakeClock62, buffer, 120, running ? 88 : 104);
   if (running) {
     snprintf(buffer, sizeof(buffer), "OF %lu MIN",
              static_cast<unsigned long>((timer_total_seconds_ + 59) / 60));
-    textAt(WatchAssets::Ui16, buffer, 120, 132);
-    textAt(WatchAssets::LakeReading18, "RUNNING", 120, 158);
+    textAt(WatchAssets::Ui16, buffer, 120, 142);
+    textAt(WatchAssets::LakeReading18, "RUNNING", 120, 166);
   } else {
     // The top buttons set the minutes: top-left is next, top-right previous.
-    textAt(WatchAssets::LakeDate20, "+1", 70, 50);
-    textAt(WatchAssets::LakeDate20, "-1", 170, 50);
+    textAt(WatchAssets::LakeDate20, "+1", 70, 64);
+    textAt(WatchAssets::LakeDate20, "-1", 170, 64);
     textAt(WatchAssets::Ui16,
-           model.timer_remaining_seconds == 0 ? "DONE" : "MINUTES", 120, 132);
+           model.timer_remaining_seconds == 0 ? "DONE" : "MINUTES", 120, 158);
   }
 }
 
 void WatchUi::drawAlarms(const WatchUiModel& model) {
   drawTitle("ALARMS");
   // A small sunrise over the water.
-  canvas_.line(84, 62, 156, 62);
+  canvas_.line(84, 82, 156, 82);
   for (int16_t dy = 0; dy <= 12; ++dy) {
     const int16_t half =
         static_cast<int16_t>(floorf(sqrtf(static_cast<float>(144 - dy * dy))));
-    canvas_.line(120 - half, 61 - dy, 120 + half, 61 - dy);
+    canvas_.line(120 - half, 81 - dy, 120 + half, 81 - dy);
   }
   static constexpr int16_t RAYS[][4] = {
-      {100, 44, 96, 40}, {120, 42, 120, 36}, {140, 44, 144, 40},
-      {94, 54, 88, 52},  {146, 54, 152, 52},
+      {100, 64, 96, 60}, {120, 62, 120, 56}, {140, 64, 144, 60},
+      {94, 74, 88, 72},  {146, 74, 152, 72},
   };
   for (const auto& ray : RAYS) {
     canvas_.line(ray[0], ray[1], ray[2], ray[3]);
   }
   for (int16_t x = 96; x < 146; x += 4) {
-    canvas_.pixel(x, 66);
-    canvas_.pixel(x + 2, 70);
+    canvas_.pixel(x, 86);
+    canvas_.pixel(x + 2, 90);
   }
 
   // Rows: the time large on the left, which days beside it, a switch.
@@ -1911,7 +1911,7 @@ void WatchUi::drawAlarms(const WatchUiModel& model) {
   const char* days[] = {"MON-FRI", "SAT-SUN"};
   const bool on[] = {model.weekday_alarm_on, model.weekend_alarm_on};
   for (uint8_t row = 0; row < 2; ++row) {
-    const int16_t top = static_cast<int16_t>(89 + row * 40);
+    const int16_t top = static_cast<int16_t>(109 + row * 40);
     const bool selected = inside_ && selected_alarm_ == row;
     if (selected) {
       drawPill(26, top - 9, 188, 34);
@@ -1922,7 +1922,7 @@ void WatchUi::drawAlarms(const WatchUiModel& model) {
   }
 
   if (model.alarm_ringing) {
-    textAt(WatchAssets::LakeReading18, "RINGING", 120, 164);
+    textAt(WatchAssets::LakeReading18, "RINGING", 120, 184);
   } else if (model.next_alarm_utc != 0 && model.time_valid) {
     const uint32_t alarm =
         utcToLocal(model.next_alarm_utc, model.utc_offset_seconds);
@@ -1933,7 +1933,7 @@ void WatchUi::drawAlarms(const WatchUiModel& model) {
       snprintf(line, sizeof(line), "PHONE  %s", when);
       canvas_.centeredFittedFontText(
           WatchAssets::Ui16, line, 120,
-          164 - peek::capOffset(WatchAssets::Ui16), 160);
+          184 - peek::capOffset(WatchAssets::Ui16), 160);
     }
   }
 }
@@ -1942,9 +1942,9 @@ void WatchUi::drawMusic(const WatchUiModel& model) {
   const bool playing = model.music_state == MusicState::Playing;
   drawTitle("MUSIC");
   if (model.music_state == MusicState::None) {
-    textAt(WatchAssets::Bold22, "NOTHING", 120, 70);
-    textAt(WatchAssets::Bold22, "PLAYING", 120, 92);
-    textAt(WatchAssets::Ui16, "Start music on the phone", 120, 130);
+    textAt(WatchAssets::Bold22, "NOTHING", 120, 86);
+    textAt(WatchAssets::Bold22, "PLAYING", 120, 108);
+    textAt(WatchAssets::Ui16, "Start music on the phone", 120, 146);
     return;
   }
 
@@ -1952,11 +1952,11 @@ void WatchUi::drawMusic(const WatchUiModel& model) {
   static peek::Layout title;
   title.count = 0;
   const uint8_t lines =
-      peek::wrap(title, WatchAssets::Bold22, model.music_title, 44, 21, 2, 4);
+      peek::wrap(title, WatchAssets::Bold22, model.music_title, 60, 21, 2, 4);
   for (uint8_t i = 0; i < title.count; ++i) {
     textAt(WatchAssets::Bold22, title.lines[i].text, 120, title.lines[i].top);
   }
-  const int16_t artist_top = static_cast<int16_t>(lines >= 2 ? 91 : 72);
+  const int16_t artist_top = static_cast<int16_t>(lines >= 2 ? 107 : 88);
   canvas_.centeredFittedFontText(
       WatchAssets::Ui16, model.music_artist, 120,
       artist_top - peek::capOffset(WatchAssets::Ui16), 176);
@@ -1974,24 +1974,24 @@ void WatchUi::drawMusic(const WatchUiModel& model) {
                                  : static_cast<int32_t>(
                                        static_cast<uint64_t>(position) *
                                        (LINE_RIGHT - LINE_LEFT) / duration)));
-  canvas_.fillRect(LINE_LEFT, 112, LINE_RIGHT - LINE_LEFT, 1);
-  canvas_.fillRect(LINE_LEFT, 111, knob - LINE_LEFT, 3);
-  canvas_.fillCircle(knob, 112, 4);
+  canvas_.fillRect(LINE_LEFT, 128, LINE_RIGHT - LINE_LEFT, 1);
+  canvas_.fillRect(LINE_LEFT, 127, knob - LINE_LEFT, 3);
+  canvas_.fillCircle(knob, 128, 4);
   char time_value[12];
   snprintf(time_value, sizeof(time_value), "%lu:%02lu",
            static_cast<unsigned long>(position / 60),
            static_cast<unsigned long>(position % 60));
-  leftTextAt(WatchAssets::Ui16, time_value, LINE_LEFT, 120);
+  leftTextAt(WatchAssets::Ui16, time_value, LINE_LEFT, 136);
   if (duration != 0) {
     snprintf(time_value, sizeof(time_value), "%lu:%02lu",
              static_cast<unsigned long>(duration / 60),
              static_cast<unsigned long>(duration % 60));
-    rightTextAt(WatchAssets::Ui16, time_value, LINE_RIGHT, 120);
+    rightTextAt(WatchAssets::Ui16, time_value, LINE_RIGHT, 136);
   }
 
   using Point = MonochromeCanvas::PolygonPoint;
   using Shade = MonochromeCanvas::Shade;
-  constexpr int16_t CY = 152;
+  constexpr int16_t CY = 168;
   // Previous: bar then a left-pointing triangle; next mirrors it.
   canvas_.fillRect(64, CY - 8, 3, 17);
   const Point previous[] = {{81.5f, CY - 8.5f}, {81.5f, CY + 9.5f},
@@ -2026,22 +2026,22 @@ void WatchUi::drawActivity(const WatchUiModel& model) {
            static_cast<unsigned long>(model.steps));
   // Five digits are too wide for the clock numerals at this height.
   if (canvas_.fontTextWidth(WatchAssets::LakeClock62, buffer) <= 176) {
-    textAt(WatchAssets::LakeClock62, buffer, 120, 52);
+    textAt(WatchAssets::LakeClock62, buffer, 120, 68);
   } else {
-    textAt(WatchAssets::Bold36, buffer, 120, 64);
+    textAt(WatchAssets::Bold36, buffer, 120, 80);
   }
-  textAt(WatchAssets::Ui16, "STEPS  OF 10,000", 120, 106);
-  canvas_.fillRect(70, 128, 100, 1);
+  textAt(WatchAssets::Ui16, "STEPS  OF 10,000", 120, 122);
+  canvas_.fillRect(70, 144, 100, 1);
   // About 0.74 m and 0.041 kcal a step.
   const uint32_t metres = model.steps * 74 / 100;
   snprintf(buffer, sizeof(buffer), "%lu.%lu KM",
            static_cast<unsigned long>(metres / 1000),
            static_cast<unsigned long>(metres % 1000 / 100));
-  textAt(WatchAssets::LakeReading18, buffer, 76, 142);
+  textAt(WatchAssets::LakeReading18, buffer, 74, 158);
   snprintf(buffer, sizeof(buffer), "%lu KCAL",
            static_cast<unsigned long>(model.steps * 41 / 1000));
-  textAt(WatchAssets::LakeReading18, buffer, 172, 142);
-  canvas_.fillRect(119, 138, 2, 22);
+  textAt(WatchAssets::LakeReading18, buffer, 165, 158);
+  canvas_.fillRect(112, 154, 2, 22);
 }
 
 // Find Phone app: opening it rings the phone, select stops or rings again.
@@ -2051,7 +2051,7 @@ void WatchUi::drawFindPhone(const WatchUiModel& model) {
 
   // A phone, 40 x 68, with sound waves either side while it rings.
   constexpr int16_t PHONE_X = 100;
-  constexpr int16_t PHONE_Y = 40;
+  constexpr int16_t PHONE_Y = 58;
   constexpr int16_t PHONE_W = 40;
   constexpr int16_t PHONE_H = 68;
   canvas_.fillRect(PHONE_X + 2, PHONE_Y, PHONE_W - 4, PHONE_H);
@@ -2079,13 +2079,13 @@ void WatchUi::drawFindPhone(const WatchUiModel& model) {
   const char* state = ringing                      ? "RINGING"
                       : model.bluetooth_connected ? "NOT RINGING"
                                                   : "NOT CONNECTED";
-  textAt(WatchAssets::LakeDate20, state, 120, 124);
+  textAt(WatchAssets::LakeDate20, state, 120, 142);
   const char* hint = ringing ? "Stops by itself in 2 min"
                      : model.bluetooth_connected
                          ? "Ring it again any time"
                          : "Connect the phone first";
   canvas_.centeredFittedFontText(WatchAssets::Ui16, hint, 120,
-                                 154 - peek::capOffset(WatchAssets::Ui16),
+                                 172 - peek::capOffset(WatchAssets::Ui16),
                                  184);
 }
 
@@ -2096,7 +2096,7 @@ void WatchUi::drawCamera(const WatchUiModel& model) {
   const bool ready = state == CameraState::Ready || state == CameraState::Saved;
 
   // Viewfinder corners.
-  constexpr int16_t L = 56, T = 42, R = 184, B = 136, ARM = 14;
+  constexpr int16_t L = 56, T = 52, R = 184, B = 146, ARM = 14;
   canvas_.fillRect(L, T, ARM, 3);
   canvas_.fillRect(L, T, 3, ARM);
   canvas_.fillRect(R - ARM + 1, T, ARM, 3);
@@ -2107,7 +2107,7 @@ void WatchUi::drawCamera(const WatchUiModel& model) {
   canvas_.fillRect(R - 2, B - ARM + 1, 3, ARM);
 
   // Shutter: solid when the phone is ready, an outline otherwise.
-  constexpr int16_t CX = 120, CY = 89;
+  constexpr int16_t CX = 120, CY = 99;
   canvas_.fillCircle(CX, CY, 26);
   canvas_.fillCircle(CX, CY, 22, false);
   if (ready) {
@@ -2146,7 +2146,7 @@ void WatchUi::drawCamera(const WatchUiModel& model) {
           ? WatchAssets::LakeReading18
           : WatchAssets::Ui16;
   canvas_.centeredFittedFontText(status_font, status, 120,
-                                 150 - peek::capOffset(status_font), 184);
+                                 160 - peek::capOffset(status_font), 184);
 
   char timer[24];
   if (model.camera_timer_seconds == 0) {
@@ -2154,7 +2154,7 @@ void WatchUi::drawCamera(const WatchUiModel& model) {
   } else {
     snprintf(timer, sizeof(timer), "TIMER %u S", model.camera_timer_seconds);
   }
-  textAt(WatchAssets::Ui16, timer, 120, 172);
+  textAt(WatchAssets::Ui16, timer, 120, 182);
 
   const char* action = nullptr;
   if (ready) {
@@ -2194,7 +2194,7 @@ void WatchUi::drawSettings(const WatchUiModel& model) {
   constexpr int16_t SWITCH_X = 168;
   for (uint8_t row = 0; row < SETTING_VISIBLE; ++row) {
     const uint8_t index = static_cast<uint8_t>(settings_top_ + row);
-    const int16_t top = static_cast<int16_t>(42 + row * 28);
+    const int16_t top = static_cast<int16_t>(52 + row * 28);
     const bool selected = inside_ && index == selected_setting_;
     if (selected) {
       drawPill(26, top - 6, 188, 26);
