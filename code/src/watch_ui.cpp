@@ -194,7 +194,7 @@ constexpr int16_t GAP_AFTER_TITLE = 10;
 constexpr int16_t BODY_LINE_HEIGHT = 25;
 constexpr int16_t BOTTOM = 216;  // nothing is drawn below this row
 // The Messages card keeps the rows below this for its footer.
-constexpr int16_t CARD_BOTTOM = 178;  // clear of the shore band
+constexpr int16_t CARD_BOTTOM = 206;  // the Messages card, a little higher
 constexpr int16_t MARGIN = 6;    // kept clear of the round edge
 constexpr float RADIUS = 118.0f;
 constexpr uint8_t MAX_LINES = 8;
@@ -1484,10 +1484,12 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
   const WatchScreen two_before = launcherScreen(current - 2);
   const WatchScreen before = launcherScreen(current - 1);
   const WatchScreen after = launcherScreen(current + 1);
+  const WatchScreen two_after = launcherScreen(current + 2);
   const BitmapFont& small = WatchAssets::Ui16;
   textAt(small, SCREEN_LABELS[static_cast<uint8_t>(two_before)], 120, 8);
   textAt(small, SCREEN_LABELS[static_cast<uint8_t>(before)], 120, 34);
-  textAt(small, SCREEN_LABELS[static_cast<uint8_t>(after)], 120, 166);
+  textAt(small, SCREEN_LABELS[static_cast<uint8_t>(after)], 120, 178);
+  textAt(small, SCREEN_LABELS[static_cast<uint8_t>(two_after)], 120, 206);
 
   canvas_.icon(SCREEN_ICONS[static_cast<uint8_t>(screen_)], 120, 76, 28);
   const char* selected = SCREEN_LABELS[static_cast<uint8_t>(screen_)];
@@ -1498,7 +1500,6 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
   } else {
     textAt(WatchAssets::Bold22, selected, 120, 104);
   }
-  drawShore("OPEN", "CLOCK");
 
   char status[32] = {};
   switch (screen_) {
@@ -1578,28 +1579,6 @@ void WatchUi::drawTitle(const char* title) {
   canvas_.centeredFittedFontText(
       WatchAssets::Ui16, title, 120, 20 - peek::capOffset(WatchAssets::Ui16),
       peek::chord(20, 15));
-}
-
-void WatchUi::drawShore(const char* select, const char* back) {
-  using Shade = MonochromeCanvas::Shade;
-  for (int16_t x = 0; x < MonochromeCanvas::WIDTH; ++x) {
-    // The shore rises gently towards the middle.
-    const float from_middle = (x - 120) / 120.0f;
-    const int16_t top =
-        static_cast<int16_t>(lroundf(190.0f + from_middle * from_middle * 12.0f));
-    canvas_.shadeRect(x, top - 5, 1, 3, Shade::Dither12);
-    canvas_.shadeRect(x, top - 2, 1, 2, Shade::Dither50);
-    canvas_.fillRect(x, top, 1, MonochromeCanvas::HEIGHT - top);
-  }
-  // White labels; a small tick under each points at its button.
-  if (select != nullptr && select[0] != '\0') {
-    textAt(WatchAssets::Ui16, select, 86, 208, false);
-    canvas_.fillRect(70, 223, 8, 2, false);
-  }
-  if (back != nullptr && back[0] != '\0') {
-    textAt(WatchAssets::Ui16, back, 156, 208, false);
-    canvas_.fillRect(162, 223, 8, 2, false);
-  }
 }
 
 void WatchUi::drawRim(uint16_t permille) {
@@ -1713,7 +1692,6 @@ void WatchUi::drawNotifications(const WatchUiModel& model) {
     drawTitle("MESSAGES");
     textAt(WatchAssets::LakeDate20, "ALL CLEAR", 120, 96);
     textAt(WatchAssets::Ui16, "No notifications", 120, 126);
-    drawShore(nullptr);
     return;
   }
   const uint8_t index = notification_index_ < model.notification_count
@@ -1726,7 +1704,6 @@ void WatchUi::drawNotifications(const WatchUiModel& model) {
              model.notification_count);
   }
   drawNotification(notification, peek::CARD_BOTTOM, counter);
-  drawShore("DISMISS");
 }
 
 // The newest notification, shown briefly over whatever screen is current
@@ -1896,14 +1873,12 @@ void WatchUi::drawTimer(const WatchUiModel& model) {
              static_cast<unsigned long>((timer_total_seconds_ + 59) / 60));
     textAt(WatchAssets::Ui16, buffer, 120, 132);
     textAt(WatchAssets::LakeReading18, "RUNNING", 120, 158);
-    drawShore("PAUSE");
   } else {
     // The top buttons set the minutes: top-left is next, top-right previous.
     textAt(WatchAssets::LakeDate20, "+1", 70, 50);
     textAt(WatchAssets::LakeDate20, "-1", 170, 50);
     textAt(WatchAssets::Ui16,
            model.timer_remaining_seconds == 0 ? "DONE" : "MINUTES", 120, 132);
-    drawShore("START");
   }
 }
 
@@ -1961,7 +1936,6 @@ void WatchUi::drawAlarms(const WatchUiModel& model) {
           164 - peek::capOffset(WatchAssets::Ui16), 160);
     }
   }
-  drawShore(inside_ ? "ON/OFF" : nullptr);
 }
 
 void WatchUi::drawMusic(const WatchUiModel& model) {
@@ -1971,7 +1945,6 @@ void WatchUi::drawMusic(const WatchUiModel& model) {
     textAt(WatchAssets::Bold22, "NOTHING", 120, 70);
     textAt(WatchAssets::Bold22, "PLAYING", 120, 92);
     textAt(WatchAssets::Ui16, "Start music on the phone", 120, 130);
-    drawShore(nullptr);
     return;
   }
 
@@ -2040,7 +2013,6 @@ void WatchUi::drawMusic(const WatchUiModel& model) {
                           {132.0f, CY + 0.5f}};
     canvas_.fillPolygon(play, 3, Shade::White);
   }
-  drawShore(playing ? "PAUSE" : "PLAY");
 }
 
 
@@ -2070,14 +2042,12 @@ void WatchUi::drawActivity(const WatchUiModel& model) {
            static_cast<unsigned long>(model.steps * 41 / 1000));
   textAt(WatchAssets::LakeReading18, buffer, 172, 142);
   canvas_.fillRect(119, 138, 2, 22);
-  drawShore(nullptr);
 }
 
 // Find Phone app: opening it rings the phone, select stops or rings again.
 void WatchUi::drawFindPhone(const WatchUiModel& model) {
   const bool ringing = model.find_phone_active;
   drawTitle("FIND PHONE");
-  drawShore(!model.bluetooth_connected ? nullptr : ringing ? "STOP" : "RING");
 
   // A phone, 40 x 68, with sound waves either side while it rings.
   constexpr int16_t PHONE_X = 100;
@@ -2192,7 +2162,6 @@ void WatchUi::drawCamera(const WatchUiModel& model) {
   } else if (state == CameraState::Closed || state == CameraState::Error) {
     action = model.bluetooth_connected ? "OPEN" : nullptr;
   }
-  drawShore(action);
 }
 
 void WatchUi::drawSettings(const WatchUiModel& model) {
@@ -2269,7 +2238,4 @@ void WatchUi::drawSettings(const WatchUiModel& model) {
       rightTextAt(WatchAssets::Ui16, value, VALUE_RIGHT, top + 2, !selected);
     }
   }
-  drawShore(selected_setting_ == SETTING_FORGET_PHONE && forget_armed_
-                ? "CONFIRM"
-                : "CHANGE");
 }

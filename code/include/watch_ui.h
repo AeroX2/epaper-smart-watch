@@ -289,9 +289,6 @@ class WatchUi {
   void rightTextAt(const BitmapFont& font, const char* value, int16_t right,
                    int16_t cap_top, bool black = true);
   void drawTitle(const char* title);
-  // Dark dithered band along the bottom; labels sit over the select
-  // (bottom-left) and back (bottom-right) buttons. nullptr = no label.
-  void drawShore(const char* select, const char* back = "BACK");
   // Progress round the rim, clockwise from the top; permille 0-1000.
   void drawRim(uint16_t permille);
   void drawPill(int16_t x, int16_t y, int16_t width, int16_t height,
