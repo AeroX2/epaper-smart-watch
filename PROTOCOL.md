@@ -95,6 +95,7 @@ Phone → watch writes are not fragmented by the protocol: the ATT layer's prepa
 | `SETTINGS` | `vibration`, `quiet`, `tone` | `vibration`/`quiet` `1`/`0`. `tone` = notification alert tone: `0` none, `1` Chirp, `2` Double, `3` Rise, `4` Fall, `5` Triple (missing = unchanged). Phone's stored copy wins at session start. Quiet mode silences the tone; vibration is governed by `vibration`. |
 | `TONE_PREVIEW` | `tone` | Play tone `1`–`5` once now (ignores quiet mode). |
 | `FIND_WATCH` | — | Watch alerts (vibrate + buzzer) for ~10 s or until any button. |
+| `CAMERA` | `state\|number\|detail` | The phone's camera screen for the watch's Camera app. `state`: `CLOSED`, `OPENING`, `READY`, `COUNTDOWN` (`number` = seconds), `SAVED` (`number` = photos since it opened) or `ERROR` (`detail`, ≤ 20 chars, e.g. `NO PERMISSION`, `CAMERA BUSY`, `TAP THE PHONE`, `PHOTO FAILED`). |
 | `REQUEST` | `what` | `STATUS` or `HISTORY`. |
 | `STEPS_RESET` | — | Reset today's step count. |
 | `SLEEP_START` / `SLEEP_STOP` | — | Sleep as Android tracking. |
@@ -117,6 +118,7 @@ Phone → watch writes are not fragmented by the protocol: the ATT layer's prepa
 | `MEDIA` | `action` | `PREV`, `NEXT`, `PLAY_PAUSE`. |
 | `CALL_REJECT` | — | Reject the ringing call. |
 | `FIND_PHONE` | `on` | `1` start ringing the phone, `0` stop. |
+| `CAMERA` | `action\|delay` | `OPEN` the phone's camera screen, `SHUTTER` take a photo after `delay` seconds (0, 3 or 10), `CLOSE` it. The phone answers with `CAMERA` state messages. |
 | `SETTINGS` | `vibration`, `quiet`, `tone` | Sent when changed on the watch. |
 | `SLEEP_DATA` | `value` | Movement sample (unchanged semantics). |
 | `SLEEP_SNOOZE` / `SLEEP_DISMISS` / `SLEEP_PAUSE` / `SLEEP_RESUME` | — | |

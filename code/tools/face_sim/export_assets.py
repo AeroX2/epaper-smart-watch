@@ -25,6 +25,7 @@ OUTPUT = HERE / "assets.js"
 ICON_NAMES = [
     "Notifications", "Timer", "Alarms", "Music", "Weather",
     "Sensors", "Activity", "Settings", "Bluetooth", "Battery", "Phone",
+    "Camera",
 ]
 TTFS = {
     "regular": "AtkinsonHyperlegibleNext-Regular.ttf",

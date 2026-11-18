@@ -715,6 +715,22 @@ WatchBle::ParseResult WatchBle::parse(char* const* fields, uint8_t count,
     update.type = PhoneUpdateType::OtaAbort;
   } else if (strcmp(type, "FIND_WATCH") == 0) {
     update.type = PhoneUpdateType::FindWatch;
+  } else if (strcmp(type, "CAMERA") == 0) {
+    // CAMERA|state|number|detail; values match CameraState in watch_ui.h.
+    static constexpr const char* STATES[] = {"CLOSED", "OPENING", "READY",
+                                             "COUNTDOWN", "SAVED", "ERROR"};
+    n[0] = -1;
+    for (uint8_t i = 0; i < sizeof(STATES) / sizeof(STATES[0]); ++i) {
+      if (strcmp(field(1), STATES[i]) == 0) {
+        n[0] = i;
+      }
+    }
+    if (n[0] < 0) return ParseResult::Parse;
+    if (field(2)[0] != '\0' && !parseInteger(field(2), 0, 9999, n[1])) {
+      return ParseResult::Parse;
+    }
+    copyField(update.text_a, field(3), 20);
+    update.type = PhoneUpdateType::Camera;
   } else if (strcmp(type, "REQUEST") == 0) {
     if (strcmp(field(1), "STATUS") == 0) {
       update.type = PhoneUpdateType::RequestStatus;

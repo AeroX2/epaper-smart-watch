@@ -326,7 +326,7 @@ entry. This keeps the button meanings deterministic: PREV/NEXT never trigger an 
 browsing, and never leave the current card while inside it.
 
 Implemented screens mirror the browser playground: clock, notification, timer, alarms, music,
-activity, find phone, and settings (the phone's weather and the BME280 readings appear on the
+activity, find phone, camera, and settings (the phone's weather and the BME280 readings appear on the
 clock face). Temperature, humidity, pressure, acceleration, battery
 percentage, battery voltage, time, timer state, alarms, and steps are live watch data. Phone
 notifications, forecast data, time sync, and music metadata/control use the companion BLE link.
@@ -486,6 +486,7 @@ What the watch does with the link:
 | Music | State none/playing/paused; the position advances locally while playing. Inside Music, previous/next/select send `MEDIA\|PREV`, `MEDIA\|NEXT`, `MEDIA\|PLAY_PAUSE`. |
 | Upcoming | The clock face shows the next calendar event (or else the phone's next alarm) within 24 h on one line under the time. The Alarms card also shows the phone alarm. |
 | Phone / link | The clock shows a Bluetooth icon while connected. Settings shows radio state, phone battery, charging, and Do Not Disturb. |
+| Camera | Opening the Camera app sends `CAMERA\|OPEN` and the phone shows its camera screen. Select sends `CAMERA\|SHUTTER\|delay`, the top buttons pick the self-timer (off / 3 s / 10 s), back sends `CAMERA\|CLOSE`. The screen shows the phone's `CAMERA` state: opening, ready, the countdown, photos saved or the error. |
 | Find | Opening the Find Phone app sends `FIND_PHONE\|1`; inside it select sends `\|0` or `\|1` again, and back stops the ringing as it leaves. The watch shows it as ringing for at most 2 min, as long as the phone rings. `FIND_WATCH` vibrates and buzzes for 10 s or until any button. |
 | Settings | Vibration, quiet mode and alert tone are applied from the phone (`SETTINGS\|v\|q\|tone`, tone optional) and sent back in the same form when changed on the watch. They are stored in external flash. |
 | Status / history | `STATUS\|battery\|mV\|steps\|-1` after `HELLO`, on request, when the battery percentage changes, and every 10 min. Steps roll over at local midnight into a history of six completed days; `REQUEST\|HISTORY` sends those plus today, oldest first, then `HISTORY_END`. The history survives resets when the external flash works. Both are suspended during a firmware transfer. |

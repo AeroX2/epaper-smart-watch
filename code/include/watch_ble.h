@@ -42,6 +42,8 @@ enum class PhoneUpdateType : uint8_t {
   SleepAlarmStop,
   SleepNotify,     // text_a=title, text_b=text
   SleepHint,       // number[0]=repeats
+  Camera,          // number[0]=CameraState, number[1]=countdown seconds or
+                   // photos saved; text_a=error detail
   OtaBegin,        // number[0]=size, utc=crc32, text_a=version
   OtaEnd,
   OtaAbort,

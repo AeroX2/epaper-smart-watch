@@ -41,13 +41,13 @@ const BitmapFont& fontForScale(uint8_t scale) {
 
 constexpr const char* SCREEN_LABELS[] = {
     "CLOCK", "MESSAGES", "TIMER", "ALARMS", "MUSIC",
-    "ACTIVITY", "FIND PHONE", "SETTINGS",
+    "ACTIVITY", "FIND PHONE", "CAMERA", "SETTINGS",
 };
 
 constexpr WatchIcon SCREEN_ICONS[] = {
     WatchIcon::Notifications, WatchIcon::Notifications, WatchIcon::Timer,
     WatchIcon::Alarms,        WatchIcon::Music,         WatchIcon::Activity,
-    WatchIcon::Phone,         WatchIcon::Settings,
+    WatchIcon::Phone,         WatchIcon::Camera,        WatchIcon::Settings,
 };
 static_assert(sizeof(SCREEN_LABELS) / sizeof(SCREEN_LABELS[0]) ==
                   static_cast<size_t>(WatchScreen::Count),
@@ -825,6 +825,12 @@ WatchUiAction WatchUi::previous(WatchUiModel& model) {
   if (screen_ == WatchScreen::Music) {
     return WatchUiAction::MediaPrevious;
   }
+  if (screen_ == WatchScreen::Camera) {
+    model.camera_timer_seconds = model.camera_timer_seconds == 0   ? 10
+                                 : model.camera_timer_seconds == 10 ? 3
+                                                                    : 0;
+    return WatchUiAction::None;
+  }
   if (screen_ == WatchScreen::Notifications) {
     if (model.notification_count > 1) {
       notification_index_ = notification_index_ == 0
@@ -861,6 +867,13 @@ WatchUiAction WatchUi::next(WatchUiModel& model) {
   }
   if (screen_ == WatchScreen::Music) {
     return WatchUiAction::MediaNext;
+  }
+  if (screen_ == WatchScreen::Camera) {
+    // Self-timer: off, 3 s, 10 s.
+    model.camera_timer_seconds = model.camera_timer_seconds == 0   ? 3
+                                 : model.camera_timer_seconds == 3 ? 10
+                                                                   : 0;
+    return WatchUiAction::None;
   }
   if (screen_ == WatchScreen::Notifications) {
     if (model.notification_count > 1) {
@@ -915,11 +928,26 @@ WatchUiAction WatchUi::select(WatchUiModel& model) {
     if (screen_ == WatchScreen::FindPhone && !model.find_phone_active) {
       return WatchUiAction::FindPhoneToggle;
     }
+    // Opening Camera opens the camera on the phone.
+    if (screen_ == WatchScreen::Camera) {
+      return WatchUiAction::CameraOpen;
+    }
     return WatchUiAction::None;
   }
   switch (screen_) {
     case WatchScreen::FindPhone:
       return WatchUiAction::FindPhoneToggle;
+    case WatchScreen::Camera:
+      switch (model.camera_state) {
+        case CameraState::Ready:
+        case CameraState::Saved:
+          return WatchUiAction::CameraShutter;
+        case CameraState::Opening:
+        case CameraState::Countdown:
+          return WatchUiAction::None;
+        default:
+          return WatchUiAction::CameraOpen;  // closed or failed: try again
+      }
     case WatchScreen::Notifications:
       // The application removes notificationIndex() and tells the phone.
       return model.notification_count > 0
@@ -1029,6 +1057,9 @@ void WatchUi::render(const WatchUiModel& model) {
     case WatchScreen::FindPhone:
       drawFindPhone(model);
       break;
+    case WatchScreen::Camera:
+      drawCamera(model);
+      break;
     case WatchScreen::Settings:
       drawSettings(model);
       break;
@@ -1063,7 +1094,7 @@ void WatchUi::clampNotificationIndex(uint8_t count) {
 const char* WatchUi::screenName() const {
   static constexpr const char* NAMES[] = {
       "clock", "notifications", "timer",    "alarms",  "music",
-      "activity", "find phone", "settings",
+      "activity", "find phone", "camera", "settings",
   };
   const uint8_t index = static_cast<uint8_t>(screen_);
   return index < static_cast<uint8_t>(WatchScreen::Count)
@@ -1505,6 +1536,10 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
                model.find_phone_active      ? "RINGING"
                : model.bluetooth_connected ? "RING YOUR PHONE"
                                            : "NOT CONNECTED");
+      break;
+    case WatchScreen::Camera:
+      snprintf(status, sizeof(status), "%s",
+               model.bluetooth_connected ? "PHONE SHUTTER" : "NOT CONNECTED");
       break;
     case WatchScreen::Settings:
       if (model.bluetooth_connected && model.phone_status_valid) {
@@ -2085,6 +2120,82 @@ void WatchUi::drawFindPhone(const WatchUiModel& model) {
   canvas_.centeredFittedFontText(WatchAssets::Ui16, hint, 120,
                                  154 - peek::capOffset(WatchAssets::Ui16),
                                  184);
+}
+
+// Camera app: a remote shutter for the phone's camera screen.
+void WatchUi::drawCamera(const WatchUiModel& model) {
+  drawTitle("CAMERA");
+  const CameraState state = model.camera_state;
+  const bool ready = state == CameraState::Ready || state == CameraState::Saved;
+
+  // Viewfinder corners.
+  constexpr int16_t L = 56, T = 42, R = 184, B = 136, ARM = 14;
+  canvas_.fillRect(L, T, ARM, 3);
+  canvas_.fillRect(L, T, 3, ARM);
+  canvas_.fillRect(R - ARM + 1, T, ARM, 3);
+  canvas_.fillRect(R - 2, T, 3, ARM);
+  canvas_.fillRect(L, B - 2, ARM, 3);
+  canvas_.fillRect(L, B - ARM + 1, 3, ARM);
+  canvas_.fillRect(R - ARM + 1, B - 2, ARM, 3);
+  canvas_.fillRect(R - 2, B - ARM + 1, 3, ARM);
+
+  // Shutter: solid when the phone is ready, an outline otherwise.
+  constexpr int16_t CX = 120, CY = 89;
+  canvas_.fillCircle(CX, CY, 26);
+  canvas_.fillCircle(CX, CY, 22, false);
+  if (ready) {
+    canvas_.fillCircle(CX, CY, 18);
+  } else if (state == CameraState::Countdown) {
+    char seconds[6];
+    snprintf(seconds, sizeof(seconds), "%u", model.camera_number);
+    textAt(WatchAssets::LakeDate20, seconds, CX, CY - 7);
+  }
+
+  char line[24];
+  const char* status = line;
+  switch (state) {
+    case CameraState::Opening:
+      status = "OPENING...";
+      break;
+    case CameraState::Ready:
+      status = "READY";
+      break;
+    case CameraState::Countdown:
+      snprintf(line, sizeof(line), "IN %u S", model.camera_number);
+      break;
+    case CameraState::Saved:
+      snprintf(line, sizeof(line), "SAVED  %u", model.camera_number);
+      break;
+    case CameraState::Error:
+      status = model.camera_detail[0] != '\0' ? model.camera_detail : "FAILED";
+      break;
+    default:
+      status = model.bluetooth_connected ? "CLOSED" : "NOT CONNECTED";
+      break;
+  }
+  // Long phone messages drop to the smaller font rather than being cut.
+  const BitmapFont& status_font =
+      canvas_.fontTextWidth(WatchAssets::LakeReading18, status) <= 176
+          ? WatchAssets::LakeReading18
+          : WatchAssets::Ui16;
+  canvas_.centeredFittedFontText(status_font, status, 120,
+                                 150 - peek::capOffset(status_font), 184);
+
+  char timer[24];
+  if (model.camera_timer_seconds == 0) {
+    snprintf(timer, sizeof(timer), "TIMER OFF");
+  } else {
+    snprintf(timer, sizeof(timer), "TIMER %u S", model.camera_timer_seconds);
+  }
+  textAt(WatchAssets::Ui16, timer, 120, 172);
+
+  const char* action = nullptr;
+  if (ready) {
+    action = "SNAP";
+  } else if (state == CameraState::Closed || state == CameraState::Error) {
+    action = model.bluetooth_connected ? "OPEN" : nullptr;
+  }
+  drawShore(action);
 }
 
 void WatchUi::drawSettings(const WatchUiModel& model) {

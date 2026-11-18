@@ -604,6 +604,21 @@ void WatchApplication::applyUiAction(WatchUiAction action) {
         restartBluetooth();
       }
       break;
+    case WatchUiAction::CameraOpen:
+      if (ble_.send("CAMERA|OPEN")) {
+        model_.camera_state = CameraState::Opening;
+        model_.camera_number = 0;
+      } else {
+        model_.camera_state = CameraState::Closed;
+        Serial.println(F("Camera: no phone connected."));
+      }
+      break;
+    case WatchUiAction::CameraShutter:
+      if (ble_.sendf("CAMERA|SHUTTER|%u", model_.camera_timer_seconds)) {
+        Serial.print(F("Camera: shutter, timer "));
+        Serial.println(model_.camera_timer_seconds);
+      }
+      break;
     case WatchUiAction::FindPhoneToggle: {
       const bool start = !model_.find_phone_active;
       if (ble_.sendf("FIND_PHONE|%d", start ? 1 : 0)) {
@@ -755,7 +770,10 @@ void WatchApplication::servicePhoneLink() {
     model_.find_phone_active = false;
     model_.phone_status_valid = false;
     bool redraw = ota_.onDisconnect(Serial);
-    redraw |= ui_.screen() == WatchScreen::FindPhone;  // shows the link state
+    model_.camera_state = CameraState::Closed;
+    // These apps show the link state.
+    redraw |= ui_.screen() == WatchScreen::FindPhone ||
+              ui_.screen() == WatchScreen::Camera;
     if (model_.call_active) {
       endCall();
       redraw = true;
@@ -812,7 +830,9 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
       model_.find_phone_active = false;
       sendStatus();
       ota_.sendBootReport(Serial);
-      return screen == WatchScreen::FindPhone;  // shows the link state
+      model_.camera_state = CameraState::Closed;
+      // These apps show the link state.
+      return screen == WatchScreen::FindPhone || screen == WatchScreen::Camera;
     case PhoneUpdateType::Time:
       if (rtc_.setUtc(update.utc, n[0])) {
         rtc_.setTransition(static_cast<uint32_t>(n[2]), n[1]);
@@ -934,6 +954,13 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
     case PhoneUpdateType::FindWatch:
       alarm_.startFindAlert(Serial);
       return false;
+    case PhoneUpdateType::Camera:
+      model_.camera_state = static_cast<CameraState>(n[0]);
+      model_.camera_number = static_cast<uint16_t>(n[1]);
+      copyPhoneText(model_.camera_detail, update.text_a);
+      Serial.print(F("Camera: phone state "));
+      Serial.println(n[0]);
+      return screen == WatchScreen::Camera && ui_.isInside();
     case PhoneUpdateType::RequestStatus:
       if (!ota_.transferActive()) {
         sendStatus();
@@ -1280,6 +1307,11 @@ void WatchApplication::handleButton(size_t index) {
   if (index == 0 && ui_.screen() == WatchScreen::FindPhone && ui_.isInside() &&
       model_.find_phone_active) {
     applyUiAction(WatchUiAction::FindPhoneToggle);  // leaving stops the ring
+  }
+  if (index == 0 && ui_.screen() == WatchScreen::Camera && ui_.isInside() &&
+      model_.camera_state != CameraState::Closed) {
+    ble_.send("CAMERA|CLOSE");  // leaving closes the phone's camera too
+    model_.camera_state = CameraState::Closed;
   }
   if (index == 3 && ui_.screen() == WatchScreen::Clock &&
       model_.music_state != MusicState::None) {

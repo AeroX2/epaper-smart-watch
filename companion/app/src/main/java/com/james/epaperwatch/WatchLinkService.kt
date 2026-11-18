@@ -19,6 +19,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.james.epaperwatch.bridge.CalendarBridge
 import com.james.epaperwatch.bridge.CallBridge
+import com.james.epaperwatch.bridge.CameraRemote
 import com.james.epaperwatch.bridge.FindPhoneRinger
 import com.james.epaperwatch.bridge.MediaBridge
 import com.james.epaperwatch.bridge.NotificationRelay
@@ -144,6 +145,7 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
             Intent(this, WatchLinkService::class.java).setAction(ACTION_STOP_FIND_PHONE),
         )
         ringer.restoreVolumeIfLeftRaised()
+        CameraRemote.sender = { message -> if (sessionActive) send(message) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -169,6 +171,7 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
     override fun onDestroy() {
         stopping = true
         instance = null
+        CameraRemote.sender = null
         ota.shutdown()
         handler.removeCallbacksAndMessages(null)
         sessionActive = false
@@ -467,6 +470,12 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
             "MEDIA" -> media.handleAction(m.str(0))
             "CALL_REJECT" -> CallBridge.reject(this)
             "FIND_PHONE" -> if (m.int(0) == 1) ringer.start() else ringer.stop()
+            "CAMERA" -> when (m.str(0)) {
+                "OPEN" -> CameraRemote.open(this)
+                "SHUTTER" -> CameraRemote.shutter(m.int(1))
+                "CLOSE" -> CameraRemote.close()
+                else -> Log.w(TAG, "Unknown camera action: $m")
+            }
             "SETTINGS" -> {
                 prefs.vibration = m.int(0) == 1
                 prefs.quiet = m.int(1) == 1

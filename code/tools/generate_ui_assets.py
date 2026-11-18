@@ -49,6 +49,7 @@ ICON_NAMES = [
     "bluetooth",
     "battery-medium",
     "smartphone",
+    "camera",
 ]
 
 
@@ -160,6 +161,7 @@ enum class WatchIcon : uint8_t {
   Bluetooth,
   Battery,
   Phone,
+  Camera,
   Count,
 };
 

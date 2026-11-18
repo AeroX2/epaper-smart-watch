@@ -33,6 +33,13 @@
     <uses-permission android:name="android.permission.health.WRITE_STEPS" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <!-- Camera remote: asked for the first time the watch opens its Camera app. Saving to
+         Pictures needs storage access only before Android 10. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!-- Package visibility (API 30+): needed to resolve the app label of a notification's
          or media session's package; without it every label falls back to the package name. -->
@@ -68,6 +75,18 @@
             android:name=".ui.AppFilterActivity"
             android:exported="false"
             android:label="Notification apps" />
+
+        <!-- Opened by the watch's Camera app, also over the lock screen. Not recreated on
+             rotation, so the watch is not told it closed. -->
+        <activity
+            android:name=".ui.CameraActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:label="Watch camera"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.james.epaperwatch.camera"
+            android:theme="@android:style/Theme.Black.NoTitleBar" />
 
         <activity
             android:name=".ui.FirmwareUpdateActivity"

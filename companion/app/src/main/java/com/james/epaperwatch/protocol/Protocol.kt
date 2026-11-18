@@ -194,6 +194,18 @@ object Out {
         OutMessage("TONE_PREVIEW", listOf(tone.coerceIn(1, 5).toString()), "TONE_PREVIEW")
 
     fun findWatch() = OutMessage("FIND_WATCH")
+
+    /**
+     * The phone's camera screen for the watch's Camera app: [state] is CLOSED, OPENING, READY,
+     * COUNTDOWN (number = seconds), SAVED (number = photos since it opened) or ERROR (detail).
+     * A newer state replaces one still queued.
+     */
+    fun camera(state: String, number: Int = 0, detail: String = "") =
+        OutMessage(
+            "CAMERA",
+            listOf(state, number.coerceIn(0, 9999).toString(), t(detail.uppercase(), 20)),
+            "CAMERA",
+        )
     fun request(what: String) = OutMessage("REQUEST", listOf(what), "REQUEST:$what")
     fun stepsReset() = OutMessage("STEPS_RESET")
 

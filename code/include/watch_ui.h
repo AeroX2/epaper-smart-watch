@@ -12,6 +12,7 @@ enum class WatchScreen : uint8_t {
   Music,
   Activity,
   FindPhone,
+  Camera,
   Settings,
   Count,
 };
@@ -31,6 +32,18 @@ enum class WatchUiAction : uint8_t {
   AlertToneChanged,      // model.alert_tone cycled: sync, persist, preview
   SecureLinkChanged,     // model.secure_link toggled
   ForgetPhone,           // confirmed on the Settings row
+  CameraOpen,            // ask the phone to open its camera screen
+  CameraShutter,         // take a photo after model.camera_timer_seconds
+};
+
+// The phone's camera screen, as last reported (CAMERA|state on the wire).
+enum class CameraState : uint8_t {
+  Closed,
+  Opening,    // asked the phone, no answer yet
+  Ready,
+  Countdown,  // camera_number = seconds
+  Saved,      // camera_number = photos saved since it opened
+  Error,      // camera_detail says why
 };
 
 // Full-screen firmware-update overlay (drawn instead of the current screen).
@@ -140,6 +153,11 @@ struct WatchUiModel {
   bool phone_charging = false;
   bool phone_dnd = false;
   bool find_phone_active = false;
+
+  CameraState camera_state = CameraState::Closed;
+  uint16_t camera_number = 0;
+  uint8_t camera_timer_seconds = 0;  // 0, 3 or 10; chosen on the watch
+  char camera_detail[21]{};
 };
 
 class MonochromeCanvas {
@@ -250,6 +268,7 @@ class WatchUi {
   void drawActivity(const WatchUiModel& model);
   void drawSettings(const WatchUiModel& model);
   void drawFindPhone(const WatchUiModel& model);
+  void drawCamera(const WatchUiModel& model);
   void drawCall(const WatchUiModel& model);
   void drawNotificationPeek(const WatchUiModel& model);
   void drawNotification(const WatchNotification& notification,
