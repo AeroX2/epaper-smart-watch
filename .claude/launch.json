@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "face-sim",
+      "runtimeExecutable": "C:/Users/James/.platformio/penv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "http.server", "8791", "--bind", "127.0.0.1", "--directory", "code/tools/face_sim"],
+      "port": 8791
+    }
+  ]
+}
