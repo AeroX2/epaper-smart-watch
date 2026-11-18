@@ -195,8 +195,9 @@ and the link must be encrypted with a bond before the watch will talk:
   `REQUEST|HISTORY`.
 - The watch's outbound queue lets an `ACK`/`NAK` displace the oldest queued message
   rather than be dropped.
-- OTA: `ACCEPT` always carries `240`; the phone clamps each chunk to
-  min(240, MTU − 7). The on-watch confirmation timing out is reported as `DECLINED`.
+- OTA: `ACCEPT` always carries `240`, followed by `|1` from firmware that receives
+  full-size packets; the phone clamps each chunk to min(240, MTU − 7), and to 96 when
+  the `1` is missing (earlier firmware dropped any packet over 128 bytes). The on-watch confirmation timing out is reported as `DECLINED`.
   `OTA_BEGIN` while the watch is ringing (alarm/call) yields `BUSY`. `OTA_END` with no
   transfer in progress yields `ERROR|SIZE`. `OTA_ABORT` has no reply beyond its ACK.
   `PROGRESS` is also sent once when the last byte has arrived. After `READY` the watch

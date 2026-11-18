@@ -30,6 +30,12 @@ object Protocol {
     const val OTA_MIN_IMAGE_BYTES = 8
     const val OTA_MAX_IMAGE_BYTES = 761_856
     const val OTA_MAX_CHUNK = 240
+    /**
+     * Largest chunk for a watch that does not announce big-packet support (`ACCEPT|n|1`).
+     * Firmware before that fix drops any packet over 128 bytes from its radio core: 96 data
+     * bytes + offset + ATT and L2CAP headers stay below that.
+     */
+    const val OTA_SAFE_CHUNK = 96
     /** ATT write header (3) plus the chunk's 4-byte offset. */
     const val OTA_CHUNK_OVERHEAD = 7
 }

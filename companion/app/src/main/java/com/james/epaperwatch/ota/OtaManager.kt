@@ -153,7 +153,8 @@ class OtaManager(
         val detail = m.str(1)
         when (state) {
             "ACCEPT" -> if (OtaState.phase == Phase.WAITING_CONFIRM || OtaState.phase == Phase.REQUESTING) {
-                startSending(m.int(1))
+                // A third field of 1: the watch takes full-size packets (see OTA_SAFE_CHUNK).
+                startSending(m.int(1), bigPackets = m.has(2) && m.int(2) == 1)
             }
             "DECLINED" -> ifBusy { failTransfer("The update was declined on the watch, or not confirmed there within a minute.", abort = false) }
             "BUSY" -> ifBusy {
@@ -229,10 +230,11 @@ class OtaManager(
 
     // ------------------------------------------------------------------ data phase
 
-    private fun startSending(maxChunk: Int) {
+    private fun startSending(maxChunk: Int, bigPackets: Boolean) {
         handler.removeCallbacks(confirmTimeout)
         val firmware = image ?: return
         chunk = minOf(maxChunk.coerceAtMost(Protocol.OTA_MAX_CHUNK), host.mtu - Protocol.OTA_CHUNK_OVERHEAD)
+        if (!bigPackets) chunk = chunk.coerceAtMost(Protocol.OTA_SAFE_CHUNK)
         if (chunk < 1) {
             failTransfer("The watch offered an unusable chunk size ($maxChunk).", abort = true)
             return

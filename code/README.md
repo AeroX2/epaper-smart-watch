@@ -518,7 +518,9 @@ answers `OTA_STATE|UNSUPPORTED`. `WatchOta` (`watch_ota.cpp`) implements the wat
    60 s without an answer declines. `OTA_STATE|BUSY` if an update is already in progress or an
    alarm/call is active; `ERROR|SIZE` if the size is outside 8..761856.
 2. On accept the header sector (`0x100000`) is erased and magic/format/size/CRC/header-CRC are
-   written, then `OTA_STATE|ACCEPT|240`.
+   written, then `OTA_STATE|ACCEPT|240|1`. The trailing `1` says full-size packets get
+   through (the radio-core buffer fix in `tools/patch_libraries.py`); without it the phone
+   sends at most 96 bytes a chunk, which earlier firmware can receive.
 3. Each write to the OTA data characteristic must carry the next expected offset; anything else
    is ignored and answered with `OTA_STATE|PROGRESS|<expected>`. Each 4 KiB sector of the staging
    area is erased just before the first byte goes into it, and the data is programmed before the

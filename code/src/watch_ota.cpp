@@ -223,7 +223,9 @@ void WatchOta::accept(Print& out) {
   }
   model_.ota_percent = 0;
   model_.ota_screen = OtaScreen::Progress;
-  ble_.sendf("OTA_STATE|ACCEPT|%u", static_cast<unsigned>(MAX_CHUNK));
+  // The trailing 1: full-size packets get through (the radio-core buffer fix in
+  // tools/patch_libraries.py). Without it the phone keeps chunks small.
+  ble_.sendf("OTA_STATE|ACCEPT|%u|1", static_cast<unsigned>(MAX_CHUNK));
   out.println(F("Firmware update accepted; receiving."));
 }
 
