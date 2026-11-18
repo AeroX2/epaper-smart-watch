@@ -110,6 +110,7 @@
         <select id="face" style="width:auto">
           <option value="lake">Mountain lake</option>
           <option value="firmware">Firmware clock</option>
+          <option value="notify">Notification pop-up</option>
         </select>
       </label>
       <button id="reset">Reset this face</button>
@@ -781,6 +782,166 @@ if (m.time_valid) {
 }
 `;
 
+// ---- notification pop-up (layout study) -------------------------------
+const NOTIFY_CODE = `// Notification pop-up: shown for 5 s when a notification alerts.
+// layout "current" is what the firmware draws today (WatchUi::
+// drawNotificationPeek); "proposed" is the suggested replacement.
+// Fill in the app, title and text under Watch state (the phone sends at most
+// 24, 28 and 56 characters).
+const L = {
+  layout: "proposed",       // "proposed" or "current"
+  appTop: 22,               // row where the app name's capitals start
+  titleTop: 44,             // highest row the title may start on
+  centre: true,             // centre title and body in the space below the app
+  titleLines: 2,
+  titleLineHeight: 22,
+  gapAfterTitle: 10,        // between the title and the body
+  bodySize: 20,             // px. 16 and 22 are firmware fonts; others preview
+  bodyBold: false,
+  bodyLineHeight: 25,
+  bottom: 216,              // nothing is drawn below this row
+  margin: 6,                // kept clear of the round edge on every line
+};
+
+const n = m.notifications[0] || { app: "", title: "", text: "" };
+const app = n.app || "Message";
+
+if (L.layout === "current") {
+  // Line for line from WatchUi::drawNotificationPeek and drawCardFrame.
+  c.centeredFittedFontText(F.Ui16, app, 120, 18, 140);
+  let bodyY = 50;
+  if (n.title) {
+    c.centeredFittedFontText(F.Bold22, n.title, 120, 42, 176);
+    bodyY = 72;
+  }
+  wrap(n.text, (line, i) => bodyY + i * 22, bodyY === 72 ? 4 : 5,
+       () => 184, F.Ui16, (s, y) => c.centeredFontText(F.Ui16, s, 120, y));
+  return;
+}
+
+// ---- proposed ------------------------------------------------------------
+// Text is placed by the row where its capitals start, and every line is
+// only as wide as the round panel allows at its height.
+const R = 118;
+function chord(top, height) {
+  // The widest a line can be when it spans rows top..top+height.
+  const far = Math.max(Math.abs(top - 120), Math.abs(top + height - 120));
+  return far >= R ? 0 : Math.floor(2 * Math.sqrt(R * R - far * far)) - 2 * L.margin;
+}
+const bitmapFor = (px, bold) =>
+    !bold && px === 16 ? F.Ui16 : bold && px === 22 ? F.Bold22 : null;
+function makeFont(px, bold) {
+  const bitmap = bitmapFor(px, bold);
+  if (bitmap) {
+    const cap = glyph(bitmap, "H");
+    return {
+      cap: cap[2],
+      width: s => c.fontTextWidth(bitmap, s),
+      draw: (s, top) => c.centeredFontText(bitmap, s, 120,
+                                           top - (bitmap.ascent + cap[4])),
+    };
+  }
+  const options = { bold };
+  const box = c.ttfBounds("H", px, options);
+  return {
+    cap: box.bottom - box.top,
+    width: s => c.ttfWidth(s, px, options),
+    draw: (s, top) => c.ttfText(s, 120, top - box.top, px, { ...options, center: true }),
+  };
+}
+const small = makeFont(16, false);
+const titleFont = makeFont(22, true);
+const bodyFont = makeFont(L.bodySize, L.bodyBold);
+
+small.draw(app.toUpperCase(), L.appTop);
+
+// Lay the title and body out from a starting row; returns [font, text, row].
+function layout(start) {
+  const lines = [];
+  let next = start;
+  if (n.title) {
+    const used = wrap(n.title, (line, i) => start + i * L.titleLineHeight,
+                      L.titleLines, top => chord(top, titleFont.cap + 4), titleFont,
+                      (s, top) => lines.push([titleFont, s, top]));
+    next = start + (used - 1) * L.titleLineHeight + titleFont.cap + L.gapAfterTitle;
+  }
+  const bodyLines = Math.max(1, Math.floor(
+      (L.bottom - next - bodyFont.cap) / L.bodyLineHeight) + 1);
+  wrap(n.text, (line, i) => next + i * L.bodyLineHeight, bodyLines,
+       top => chord(top, bodyFont.cap + 5), bodyFont,
+       (s, top) => lines.push([bodyFont, s, top]));
+  return lines;
+}
+const bottomOf = lines => lines.length
+    ? Math.max(...lines.map(([font, , top]) => top + font.cap)) : L.titleTop;
+// Short messages move down towards the middle, where the panel is wider,
+// but never so far that more text gets cut off than at the top.
+const cut = ls => ls.filter(([, s]) => s.endsWith("...")).length;
+const base = layout(L.titleTop);
+let lines = base;
+if (L.centre && base.length) {
+  const height = bottomOf(base) - L.titleTop;
+  for (let start = L.titleTop + Math.floor((L.bottom - L.titleTop - height) / 2);
+       start > L.titleTop; start -= 2) {
+    const moved = layout(start);
+    if (bottomOf(moved) <= L.bottom && cut(moved) <= cut(base) &&
+        moved.length <= base.length) {
+      lines = moved;
+      break;
+    }
+  }
+}
+for (const [font, s, top] of lines) font.draw(s, top);
+
+// ---- helpers ---------------------------------------------------------------
+function glyph(font, ch) { return font.glyphs[ch.charCodeAt(0) - font.first]; }
+
+// Word wrap. rowOf(line, i) gives each line's row, widthAt(row) its width,
+// the last line is cut with "...". Returns the number of lines drawn.
+function wrap(text, rowOf, maxLines, widthAt, font, draw) {
+  const measure = font.width ? font.width : s => c.fontTextWidth(font, s);
+  const words = String(text || "").split(/\\s+/).filter(Boolean);
+  let lines = 0;
+  while (words.length && lines < maxLines) {
+    const row = rowOf(null, lines);
+    const width = widthAt(row);
+    let line = "";
+    if (lines === maxLines - 1) {
+      line = words.join(" ");
+      words.length = 0;
+      if (measure(line) > width) {
+        while (line.length && measure(line.trimEnd() + "...") > width) line = line.slice(0, -1);
+        line = line.trimEnd() + "...";
+      }
+    } else {
+      while (words.length) {
+        const candidate = line ? line + " " + words[0] : words[0];
+        if (measure(candidate) <= width) { line = candidate; words.shift(); continue; }
+        // Break after a hyphen inside the word if that part fits.
+        const hyphen = words[0].lastIndexOf("-", words[0].length - 2);
+        if (hyphen > 0) {
+          const head = words[0].slice(0, hyphen + 1);
+          const withHead = line ? line + " " + head : head;
+          if (measure(withHead) <= width) {
+            line = withHead; words[0] = words[0].slice(hyphen + 1);
+            break;
+          }
+        }
+        if (!line) {   // one word wider than the line: break it
+          let part = words[0];
+          while (part.length > 1 && measure(part) > width) part = part.slice(0, -1);
+          line = part; words[0] = words[0].slice(part.length);
+        }
+        break;
+      }
+    }
+    draw(line, row);
+    lines++;
+  }
+  return lines;
+}
+`;
+
 // ---- watch state controls ---------------------------------------------
 const params = new URLSearchParams(location.search);
 const FIELDS = [
@@ -807,6 +968,12 @@ const FIELDS = [
   { id: "vibration_on", label: "Vibration on", type: "checkbox", value: true },
   { id: "bluetooth_connected", label: "Phone connected", type: "checkbox", value: true },
   { id: "notification_count", label: "Notifications", type: "number", value: 2, min: 0, max: 5 },
+  { id: "notif_app", label: "Newest notification app (24 chars)", type: "text",
+    value: "Messages", max: 24 },
+  { id: "notif_title", label: "Newest notification title (28 chars)", type: "text",
+    value: "Alexandra Montgomery-Smith", max: 28 },
+  { id: "notif_text", label: "Newest notification text (56 chars)", type: "text",
+    value: "Running about ten minutes late, save me a seat please!", max: 56 },
   { id: "weekday_alarm_on", label: "Weekday alarm on", type: "checkbox", value: true },
   { id: "weekend_alarm_on", label: "Weekend alarm on", type: "checkbox", value: false },
   { id: "event_title", label: "Next event title (28 chars)", type: "text",
@@ -899,6 +1066,8 @@ function buildModel() {
     weather_condition: fieldValue("weather_condition"),
     bluetooth_enabled: true, bluetooth_connected: fieldValue("bluetooth_connected"),
     notification_count: fieldValue("notification_count"),
+    notifications: [{ app: fieldValue("notif_app"), title: fieldValue("notif_title"),
+                      text: fieldValue("notif_text") }],
     weekday_alarm_on: fieldValue("weekday_alarm_on"),
     weekend_alarm_on: fieldValue("weekend_alarm_on"),
     alarm_hour: 7, alarm_minute: 30,
@@ -1012,6 +1181,7 @@ function paintOverlay() {
 const FACES = {
   firmware: { code: DEFAULT_CODE, key: "faceSim.code" },
   lake: { code: LAKE_CODE, key: "faceSim.code.lake" },
+  notify: { code: NOTIFY_CODE, key: "faceSim.code.notify" },
 };
 const faceSelect = document.getElementById("face");
 faceSelect.value = FACES[params.get("face")] ? params.get("face")
