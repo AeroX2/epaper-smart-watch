@@ -33,6 +33,7 @@ enum class WatchIcon : uint8_t {
   Settings,
   Bluetooth,
   Battery,
+  Phone,
   Count,
 };
 

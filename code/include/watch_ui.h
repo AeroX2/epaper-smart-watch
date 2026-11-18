@@ -13,6 +13,7 @@ enum class WatchScreen : uint8_t {
   Weather,
   Sensors,
   Activity,
+  FindPhone,
   Settings,
   Count,
 };
@@ -28,7 +29,7 @@ enum class WatchUiAction : uint8_t {
   BluetoothToggle,
   SettingsChanged,       // local-only setting (LED ring)
   PhoneSettingsChanged,  // vibration or quiet mode: synced to the phone
-  FindPhoneToggle,
+  FindPhoneToggle,       // start or stop ringing the phone
   AlertToneChanged,      // model.alert_tone cycled: sync, persist, preview
   SecureLinkChanged,     // model.secure_link toggled
   ForgetPhone,           // confirmed on the Settings row
@@ -252,6 +253,7 @@ class WatchUi {
   void drawSensors(const WatchUiModel& model);
   void drawActivity(const WatchUiModel& model);
   void drawSettings(const WatchUiModel& model);
+  void drawFindPhone(const WatchUiModel& model);
   void drawCall(const WatchUiModel& model);
   void drawNotificationPeek(const WatchUiModel& model);
   void drawOta(const WatchUiModel& model);

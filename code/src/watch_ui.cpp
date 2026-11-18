@@ -41,14 +41,21 @@ const BitmapFont& fontForScale(uint8_t scale) {
 
 constexpr const char* SCREEN_LABELS[] = {
     "CLOCK", "MESSAGES", "TIMER", "ALARMS", "MUSIC",
-    "WEATHER", "SENSORS", "ACTIVITY", "SETTINGS",
+    "WEATHER", "SENSORS", "ACTIVITY", "FIND PHONE", "SETTINGS",
 };
 
 constexpr WatchIcon SCREEN_ICONS[] = {
     WatchIcon::Notifications, WatchIcon::Notifications, WatchIcon::Timer,
     WatchIcon::Alarms,        WatchIcon::Music,         WatchIcon::Weather,
-    WatchIcon::Sensors,       WatchIcon::Activity,      WatchIcon::Settings,
+    WatchIcon::Sensors,       WatchIcon::Activity,      WatchIcon::Phone,
+    WatchIcon::Settings,
 };
+static_assert(sizeof(SCREEN_LABELS) / sizeof(SCREEN_LABELS[0]) ==
+                  static_cast<size_t>(WatchScreen::Count),
+              "one launcher label per screen");
+static_assert(sizeof(SCREEN_ICONS) / sizeof(SCREEN_ICONS[0]) ==
+                  static_cast<size_t>(WatchScreen::Count),
+              "one launcher icon per screen");
 
 WatchScreen launcherScreen(int16_t index) {
   constexpr int16_t first = static_cast<int16_t>(WatchScreen::Notifications);
@@ -70,7 +77,6 @@ enum SettingRow : uint8_t {
   SETTING_LED_RING,
   SETTING_VIBRATION,
   SETTING_ALERT_TONE,
-  SETTING_FIND_PHONE,
   SETTING_SECURE_LINK,
   SETTING_FORGET_PHONE,
   SETTING_COUNT,
@@ -898,9 +904,15 @@ WatchUiAction WatchUi::select(WatchUiModel& model) {
   }
   if (!inside_) {
     inside_ = true;
+    // Opening Find Phone rings the phone straight away.
+    if (screen_ == WatchScreen::FindPhone && !model.find_phone_active) {
+      return WatchUiAction::FindPhoneToggle;
+    }
     return WatchUiAction::None;
   }
   switch (screen_) {
+    case WatchScreen::FindPhone:
+      return WatchUiAction::FindPhoneToggle;
     case WatchScreen::Notifications:
       // The application removes notificationIndex() and tells the phone.
       return model.notification_count > 0
@@ -941,8 +953,6 @@ WatchUiAction WatchUi::select(WatchUiModel& model) {
           model.alert_tone =
               static_cast<uint8_t>((model.alert_tone + 1) % TONE_NAME_COUNT);
           return WatchUiAction::AlertToneChanged;
-        case SETTING_FIND_PHONE:
-          return WatchUiAction::FindPhoneToggle;
         case SETTING_SECURE_LINK:
           if (!model.secure_link_available) {
             return WatchUiAction::None;
@@ -1015,6 +1025,9 @@ void WatchUi::render(const WatchUiModel& model) {
     case WatchScreen::Activity:
       drawActivity(model);
       break;
+    case WatchScreen::FindPhone:
+      drawFindPhone(model);
+      break;
     case WatchScreen::Settings:
       drawSettings(model);
       break;
@@ -1049,7 +1062,7 @@ void WatchUi::clampNotificationIndex(uint8_t count) {
 const char* WatchUi::screenName() const {
   static constexpr const char* NAMES[] = {
       "clock", "notifications", "timer",    "alarms",  "music",
-      "weather", "sensors",       "activity", "settings",
+      "weather", "sensors",       "activity", "find phone", "settings",
   };
   const uint8_t index = static_cast<uint8_t>(screen_);
   return index < static_cast<uint8_t>(WatchScreen::Count)
@@ -1456,7 +1469,13 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
 
   canvas_.icon(SCREEN_ICONS[static_cast<uint8_t>(screen_)], 120, 88, 28);
   const char* selected = SCREEN_LABELS[static_cast<uint8_t>(screen_)];
-  canvas_.centeredFontText(WatchAssets::Bold36, selected, 120, 111);
+  // Long names drop to the smaller bold font, vertically centred on the same
+  // line, rather than running into the round edge.
+  if (canvas_.fontTextWidth(WatchAssets::Bold36, selected) <= 200) {
+    canvas_.centeredFontText(WatchAssets::Bold36, selected, 120, 111);
+  } else {
+    canvas_.centeredFontText(WatchAssets::Bold22, selected, 120, 118);
+  }
 
   char status[32] = {};
   switch (screen_) {
@@ -1493,6 +1512,12 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
     case WatchScreen::Activity:
       snprintf(status, sizeof(status), "%lu STEPS",
                static_cast<unsigned long>(model.steps));
+      break;
+    case WatchScreen::FindPhone:
+      snprintf(status, sizeof(status), "%s",
+               model.find_phone_active      ? "RINGING"
+               : model.bluetooth_connected ? "RING YOUR PHONE"
+                                           : "NOT CONNECTED");
       break;
     case WatchScreen::Settings:
       if (model.bluetooth_connected && model.phone_status_valid) {
@@ -1911,10 +1936,55 @@ void WatchUi::drawActivity(const WatchUiModel& model) {
   canvas_.centeredText("54 ACTIVE MIN", 120, 174, 1);
 }
 
+// Find Phone app: opening it rings the phone, select stops or rings again.
+void WatchUi::drawFindPhone(const WatchUiModel& model) {
+  const bool ringing = model.find_phone_active;
+  drawCardFrame("FIND PHONE", !model.bluetooth_connected ? ""
+                              : ringing                  ? "SELECT  STOP"
+                                                         : "SELECT  RING");
+
+  // A phone, 40 x 68, with sound waves either side while it rings.
+  constexpr int16_t PHONE_X = 100;
+  constexpr int16_t PHONE_Y = 44;
+  constexpr int16_t PHONE_W = 40;
+  constexpr int16_t PHONE_H = 68;
+  canvas_.fillRect(PHONE_X + 2, PHONE_Y, PHONE_W - 4, PHONE_H);
+  canvas_.fillRect(PHONE_X, PHONE_Y + 2, PHONE_W, PHONE_H - 4);
+  canvas_.fillRect(PHONE_X + 1, PHONE_Y + 1, PHONE_W - 2, PHONE_H - 2);
+  canvas_.fillRect(PHONE_X + 4, PHONE_Y + 9, PHONE_W - 8, PHONE_H - 20, false);
+  canvas_.fillRect(116, PHONE_Y + 4, 8, 2, false);    // speaker
+  canvas_.fillCircle(120, PHONE_Y + PHONE_H - 6, 2, false);  // button
+  if (ringing) {
+    const int16_t center_y = PHONE_Y + PHONE_H / 2;
+    for (int16_t wave = 0; wave < 3; ++wave) {
+      const float radius = 30.0f + wave * 9.0f;
+      for (int16_t step = -56; step <= 56; ++step) {
+        const float angle = step * 0.01f;  // about +-32 degrees
+        const int16_t dx = static_cast<int16_t>(lroundf(cosf(angle) * radius));
+        const int16_t dy = static_cast<int16_t>(lroundf(sinf(angle) * radius));
+        for (int16_t thick = 0; thick < 3; ++thick) {
+          canvas_.pixel(120 + dx + thick, center_y + dy);
+          canvas_.pixel(120 - dx - thick, center_y + dy);
+        }
+      }
+    }
+  }
+
+  const char* state = ringing                      ? "RINGING"
+                      : model.bluetooth_connected ? "NOT RINGING"
+                                                  : "NOT CONNECTED";
+  canvas_.centeredFontText(WatchAssets::Bold22, state, 120, 124);
+  const char* hint = ringing ? "Stops by itself after 2 min"
+                     : model.bluetooth_connected
+                         ? "Select to ring it"
+                         : "Connect the phone first";
+  canvas_.centeredFittedFontText(WatchAssets::Ui16, hint, 120, 156, 190);
+}
+
 void WatchUi::drawSettings(const WatchUiModel& model) {
   static constexpr const char* LABELS[SETTING_COUNT] = {
       "BLUETOOTH",  "QUIET",      "LED RING",    "VIBRATION",
-      "ALERT TONE", "FIND PHONE", "SECURE LINK", "FORGET PHONE",
+      "ALERT TONE", "SECURE LINK", "FORGET PHONE",
   };
   if (selected_setting_ >= SETTING_COUNT) {
     selected_setting_ = 0;
@@ -1964,9 +2034,6 @@ void WatchUi::drawSettings(const WatchUiModel& model) {
         value = TONE_NAMES[model.alert_tone < TONE_NAME_COUNT
                                ? model.alert_tone
                                : 0];
-        break;
-      case SETTING_FIND_PHONE:
-        drawToggle(TOGGLE_X, y + 5, model.find_phone_active);
         break;
       case SETTING_SECURE_LINK:
         if (model.secure_link_available) {

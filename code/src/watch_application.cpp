@@ -243,6 +243,9 @@ uint32_t WatchApplication::sleepBudgetMs() {
   }
   consider(activity_.msUntilNextService(now));
   consider(ble_.msUntilAdvertisingService());
+  if (model_.find_phone_active) {
+    consider(remaining(FIND_PHONE_RING_MS, now - find_phone_since_ms_));
+  }
   if (display_light_on_) {
     consider(remaining(DISPLAY_LIGHT_TIMEOUT_MS,
                        now - display_light_since_ms_));
@@ -606,6 +609,7 @@ void WatchApplication::applyUiAction(WatchUiAction action) {
       const bool start = !model_.find_phone_active;
       if (ble_.sendf("FIND_PHONE|%d", start ? 1 : 0)) {
         model_.find_phone_active = start;
+        find_phone_since_ms_ = millis();
       } else {
         Serial.println(F("Find phone: no phone connected."));
       }
@@ -752,6 +756,7 @@ void WatchApplication::servicePhoneLink() {
     model_.find_phone_active = false;
     model_.phone_status_valid = false;
     bool redraw = ota_.onDisconnect(Serial);
+    redraw |= ui_.screen() == WatchScreen::FindPhone;  // shows the link state
     if (model_.call_active) {
       endCall();
       redraw = true;
@@ -808,7 +813,7 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
       model_.find_phone_active = false;
       sendStatus();
       ota_.sendBootReport(Serial);
-      return false;
+      return screen == WatchScreen::FindPhone;  // shows the link state
     case PhoneUpdateType::Time:
       if (rtc_.setUtc(update.utc, n[0])) {
         rtc_.setTransition(static_cast<uint32_t>(n[2]), n[1]);
@@ -1000,6 +1005,19 @@ void WatchApplication::serviceNotificationPeek() {
   if (model_.notification_peek &&
       millis() - peek_since_ms_ >= NOTIFICATION_PEEK_MS) {
     endNotificationPeek();
+  }
+}
+
+void WatchApplication::serviceFindPhone() {
+  if (!model_.find_phone_active ||
+      millis() - find_phone_since_ms_ < FIND_PHONE_RING_MS) {
+    return;
+  }
+  model_.find_phone_active = false;
+  Serial.println(F("Find phone: phone has stopped ringing by now."));
+  if (display_controller_.active() && !model_.notification_peek &&
+      (ui_.screen() == WatchScreen::FindPhone)) {
+    renderUi();
   }
 }
 
@@ -1260,6 +1278,10 @@ void WatchApplication::handleButton(size_t index) {
     }
     return;
   }
+  if (index == 0 && ui_.screen() == WatchScreen::FindPhone && ui_.isInside() &&
+      model_.find_phone_active) {
+    applyUiAction(WatchUiAction::FindPhoneToggle);  // leaving stops the ring
+  }
   switch (index) {
     case 0: ui_.home(); break;
     case 1: applyUiAction(ui_.next(model_)); break;
@@ -1346,6 +1368,7 @@ void WatchApplication::loop() {
   model_.bluetooth_connected = ble_.connected();
   processPhoneUpdates();
   serviceNotificationPeek();
+  serviceFindPhone();
   servicePhoneLink();
   if (ble_.takeBondChange()) {
     // A phone has just paired: keep its key (flash work stays out of the

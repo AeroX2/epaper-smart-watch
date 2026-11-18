@@ -324,7 +324,7 @@ entry. This keeps the button meanings deterministic: PREV/NEXT never trigger an 
 browsing, and never leave the current card while inside it.
 
 Implemented screens mirror the browser playground: clock, notification, timer, alarms, music,
-weather, sensors, activity, and settings. Temperature, humidity, pressure, acceleration, battery
+weather, sensors, activity, find phone, and settings. Temperature, humidity, pressure, acceleration, battery
 percentage, battery voltage, time, timer state, alarms, and steps are live watch data. Phone
 notifications, forecast data, time sync, and music metadata/control use the companion BLE link.
 
@@ -340,8 +340,8 @@ step) rather than periodic raw acceleration sampling. Resetting steps records a 
 accelerometer itself.
 
 The Settings card is a scrolling list (five rows visible, arrows mark more rows above/below, the
-footer shows the position): Bluetooth, Quiet, LED ring, Vibration, Alert tone, Find phone, Secure
-link, Forget phone. Alert tone cycles NONE / CHIRP / DOUBLE / RISE / FALL / TRIPLE and plays the
+footer shows the position): Bluetooth, Quiet, LED ring, Vibration, Alert tone, Secure link,
+Forget phone. Alert tone cycles NONE / CHIRP / DOUBLE / RISE / FALL / TRIPLE and plays the
 new choice. Secure link shows `N/A` without working external flash. Forget phone needs a second
 select (`OK?`) to confirm and shows `--` when no phone is bonded.
 
@@ -483,7 +483,7 @@ What the watch does with the link:
 | Music | State none/playing/paused; the position advances locally while playing. Inside Music, previous/next/select send `MEDIA\|PREV`, `MEDIA\|NEXT`, `MEDIA\|PLAY_PAUSE`. |
 | Upcoming | The clock face shows the next calendar event (or else the phone's next alarm) within 24 h on one line under the time. The Alarms card also shows the phone alarm. |
 | Phone / link | The clock shows a Bluetooth icon while connected. Settings shows radio state, phone battery, charging, and Do Not Disturb. |
-| Find | Settings → Find phone sends `FIND_PHONE\|1`, and `\|0` on the next press. `FIND_WATCH` vibrates and buzzes for 10 s or until any button. |
+| Find | Opening the Find Phone app sends `FIND_PHONE\|1`; inside it select sends `\|0` or `\|1` again, and back stops the ringing as it leaves. The watch shows it as ringing for at most 2 min, as long as the phone rings. `FIND_WATCH` vibrates and buzzes for 10 s or until any button. |
 | Settings | Vibration, quiet mode and alert tone are applied from the phone (`SETTINGS\|v\|q\|tone`, tone optional) and sent back in the same form when changed on the watch. They are stored in external flash. |
 | Status / history | `STATUS\|battery\|mV\|steps\|-1` after `HELLO`, on request, when the battery percentage changes, and every 10 min. Steps roll over at local midnight into a history of six completed days; `REQUEST\|HISTORY` sends those plus today, oldest first, then `HISTORY_END`. The history survives resets when the external flash works. Both are suspended during a firmware transfer. |
 | Sleep as Android | `SLEEP_START`/`STOP`/`PAUSE`/`ALARM`/`ALARM_STOP`/`NOTIFY`/`HINT`; the watch sends `SLEEP_DATA\|max-delta-mg` every ten seconds while tracking, plus `SLEEP_SNOOZE`/`SLEEP_DISMISS` from the alarm. |

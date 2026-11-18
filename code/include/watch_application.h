@@ -140,6 +140,12 @@ class WatchApplication {
   void serviceNotificationPeek();
   bool endNotificationPeek();
 
+  // The phone stops ringing by itself after this long (FindPhoneRinger), so
+  // the watch stops showing it as ringing then too.
+  static constexpr uint32_t FIND_PHONE_RING_MS = 2UL * 60UL * 1000UL;
+  uint32_t find_phone_since_ms_ = 0;
+  void serviceFindPhone();
+
   // Front light switches itself off this long after it was turned on or a
   // button was last pressed.
   static constexpr uint32_t DISPLAY_LIGHT_TIMEOUT_MS = 30000;
