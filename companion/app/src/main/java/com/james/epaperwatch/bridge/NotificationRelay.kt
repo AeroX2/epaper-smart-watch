@@ -19,6 +19,8 @@ import com.james.epaperwatch.protocol.OutMessage
  *
  * - Filters out our own app, group summaries, ongoing / foreground-service notifications and
  *   the progress/transport/service/system/status categories, plus apps the user has denied.
+ * - Only apps with a launcher icon are forwarded, so system notices (charging, USB, battery
+ *   care, "running in background") never reach the watch.
  * - Each StatusBarNotification key gets a stable small id (1..65535) for as long as it is shown.
  * - Re-posts with identical (sanitised) content are not re-sent.
  * - `NOTIFY.alert` is 1 only the first time a key is forwarded from a live post; content
@@ -223,6 +225,9 @@ object NotificationRelay {
             ?: extras.getCharSequence(Notification.EXTRA_TEXT)
             ?: extras.getCharSequence(Notification.EXTRA_SUB_TEXT))?.toString().orEmpty()
         if (title.isBlank() && text.isBlank()) return null
+        // Only apps you can open: no charging, USB, "running in background" and similar
+        // notices from the system and its services, whatever category they use.
+        if (!isLaunchableApp(context, sbn.packageName)) return null
 
         val label = appLabel(context, sbn.packageName)
         prefs.rememberApp(sbn.packageName, label)
@@ -237,6 +242,30 @@ object NotificationRelay {
             outText = OtpRedactor.redact(outText, title, contextBefore = true)
         }
         return Content(label, outTitle, outText)
+    }
+
+    /** Package -> (has a launcher icon, time looked up). */
+    private val launchable = HashMap<String, Pair<Boolean, Long>>()
+
+    /** System packages whose notifications are never app notifications. */
+    private val SYSTEM_PACKAGES = setOf("android", "com.android.systemui")
+
+    /**
+     * True for an app with a launcher icon (the manifest's `<queries>` makes them visible).
+     * Cached like [appLabel]; installs and removals are picked up within [LABEL_TTL_MS].
+     */
+    fun isLaunchableApp(context: Context, packageName: String): Boolean {
+        if (packageName in SYSTEM_PACKAGES) return false
+        val now = SystemClock.elapsedRealtime()
+        launchable[packageName]?.let { (value, at) -> if (now - at < LABEL_TTL_MS) return value }
+        val value = try {
+            context.packageManager.getLaunchIntentForPackage(packageName) != null
+        } catch (_: Exception) {
+            true // unknown: do not hide it
+        }
+        if (launchable.size >= MAX_LABELS) launchable.clear()
+        launchable[packageName] = value to now
+        return value
     }
 
     /** The app's display name, cached: this runs for every notification and media callback. */
