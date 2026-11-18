@@ -256,6 +256,8 @@ class WatchUi {
   void drawFindPhone(const WatchUiModel& model);
   void drawCall(const WatchUiModel& model);
   void drawNotificationPeek(const WatchUiModel& model);
+  void drawNotification(const WatchNotification& notification,
+                        int16_t bottom);
   void drawOta(const WatchUiModel& model);
   void drawUpcoming(const WatchUiModel& model, int16_t y);
   void drawWrappedText(const BitmapFont& font, const char* text,

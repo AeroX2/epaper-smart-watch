@@ -194,6 +194,8 @@ constexpr int16_t TITLE_LINE_HEIGHT = 22;
 constexpr int16_t GAP_AFTER_TITLE = 10;
 constexpr int16_t BODY_LINE_HEIGHT = 25;
 constexpr int16_t BOTTOM = 216;  // nothing is drawn below this row
+// The Messages card keeps the rows below this for its footer.
+constexpr int16_t CARD_BOTTOM = 194;
 constexpr int16_t MARGIN = 6;    // kept clear of the round edge
 constexpr float RADIUS = 118.0f;
 constexpr uint8_t MAX_LINES = 8;
@@ -334,9 +336,10 @@ uint8_t wrap(Layout& out, const BitmapFont& font, const char* text,
   return used;
 }
 
-// Lays the title and body out with the title's first line at row start.
+// Lays the title and body out with the title's first line at row start and
+// nothing below row bottom.
 void layout(Layout& out, const WatchNotification& notification,
-            int16_t start) {
+            int16_t start, int16_t bottom) {
   out.count = 0;
   int16_t next = start;
   const BitmapFont& title_font = WatchAssets::Bold22;
@@ -350,7 +353,7 @@ void layout(Layout& out, const WatchNotification& notification,
     }
   }
   int16_t body_lines =
-      static_cast<int16_t>((BOTTOM - next - capHeight(body_font)) /
+      static_cast<int16_t>((bottom - next - capHeight(body_font)) /
                                BODY_LINE_HEIGHT + 1);
   if (body_lines < 1) {
     body_lines = 1;
@@ -1608,32 +1611,29 @@ void WatchUi::drawNotifications(const WatchUiModel& model) {
                             ? notification_index_
                             : model.notification_count - 1;
   const WatchNotification& notification = model.notifications[index];
-  drawCardFrame(notification.app[0] != '\0' ? notification.app : "MESSAGE",
-                "DISMISS");
-  int16_t body_y = 50;
-  if (notification.title[0] != '\0') {
-    canvas_.centeredFittedFontText(WatchAssets::Bold22, notification.title,
-                                   120, 42, 176);
-    body_y = 72;
-  }
-  drawWrappedText(WatchAssets::Ui16, notification.text, 120, body_y, 184,
-                  body_y == 72 ? 4 : 5, 22);
+  char footer[20];
   if (model.notification_count > 1) {
-    char position[8];
-    snprintf(position, sizeof(position), "%u/%u", index + 1,
+    snprintf(footer, sizeof(footer), "%u/%u  DISMISS", index + 1,
              model.notification_count);
-    canvas_.centeredFontText(WatchAssets::Ui16, position, 120, 172);
+  } else {
+    snprintf(footer, sizeof(footer), "DISMISS");
   }
+  drawCardFrame("", footer);
+  drawNotification(notification, peek::CARD_BOTTOM);
 }
 
 // The newest notification, shown briefly over whatever screen is current
-// when it arrives with an alert; any button closes it. The app name sits at
-// the top in capitals, the title takes up to two lines and the body is in a
-// larger font than the Messages card. Short notifications move down towards
-// the middle of the panel, where the lines are wider.
+// when it arrives with an alert; any button closes it.
 void WatchUi::drawNotificationPeek(const WatchUiModel& model) {
-  const WatchNotification& notification = model.notifications[0];
+  drawNotification(model.notifications[0], peek::BOTTOM);
+}
 
+// One notification, for the pop-up and the Messages card: the app name at
+// the top in capitals, the title on up to two lines and the body in the
+// 20 px font. Short notifications move down towards the middle of the
+// panel, where the lines are wider. Nothing is drawn below row bottom.
+void WatchUi::drawNotification(const WatchNotification& notification,
+                               int16_t bottom) {
   char app[sizeof(notification.app)]{};
   const char* app_source =
       notification.app[0] != '\0' ? notification.app : "Message";
@@ -1648,18 +1648,18 @@ void WatchUi::drawNotificationPeek(const WatchUiModel& model) {
   // Static: two layouts are about 1 KB, too much for the stack.
   static peek::Layout base;
   static peek::Layout moved;
-  peek::layout(base, notification, peek::TITLE_TOP);
+  peek::layout(base, notification, peek::TITLE_TOP, bottom);
   const peek::Layout* chosen = &base;
   if (base.count > 0) {
     const int16_t height =
         static_cast<int16_t>(peek::bottomOf(base) - peek::TITLE_TOP);
     const uint8_t base_cuts = peek::cutCount(base);
     for (int16_t start = static_cast<int16_t>(
-             peek::TITLE_TOP + (peek::BOTTOM - peek::TITLE_TOP - height) / 2);
+             peek::TITLE_TOP + (bottom - peek::TITLE_TOP - height) / 2);
          start > peek::TITLE_TOP; start -= 2) {
       // Never move so far that more text gets cut off than at the top.
-      peek::layout(moved, notification, start);
-      if (peek::bottomOf(moved) <= peek::BOTTOM &&
+      peek::layout(moved, notification, start, bottom);
+      if (peek::bottomOf(moved) <= bottom &&
           peek::cutCount(moved) <= base_cuts && moved.count <= base.count) {
         chosen = &moved;
         break;
