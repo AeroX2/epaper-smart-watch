@@ -253,13 +253,32 @@ class WatchUi {
   void drawCall(const WatchUiModel& model);
   void drawNotificationPeek(const WatchUiModel& model);
   void drawNotification(const WatchNotification& notification,
-                        int16_t bottom);
+                        int16_t bottom, const char* counter = nullptr);
   void drawOta(const WatchUiModel& model);
   void drawUpcoming(const WatchUiModel& model, int16_t y);
   void drawWrappedText(const BitmapFont& font, const char* text,
                        int16_t center_x, int16_t y, int16_t max_width,
                        uint8_t max_lines, int16_t line_height);
   void drawCardFrame(const char* title, const char* footer);
+
+  // "Shore" theme pieces shared by the apps (see the design canvas).
+  // Text helpers place text by the row where its capitals start.
+  void textAt(const BitmapFont& font, const char* value, int16_t center_x,
+              int16_t cap_top, bool black = true);
+  void leftTextAt(const BitmapFont& font, const char* value, int16_t x,
+                  int16_t cap_top, bool black = true);
+  void rightTextAt(const BitmapFont& font, const char* value, int16_t right,
+                   int16_t cap_top, bool black = true);
+  void drawTitle(const char* title);
+  // Dark dithered band along the bottom; labels sit over the select
+  // (bottom-left) and back (bottom-right) buttons. nullptr = no label.
+  void drawShore(const char* select, const char* back = "BACK");
+  // Progress round the rim, clockwise from the top; permille 0-1000.
+  void drawRim(uint16_t permille);
+  void drawPill(int16_t x, int16_t y, int16_t width, int16_t height,
+                bool black = true);
+  void drawSwitch(int16_t x, int16_t y, bool on, bool inverted = false);
+  uint32_t timer_total_seconds_ = 0;  // what the running timer started from
   void drawProgress(int16_t x, int16_t y, int16_t width, uint8_t percent,
                     int16_t height = 8);
   void drawToggle(int16_t x, int16_t y, bool enabled);
