@@ -94,7 +94,10 @@ class PixelCameraShutter : AccessibilityService() {
 
     companion object {
         const val PIXEL_CAMERA = "com.google.android.GoogleCamera"
+        // Pixel Camera 10 (Pixel 10 Pro Fold, Nov 2026): a Compose button tagged
+        // "ComposeShutter", described "Take photo". The others are older versions.
         private val SHUTTER_IDS = listOf(
+            "ComposeShutter",
             "$PIXEL_CAMERA:id/shutter_button",
             "$PIXEL_CAMERA:id/shutter",
         )
