@@ -309,7 +309,7 @@ The four active-low buttons currently map as follows:
 | 2 | Top-left | Browse: next card. Inside: next value/item |
 | 3 | Top-right | Browse: previous card. Inside: previous value/item |
 | 4 | Bottom-right | Home: inside: back to card. Browse: return to clock. Clock: press twice within 0.6 s to switch the LED ring on or off |
-| 1 | Bottom-left | Select: clock: open carousel. Browse: enter card. Inside: activate |
+| 1 | Bottom-left | Select: clock: play/pause the phone's music when it has any, else open carousel. Browse: enter card. Inside: activate |
 
 Each press acts when the button is released. There are no long presses and no two-button gestures.
 While an alarm rings, bottom-right (home) dismisses it and bottom-left (select) snoozes it. The

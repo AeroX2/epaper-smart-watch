@@ -1281,6 +1281,14 @@ void WatchApplication::handleButton(size_t index) {
       model_.find_phone_active) {
     applyUiAction(WatchUiAction::FindPhoneToggle);  // leaving stops the ring
   }
+  if (index == 3 && ui_.screen() == WatchScreen::Clock &&
+      model_.music_state != MusicState::None) {
+    // Play/pause from the clock: the face does not show music, so nothing
+    // needs redrawing.
+    applyUiSelection();
+    Serial.println(F("Clock: music play/pause."));
+    return;
+  }
   switch (index) {
     case 0: ui_.home(); break;
     case 1: applyUiAction(ui_.next(model_)); break;
