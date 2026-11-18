@@ -68,6 +68,7 @@ class MainActivity : Activity() {
     private lateinit var accessButton: Button
     private lateinit var forwardSwitch: Switch
     private lateinit var redactSwitch: Switch
+    private lateinit var messagesOnlySwitch: Switch
     private lateinit var callsSwitch: Switch
     private lateinit var rejectSwitch: Switch
     private lateinit var calendarSwitch: Switch
@@ -532,6 +533,7 @@ class MainActivity : Activity() {
         accessButton.setTextColor(if (access) Ui.INK else Ui.ALERT)
         forwardSwitch.isChecked = prefs.forwardNotifications
         redactSwitch.isChecked = prefs.redactCodes
+        messagesOnlySwitch.isChecked = prefs.messagesOnly
         callsSwitch.isChecked = prefs.forwardCalls
         rejectSwitch.isChecked = prefs.rejectCalls && hasCallPermission()
         rejectSwitch.isEnabled = Build.VERSION.SDK_INT >= 28
@@ -698,6 +700,15 @@ class MainActivity : Activity() {
         root.addView(ui.button("Choose apps and private apps", primary = false) {
             startActivity(Intent(this, AppFilterActivity::class.java))
         })
+        messagesOnlySwitch = ui.switchRow(
+            "Only messages and email",
+            "Chats, texts, email and calendar reminders. Off: every app",
+        ) { _, on ->
+            if (rendering) return@switchRow
+            prefs.messagesOnly = on
+            WatchNotificationListener.reevaluate()
+        }
+        root.addView(messagesOnlySwitch)
         redactSwitch = ui.switchRow("Hide one-time codes", "Masks 4–8 digit codes next to words like code, OTP or PIN") { _, on ->
             if (rendering) return@switchRow
             prefs.redactCodes = on

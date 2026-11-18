@@ -228,6 +228,7 @@ object NotificationRelay {
         // Only apps you can open: no charging, USB, "running in background" and similar
         // notices from the system and its services, whatever category they use.
         if (!isLaunchableApp(context, sbn.packageName)) return null
+        if (prefs.messagesOnly && !isPersonal(n)) return null
 
         val label = appLabel(context, sbn.packageName)
         prefs.rememberApp(sbn.packageName, label)
@@ -242,6 +243,27 @@ object NotificationRelay {
             outText = OtpRedactor.redact(outText, title, contextBefore = true)
         }
         return Content(label, outTitle, outText)
+    }
+
+    /** Categories that are someone writing to you, or something you asked to be reminded of. */
+    private val PERSONAL_CATEGORIES = setOf(
+        Notification.CATEGORY_MESSAGE,
+        Notification.CATEGORY_EMAIL,
+        Notification.CATEGORY_EVENT,
+        Notification.CATEGORY_REMINDER,
+        "missed_call", // Notification.CATEGORY_MISSED_CALL, API 30
+    )
+
+    /**
+     * A message, email or reminder, judged by what the app told Android: its category, or a
+     * chat-style (MessagingStyle) layout for chat apps that leave the category unset. No list
+     * of apps is needed, and promotions, news, shopping and game notices are left on the phone.
+     */
+    private fun isPersonal(n: Notification): Boolean {
+        if (n.category in PERSONAL_CATEGORIES) return true
+        val template = n.extras.getString(Notification.EXTRA_TEMPLATE).orEmpty()
+        if (template.endsWith("\$MessagingStyle")) return true
+        return n.extras.containsKey(Notification.EXTRA_MESSAGES)
     }
 
     /** Package -> (has a launcher icon, time looked up). */

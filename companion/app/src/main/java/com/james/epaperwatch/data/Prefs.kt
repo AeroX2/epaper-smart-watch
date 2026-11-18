@@ -40,6 +40,10 @@ class Prefs(context: Context) {
     var rejectCalls: Boolean
         get() = sp.getBoolean("reject_calls", false)
         set(value) = sp.edit().putBoolean("reject_calls", value).apply()
+    /** Forward only messages, email and reminders (by Android's own category), not every app. */
+    var messagesOnly: Boolean
+        get() = sp.getBoolean("messages_only", true)
+        set(value) = sp.edit().putBoolean("messages_only", value).apply()
     var redactCodes: Boolean
         get() = sp.getBoolean("redact_codes", true)
         set(value) = sp.edit().putBoolean("redact_codes", value).apply()
