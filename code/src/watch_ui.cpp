@@ -1351,6 +1351,20 @@ void WatchUi::drawLakeClock(const WatchUiModel& model) {
                            100),
       BATTERY_HEIGHT - 4, ink);
   canvas_.fillRect(bx + BATTERY_WIDTH, by + 4, 2, BATTERY_HEIGHT - 8, ink);
+  if (model.charging) {
+    // A lightning bolt just right of the battery's tip.
+    using Point = MonochromeCanvas::PolygonPoint;
+    const float x = static_cast<float>(bx + BATTERY_WIDTH + 5);
+    const float y = static_cast<float>(by - 1);
+    const Point bolt[] = {
+        {x + 6.0f, y},         {x, y + 8.5f},         {x + 4.5f, y + 8.5f},
+        {x + 2.5f, y + 15.0f}, {x + 10.0f, y + 6.0f}, {x + 5.5f, y + 6.0f},
+        {x + 8.5f, y},
+    };
+    canvas_.fillPolygon(bolt, 7,
+                        ink ? MonochromeCanvas::Shade::Black
+                            : MonochromeCanvas::Shade::White);
+  }
 
   char buffer[48];
   snprintf(buffer, sizeof(buffer), "%s %u %s", WEEKDAYS[model.weekday % 7],

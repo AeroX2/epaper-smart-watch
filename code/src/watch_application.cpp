@@ -1580,6 +1580,14 @@ void WatchApplication::loop() {
   if ((wake_events & WATCH_WAKE_ACCELEROMETER) != 0) {
     activity_.serviceInterrupt(Serial);
   }
+  // The clock face shows a charging bolt while USB power is present.
+  const bool charging = power_.usbPowered();
+  if (charging != model_.charging) {
+    model_.charging = charging;
+    if (display_controller_.active() && ui_.screen() == WatchScreen::Clock) {
+      renderUi();
+    }
+  }
   if ((wake_events & WATCH_WAKE_BATTERY) != 0) {
     updateUiSensors();
   }

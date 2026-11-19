@@ -153,6 +153,9 @@ struct WatchUiModel {
   bool phone_charging = false;
   bool phone_dnd = false;
   bool find_phone_active = false;
+  // USB power present (the board has no charger status line; with USB in,
+  // the nPM1100 is charging or holding the battery full).
+  bool charging = false;
 
   CameraState camera_state = CameraState::Closed;
   uint16_t camera_number = 0;
