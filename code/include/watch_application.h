@@ -15,6 +15,7 @@
 #include "watch_diagnostics.h"
 #include "watch_display.h"
 #include "watch_power.h"
+#include "watch_power_log.h"
 #include "watch_rtc.h"
 #include "watch_dfu.h"
 #include "watch_flash.h"
@@ -113,6 +114,7 @@ class WatchApplication {
   WatchActivity activity_;
   WatchAlarm alarm_;
   WatchPower power_;
+  WatchPowerLog power_log_;
 
   static WatchApplication* instance_;
   bool in_background_ = false;
@@ -164,4 +166,19 @@ class WatchApplication {
   uint32_t select_press_ms_ = 0;
   void serviceSelectPress();
   uint32_t environment_read_ms_ = 0;
+
+  // Battery-use log (console c = dump, C twice = clear): one record a
+  // minute in external flash, with deltas since the previous record.
+  static constexpr uint32_t POWER_LOG_INTERVAL_MS = 60000;
+  void writePowerLog(uint8_t type);
+  void servicePowerLog();
+  uint32_t power_log_ms_ = 0;
+  WatchPower::Totals power_log_totals_{};
+  uint32_t power_log_ble_rx_ = 0;
+  uint32_t power_log_ble_tx_ = 0;
+  uint32_t renders_ = 0;          // display refreshes since boot
+  uint32_t render_ms_total_ = 0;  // time spent in them
+  uint32_t power_log_renders_ = 0;
+  uint32_t power_log_render_ms_ = 0;
+  uint32_t power_log_clear_armed_ms_ = 0;
 };

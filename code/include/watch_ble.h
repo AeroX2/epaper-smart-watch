@@ -134,6 +134,9 @@ class WatchBle {
 
   bool ready() const;
   bool connected() const;
+  // Writes received from the phone and notifications sent, since boot.
+  uint32_t rxWrites() const { return rx_writes_; }
+  uint32_t txNotifications() const { return tx_notifications_; }
   // True once after the link drops (outbound queue already cleared).
   bool takeDisconnected();
 
@@ -166,6 +169,8 @@ class WatchBle {
   static constexpr uint16_t ADV_INTERVAL_FAST = 160;
   static constexpr uint16_t ADV_INTERVAL_SLOW = 1636;
 
+  uint32_t rx_writes_ = 0;
+  uint32_t tx_notifications_ = 0;
   bool adv_fast_ = true;            // interval currently programmed
   bool adv_boost_pending_ = false;  // a disconnect asks for a fast window
   bool adv_retry_ = false;          // the last change was refused

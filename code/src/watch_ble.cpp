@@ -538,6 +538,7 @@ void WatchBle::handleWrite(const uint8_t* data, int length) {
   if (data == nullptr || length <= 0) {
     return;
   }
+  ++rx_writes_;
   // A write can only arrive while connected; make sure ACKs are not refused
   // because poll() has not yet observed the connection.
   connected_ = true;
@@ -860,6 +861,7 @@ void WatchBle::drainOutbound() {
       sending_active_ = false;
       return;
     }
+    ++tx_notifications_;
     // HCI flow control may spin briefly while controller buffers drain.
     WatchWatchdog::feed();
   }

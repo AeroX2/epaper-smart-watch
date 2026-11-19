@@ -105,6 +105,22 @@ class WatchPower {
 
   void printStatus(Print& out, bool radio_on, uint8_t busy);
 
+  // Running totals since boot, for the power log (deltas between two
+  // snapshots give one interval). Wake causes count Stop wakes only.
+  static constexpr uint8_t WAKE_CAUSES = 7;  // RTC, button, accelerometer,
+                                             // battery, radio, USB, other
+  struct Totals {
+    uint32_t stop_ms;
+    uint32_t idle_ms;
+    uint32_t stop_entries;
+    uint32_t idle_entries;
+    uint32_t wake_cause[WAKE_CAUSES];
+  };
+  void totals(Totals& out) const;
+  // Every WatchSleepBlock / WatchSleepBusy bit seen since the last call.
+  uint16_t takeBlocksSeen();
+  uint8_t takeBusySeen();
+
  private:
   enum class StopResult : uint8_t { Slept, Abandoned, Unavailable };
   enum WakeCause : uint8_t {
@@ -153,6 +169,8 @@ class WatchPower {
   uint32_t idle_ms_total_ = 0;
   uint32_t wake_cause_[CAUSE_COUNT]{};
   uint16_t last_blocks_ = 0;
+  uint16_t blocks_seen_ = 0;
+  uint8_t busy_seen_ = 0;
   volatile uint32_t usb_supply_changes_ = 0;  // PVM1 edges seen
 
   // Rolling one-minute window.

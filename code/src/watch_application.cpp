@@ -109,6 +109,8 @@ void WatchApplication::printHelp() {
   Serial.println(F("  q  probe external flash (JEDEC ID), config store, update state"));
   Serial.println(F("  t  play the next notification alert tone (1-5)"));
   Serial.println(F("  n  show the next sample notification pop-up"));
+  Serial.println(F("  c  dump the power log as CSV (tools/power_log.py reads it)"));
+  Serial.println(F("  C  twice: erase the power log"));
   Serial.println(F("  p  forget the bonded phone (erase the stored link key)"));
   Serial.println(F("  f  reboot into resident STM32 USB DFU"));
   Serial.println(F("  %  hang on purpose (tests the watchdog and hang monitor)"));
@@ -242,6 +244,9 @@ uint32_t WatchApplication::sleepBudgetMs() {
     consider(remaining(STATUS_INTERVAL_MS, now - last_status_ms_));
   }
   consider(activity_.msUntilNextService(now));
+  if (power_log_.available()) {
+    consider(remaining(POWER_LOG_INTERVAL_MS, now - power_log_ms_));
+  }
   consider(ble_.msUntilAdvertisingService());
   if (model_.find_phone_active) {
     consider(remaining(FIND_PHONE_RING_MS, now - find_phone_since_ms_));
@@ -350,7 +355,92 @@ void WatchApplication::updateMusicPosition() {
 
 void WatchApplication::renderUi() {
   updateUiSensors();
+  const uint32_t started = millis();
   display_controller_.render(Serial);
+  render_ms_total_ += millis() - started;
+  ++renders_;
+}
+
+// One power-log record. A boot record carries the state at startup; an
+// interval record carries what happened since the previous record.
+void WatchApplication::writePowerLog(uint8_t type) {
+  if (!power_log_.available() || !ota_.idle()) {
+    return;  // the external flash belongs to a firmware transfer
+  }
+  const uint32_t now = millis();
+  readBattery();
+  WatchPower::Totals totals{};
+  power_.totals(totals);
+
+  PowerLogRecord r{};
+  r.type = type;
+  rtc_.updateModel(model_);
+  r.local_epoch = model_.time_valid ? model_.local_epoch : 0;
+  r.uptime_s = now / 1000UL;
+  uint8_t flags = 0;
+  if (ble_.ready()) flags |= PowerLogRecord::FLAG_RADIO_ON;
+  if (ble_.connected()) flags |= PowerLogRecord::FLAG_CONNECTED;
+  if (power_.usbPowered()) flags |= PowerLogRecord::FLAG_USB_POWER;
+  if (display_light_on_) flags |= PowerLogRecord::FLAG_LIGHT_ON;
+  if (ble_.ready() && ble_.advertisingFast()) {
+    flags |= PowerLogRecord::FLAG_ADV_FAST;
+  }
+  if (model_.battery_valid) flags |= PowerLogRecord::FLAG_BATTERY_VALID;
+  if (model_.time_valid) flags |= PowerLogRecord::FLAG_TIME_VALID;
+  r.battery_mv = model_.battery_valid ? model_.battery_millivolts : 0;
+  r.battery_pct = model_.battery_valid ? model_.battery_percent : 0;
+
+  auto clamp16 = [](uint32_t value) -> uint16_t {
+    return value > 0xFFFFUL ? 0xFFFFU : static_cast<uint16_t>(value);
+  };
+  if (type == PowerLogRecord::TYPE_BOOT) {
+    if (watchdog_.resetByWatchdog()) {
+      flags |= PowerLogRecord::FLAG_WATCHDOG_RESET;
+    }
+    r.busy_seen = static_cast<uint8_t>(power_.mode());
+  } else {
+    const uint32_t interval = now - power_log_ms_;
+    r.interval_s = clamp16((interval + 500UL) / 1000UL);
+    r.stop_ms = totals.stop_ms - power_log_totals_.stop_ms;
+    r.idle_ms = totals.idle_ms - power_log_totals_.idle_ms;
+    const uint32_t asleep = r.stop_ms + r.idle_ms;
+    r.awake_ms = interval > asleep ? interval - asleep : 0;
+    r.stops = clamp16(totals.stop_entries - power_log_totals_.stop_entries);
+    r.sleeps = clamp16(totals.stop_entries + totals.idle_entries -
+                       power_log_totals_.stop_entries -
+                       power_log_totals_.idle_entries);
+    for (uint8_t cause = 0; cause < WatchPower::WAKE_CAUSES; ++cause) {
+      r.wake[cause] = clamp16(totals.wake_cause[cause] -
+                              power_log_totals_.wake_cause[cause]);
+    }
+    r.busy_seen = power_.takeBusySeen();
+    r.blocks_seen = power_.takeBlocksSeen();
+    r.renders = clamp16(renders_ - power_log_renders_);
+    r.display_cs = clamp16((render_ms_total_ - power_log_render_ms_) / 10UL);
+    r.ble_rx = clamp16(ble_.rxWrites() - power_log_ble_rx_);
+    r.ble_tx = clamp16(ble_.txNotifications() - power_log_ble_tx_);
+  }
+  r.flags = flags;
+
+  power_log_ms_ = now;
+  power_log_totals_ = totals;
+  power_log_renders_ = renders_;
+  power_log_render_ms_ = render_ms_total_;
+  power_log_ble_rx_ = ble_.rxWrites();
+  power_log_ble_tx_ = ble_.txNotifications();
+  if (type == PowerLogRecord::TYPE_BOOT) {
+    power_.takeBusySeen();
+    power_.takeBlocksSeen();
+  }
+  if (!power_log_.append(r)) {
+    Serial.println(F("[WARN] Power log record not written."));
+  }
+}
+
+void WatchApplication::servicePowerLog() {
+  if (millis() - power_log_ms_ >= POWER_LOG_INTERVAL_MS) {
+    writePowerLog(PowerLogRecord::TYPE_INTERVAL);
+  }
 }
 
 bool WatchApplication::startBluetooth() {
@@ -467,6 +557,7 @@ void WatchApplication::forgetPhone() {
 void WatchApplication::printStorageStatus() {
   flash_.printStatus(Serial);
   config_.printStatus(Serial);
+  power_log_.printStatus(Serial);
   ota_.printStatus(Serial);
   Serial.print(F("Secure link: "));
   Serial.print(model_.secure_link ? F("ON") : F("OFF"));
@@ -1262,6 +1353,21 @@ void WatchApplication::handleCommand(char command) {
       Serial.println(chosen[0]);
       break;
     }
+    case 'c':
+      power_log_.dump(Serial);
+      break;
+    case 'C':
+      // Twice within 3 s: erasing the log is not undoable.
+      if (power_log_clear_armed_ms_ != 0 &&
+          millis() - power_log_clear_armed_ms_ <= 3000) {
+        power_log_clear_armed_ms_ = 0;
+        power_log_.clear(Serial);
+        writePowerLog(PowerLogRecord::TYPE_BOOT);
+      } else {
+        power_log_clear_armed_ms_ = millis();
+        Serial.println(F("Send C again within 3 s to erase the power log."));
+      }
+      break;
     case 'h': case 'H': case '?': printHelp(); break;
     case '\r': case '\n': case ' ': case '\t': break;
     default:
@@ -1409,6 +1515,8 @@ void WatchApplication::setup() {
   if (config_.loadPowerMode(stored_sleep_mode)) {
     power_.setMode(static_cast<DeepSleepMode>(stored_sleep_mode));
   }
+  power_log_.begin(flash_, Serial);
+  writePowerLog(PowerLogRecord::TYPE_BOOT);
   printHelp();
   updateUiSensors();
   WatchWatchdog::feed();
@@ -1487,6 +1595,7 @@ void WatchApplication::loop() {
     }
   }
   serviceDisplayLight();
+  servicePowerLog();
   if (display_controller_.clockMinuteChanged()) {
     renderUi();
   }

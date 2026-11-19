@@ -363,6 +363,30 @@ WatchPower::StopResult WatchPower::enterStop(uint32_t ms) {
   return StopResult::Slept;
 }
 
+void WatchPower::totals(Totals& out) const {
+  static_assert(static_cast<uint8_t>(CAUSE_COUNT) == WAKE_CAUSES,
+                "WAKE_CAUSES must match WakeCause");
+  out.stop_ms = stop_ms_total_;
+  out.idle_ms = idle_ms_total_;
+  out.stop_entries = stop_entries_;
+  out.idle_entries = idle_entries_;
+  for (uint8_t cause = 0; cause < WAKE_CAUSES; ++cause) {
+    out.wake_cause[cause] = wake_cause_[cause];
+  }
+}
+
+uint16_t WatchPower::takeBlocksSeen() {
+  const uint16_t seen = blocks_seen_;
+  blocks_seen_ = 0;
+  return seen;
+}
+
+uint8_t WatchPower::takeBusySeen() {
+  const uint8_t seen = busy_seen_;
+  busy_seen_ = 0;
+  return seen;
+}
+
 void WatchPower::rollWindow(uint32_t now) {
   const uint32_t elapsed = now - window_started_ms_;
   if (elapsed < 60000UL) {
@@ -393,6 +417,8 @@ void WatchPower::sleep(uint32_t maximum_ms, bool radio_on, uint8_t busy) {
 
   const uint16_t blocks = blockers(radio_on, busy);
   last_blocks_ = blocks;
+  blocks_seen_ |= blocks;
+  busy_seen_ |= busy;
 
   const uint64_t rtc_before = rtc_->milliseconds();
   const uint32_t tick_before = HAL_GetTick();
