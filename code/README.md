@@ -82,7 +82,7 @@ back and start the application. STM32CubeProgrammer v2.23 fails to erase through
 the resident loader, so it is not used here. The
 USB path involves no external-flash staging (that is only used by the Bluetooth
 update described below).
-Holding PCB button 1 (bottom-left) during reset also enters resident DFU if an
+Holding PCB button 1 (top-left) during reset also enters resident DFU if an
 application update is interrupted or the application vector table is invalid.
 
 This prototype does not authenticate firmware. Anyone with physical USB access
@@ -306,10 +306,10 @@ below describes the roles, wherever they sit:
 
 | PCB button | Physical corner | Action |
 | --- | --- | --- |
-| 2 | Top-left | Browse: next card. Inside: next value/item |
-| 3 | Top-right | Browse: previous card. Inside: previous value/item |
-| 4 | Bottom-right | Home: inside: back to card. Browse: return to clock. Clock: press twice within 0.6 s to switch the LED ring on or off |
-| 1 | Bottom-left | Select: clock: open carousel; with notifications waiting, a double press within 0.6 s shows the newest one again as the pop-up (and a single press opens the carousel after that 0.6 s). Browse: enter card. Inside: activate |
+| 2 | Top-right | Next. Browse: next card. Inside: next value/item |
+| 3 | Bottom-right | Previous. Browse: previous card. Inside: previous value/item |
+| 4 | Bottom-left | Home: inside: back to card. Browse: return to clock. Clock: press twice within 0.6 s to switch the LED ring on or off |
+| 1 | Top-left | Select: clock: open carousel; with notifications waiting, a double press within 0.6 s shows the newest one again as the pop-up (and a single press opens the carousel after that 0.6 s). Browse: enter card. Inside: activate |
 
 Each press acts when the button is released. There are no long presses and no two-button gestures.
 
@@ -318,8 +318,8 @@ already uses, so they add next to no current): a **double tap** on the face (Z a
 sensitive, taps 40-500 ms apart) shows the newest notification as the pop-up (or closes it); **turning the wrist to look** (orientation change
 ending with the face roughly flat, |z| ≥ 0.75 g) lights the front light for 5 s between 19:00
 and 06:00. A button press while it is lit gives it the normal 30 s.
-While an alarm rings, bottom-right (home) dismisses it and bottom-left (select) snoozes it. Holding
-PCB button 1 (bottom-left) during reset for DFU is a bootloader feature and does not move with the
+While an alarm rings, home dismisses it and select snoozes it. Holding
+PCB button 1 (top-left) during reset for DFU is a bootloader feature and does not move with the
 layout.
 
 Console equivalents are `[` for previous, `]` for next, `m` for home, `o` for select, and `u` to
@@ -557,10 +557,10 @@ verify if the controller logic works but the booster does not.
 
 1. Install the combined factory image once, then use `tools/usb_dfu_update.py` for later application builds.
 2. Confirm the automatic peripheral test completes and `j` reports a plausible retained time.
-3. Press `u` once. Use the top buttons (PCB 2/3) to browse the seven cards; bottom-right (PCB 4)
-   returns to the clock.
-4. Browse to Timer, press bottom-left (PCB 1) to enter it, adjust with the top buttons, then press
-   bottom-left to start. Bottom-right backs out to the Timer card; a second press returns to the clock. Verify vibration/buzzer at zero,
+3. Press `u` once. Use the right-hand buttons (PCB 2/3) to browse the cards; bottom-left
+   (PCB 4) returns to the clock.
+4. Browse to Timer, press top-left (PCB 1) to enter it, adjust with the right-hand buttons, then
+   press top-left to start. Bottom-left backs out to the Timer card; a second press returns to the clock. Verify vibration/buzzer at zero,
    button 1 snoozes, and button 4 dismisses.
 5. Set a near-future alarm with `!HH:MM`, then test the same alarm controls.
 6. Press `r`; wait for `BLE advertising as "E-Paper Watch"`.

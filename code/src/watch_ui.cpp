@@ -1883,9 +1883,14 @@ void WatchUi::drawTimer(const WatchUiModel& model) {
     textAt(WatchAssets::Ui16, buffer, 120, 142);
     textAt(WatchAssets::LakeReading18, "RUNNING", 120, 166);
   } else {
-    // The top buttons set the minutes: top-left is next, top-right previous.
-    textAt(WatchAssets::LakeDate20, "+1", 70, 64);
-    textAt(WatchAssets::LakeDate20, "-1", 170, 64);
+    // Next adds a minute and Previous takes one off: show each by its
+    // button, wherever the layout puts it.
+    const auto hint = [this](const char* text, uint8_t corner) {
+      textAt(WatchAssets::LakeDate20, text, (corner & 1U) != 0 ? 170 : 70,
+             corner >= 2 ? 184 : 64);
+    };
+    hint("+1", model.next_corner);
+    hint("-1", model.previous_corner);
     textAt(WatchAssets::Ui16,
            model.timer_remaining_seconds == 0 ? "DONE" : "MINUTES", 120, 158);
   }

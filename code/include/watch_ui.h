@@ -152,6 +152,11 @@ struct WatchUiModel {
   CameraState camera_state = CameraState::Closed;
   uint16_t camera_number = 0;
   uint8_t camera_timer_seconds = 0;  // 0, 3 or 10; chosen on the watch
+
+  // Where the Next and Previous buttons are (ButtonCorner: 0 top-left,
+  // 1 top-right, 2 bottom-left, 3 bottom-right), for on-screen hints.
+  uint8_t next_corner = 1;
+  uint8_t previous_corner = 3;
   char camera_detail[21]{};
 };
 

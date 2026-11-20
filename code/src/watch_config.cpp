@@ -20,7 +20,9 @@ constexpr size_t SETTINGS_LENGTH = 4;
 constexpr size_t BOND_LENGTH = 24;
 constexpr size_t STEPS_LENGTH = 60;
 constexpr size_t POWER_LENGTH = 4;
-constexpr size_t BUTTONS_LENGTH = 4;
+constexpr size_t BUTTONS_LENGTH = 5;
+constexpr size_t BUTTONS_V1_LENGTH = 4;
+constexpr uint8_t BUTTONS_FORMAT = 2;
 
 }  // namespace
 
@@ -322,20 +324,35 @@ bool WatchConfigStore::saveRadioOn(bool on) {
 
 bool WatchConfigStore::loadButtons(uint8_t roles[4]) {
   uint8_t payload[BUTTONS_LENGTH];
-  if (!load(KIND_BUTTONS, payload, sizeof(payload))) {
+  if (load(KIND_BUTTONS, payload, sizeof(payload))) {
+    if (payload[0] != BUTTONS_FORMAT) {
+      return false;
+    }
+    memcpy(roles, payload + 1, 4);
+    return true;
+  }
+  // First format: the same buttons listed as (top-right, bottom-right,
+  // top-left, bottom-left) under the wrong names.
+  uint8_t old[BUTTONS_V1_LENGTH];
+  if (!load(KIND_BUTTONS, old, sizeof(old))) {
     return false;
   }
-  memcpy(roles, payload, BUTTONS_LENGTH);
+  roles[0] = old[2];
+  roles[1] = old[0];
+  roles[2] = old[3];
+  roles[3] = old[1];
   return true;
 }
 
 bool WatchConfigStore::saveButtons(const uint8_t roles[4]) {
   uint8_t payload[BUTTONS_LENGTH];
   if (load(KIND_BUTTONS, payload, sizeof(payload)) &&
-      memcmp(payload, roles, BUTTONS_LENGTH) == 0) {
+      payload[0] == BUTTONS_FORMAT && memcmp(payload + 1, roles, 4) == 0) {
     return true;  // unchanged: no flash wear
   }
-  return save(KIND_BUTTONS, roles, BUTTONS_LENGTH);
+  payload[0] = BUTTONS_FORMAT;
+  memcpy(payload + 1, roles, 4);
+  return save(KIND_BUTTONS, payload, BUTTONS_LENGTH);
 }
 
 void WatchConfigStore::printStatus(Print& out) {

@@ -28,7 +28,7 @@ class WatchButtons {
   static bool validLayout(const uint8_t roles[BUTTON_COUNT]);
   bool setLayout(const uint8_t roles[BUTTON_COUNT]);
   const uint8_t* layout() const { return roles_; }
-  // Top-left Next, top-right Previous, bottom-left Select, bottom-right Home.
+  // Top-left Select, top-right Next, bottom-left Home, bottom-right Previous.
   static const uint8_t DEFAULT_LAYOUT[BUTTON_COUNT];
 
  private:
@@ -40,5 +40,5 @@ class WatchButtons {
   bool stable_state_[BUTTON_COUNT]{};
   uint32_t changed_at_[BUTTON_COUNT]{};
   uint8_t pending_release_mask_ = 0;
-  uint8_t roles_[BUTTON_COUNT] = {1, 2, 3, 0};
+  uint8_t roles_[BUTTON_COUNT] = {3, 1, 0, 2};
 };

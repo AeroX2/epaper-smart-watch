@@ -49,6 +49,7 @@ class WatchApplication {
   uint8_t helloFlags() const;
   void loadStoredSettings();
   void persistSettings();
+  void syncButtonCorners();
   void forgetPhone();
   void printStorageStatus();
   void rebootForUpdate();

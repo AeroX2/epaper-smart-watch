@@ -6,21 +6,21 @@ namespace {
 
 // Index order is ButtonCorner; roles_ maps each corner to its role.
 constexpr uint32_t BUTTON_PINS[] = {
-    BoardPins::BUTTON_2,  // top-left
-    BoardPins::BUTTON_3,  // top-right
-    BoardPins::BUTTON_1,  // bottom-left (also the DFU button at reset)
-    BoardPins::BUTTON_4,  // bottom-right
+    BoardPins::BUTTON_1,  // top-left (also the DFU button at reset)
+    BoardPins::BUTTON_2,  // top-right
+    BoardPins::BUTTON_4,  // bottom-left
+    BoardPins::BUTTON_3,  // bottom-right
 };
 
 // BUTTON_4 shares its pin with the display SPI bus.
 constexpr uint8_t SHARED_SPI_INDEX =
-    static_cast<uint8_t>(ButtonCorner::BottomRight);
+    static_cast<uint8_t>(ButtonCorner::BottomLeft);
 static_assert(BUTTON_PINS[SHARED_SPI_INDEX] == BoardPins::BUTTON_4,
               "SHARED_SPI_INDEX must point at BUTTON_4");
 
 }  // namespace
 
-const uint8_t WatchButtons::DEFAULT_LAYOUT[BUTTON_COUNT] = {1, 2, 3, 0};
+const uint8_t WatchButtons::DEFAULT_LAYOUT[BUTTON_COUNT] = {3, 1, 0, 2};
 
 bool WatchButtons::validLayout(const uint8_t roles[BUTTON_COUNT]) {
   uint8_t seen = 0;

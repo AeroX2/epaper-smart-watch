@@ -550,6 +550,19 @@ void WatchApplication::loadStoredSettings() {
   if (config_.loadButtons(roles) && buttons_.setLayout(roles)) {
     Serial.println(F("Button layout restored from flash."));
   }
+  syncButtonCorners();
+}
+
+// The UI places its +1 / -1 hints by the Next and Previous buttons.
+void WatchApplication::syncButtonCorners() {
+  const uint8_t* roles = buttons_.layout();
+  for (uint8_t corner = 0; corner < WatchButtons::BUTTON_COUNT; ++corner) {
+    if (roles[corner] == 1) {
+      model_.next_corner = corner;
+    } else if (roles[corner] == 2) {
+      model_.previous_corner = corner;
+    }
+  }
 }
 
 void WatchApplication::persistSettings() {
@@ -1050,6 +1063,8 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
         if (!config_.saveButtons(roles) && flash_.present()) {
           Serial.println(F("[WARN] Button layout not saved to flash."));
         }
+        syncButtonCorners();
+        return screen == WatchScreen::Timer;
       }
       return false;
     }
