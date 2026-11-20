@@ -39,11 +39,11 @@ class WatchFlash;
 //   power (4):     u8 deep_sleep_mode (0 off, 1 radio-off only, 2 always),
 //                  u8 radio_on (1 = Bluetooth was on; restore it at boot),
 //                  u8 reserved[2]
-//   buttons (5):   u8 format (2), then the role of the top-left, top-right,
-//                  bottom-left and bottom-right button (0 Home, 1 Next,
-//                  2 Previous, 3 Select; each once). A 4-byte record is the
-//                  first format, whose corner labels were turned a quarter
-//                  turn; it is converted on load.
+//   buttons (5):   u8 format (3), then the role of PCB buttons 1-4 (BTN_1..4,
+//                  i.e. SW2, SW3, SW4, SW5): 0 Home, 1 Next, 2 Previous,
+//                  3 Select, each once. Earlier records listed corners under
+//                  wrong names (format 2, and the 4-byte first format); they
+//                  are converted on load.
 //
 // When the flash is absent, or after a write fails, every save returns false
 // and the callers simply keep running from RAM.

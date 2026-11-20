@@ -155,8 +155,8 @@ struct WatchUiModel {
 
   // Where the Next and Previous buttons are (ButtonCorner: 0 top-left,
   // 1 top-right, 2 bottom-left, 3 bottom-right), for on-screen hints.
-  uint8_t next_corner = 1;
-  uint8_t previous_corner = 3;
+  uint8_t next_corner = 3;
+  uint8_t previous_corner = 1;
   char camera_detail[21]{};
 };
 

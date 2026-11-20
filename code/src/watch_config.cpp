@@ -22,7 +22,8 @@ constexpr size_t STEPS_LENGTH = 60;
 constexpr size_t POWER_LENGTH = 4;
 constexpr size_t BUTTONS_LENGTH = 5;
 constexpr size_t BUTTONS_V1_LENGTH = 4;
-constexpr uint8_t BUTTONS_FORMAT = 2;
+constexpr uint8_t BUTTONS_FORMAT = 3;
+constexpr uint8_t BUTTONS_FORMAT_V2 = 2;
 
 }  // namespace
 
@@ -322,36 +323,56 @@ bool WatchConfigStore::saveRadioOn(bool on) {
   return save(KIND_POWER, payload, sizeof(payload));
 }
 
+namespace {
+
+// Corner order (WatchButtons) <-> PCB button order. Corners: top-left
+// BTN_4, top-right BTN_3, bottom-left BTN_1, bottom-right BTN_2.
+constexpr uint8_t CORNER_BUTTON[4] = {3, 2, 0, 1};  // corner -> button index
+
+}  // namespace
+
 bool WatchConfigStore::loadButtons(uint8_t roles[4]) {
+  uint8_t by_button[4];
   uint8_t payload[BUTTONS_LENGTH];
+  uint8_t old[BUTTONS_V1_LENGTH];
   if (load(KIND_BUTTONS, payload, sizeof(payload))) {
-    if (payload[0] != BUTTONS_FORMAT) {
+    if (payload[0] == BUTTONS_FORMAT) {
+      memcpy(by_button, payload + 1, 4);
+    } else if (payload[0] == BUTTONS_FORMAT_V2) {
+      // Listed buttons 1, 2, 4, 3.
+      by_button[0] = payload[1];
+      by_button[1] = payload[2];
+      by_button[2] = payload[4];
+      by_button[3] = payload[3];
+    } else {
       return false;
     }
-    memcpy(roles, payload + 1, 4);
-    return true;
-  }
-  // First format: the same buttons listed as (top-right, bottom-right,
-  // top-left, bottom-left) under the wrong names.
-  uint8_t old[BUTTONS_V1_LENGTH];
-  if (!load(KIND_BUTTONS, old, sizeof(old))) {
+  } else if (load(KIND_BUTTONS, old, sizeof(old))) {
+    // First format: listed buttons 2, 3, 1, 4.
+    by_button[0] = old[2];
+    by_button[1] = old[0];
+    by_button[2] = old[1];
+    by_button[3] = old[3];
+  } else {
     return false;
   }
-  roles[0] = old[2];
-  roles[1] = old[0];
-  roles[2] = old[3];
-  roles[3] = old[1];
+  for (uint8_t corner = 0; corner < 4; ++corner) {
+    roles[corner] = by_button[CORNER_BUTTON[corner]];
+  }
   return true;
 }
 
 bool WatchConfigStore::saveButtons(const uint8_t roles[4]) {
   uint8_t payload[BUTTONS_LENGTH];
-  if (load(KIND_BUTTONS, payload, sizeof(payload)) &&
-      payload[0] == BUTTONS_FORMAT && memcmp(payload + 1, roles, 4) == 0) {
+  payload[0] = BUTTONS_FORMAT;
+  for (uint8_t corner = 0; corner < 4; ++corner) {
+    payload[1 + CORNER_BUTTON[corner]] = roles[corner];
+  }
+  uint8_t stored[BUTTONS_LENGTH];
+  if (load(KIND_BUTTONS, stored, sizeof(stored)) &&
+      memcmp(stored, payload, BUTTONS_LENGTH) == 0) {
     return true;  // unchanged: no flash wear
   }
-  payload[0] = BUTTONS_FORMAT;
-  memcpy(payload + 1, roles, 4);
   return save(KIND_BUTTONS, payload, BUTTONS_LENGTH);
 }
 
