@@ -14,11 +14,13 @@ constexpr uint8_t KIND_SETTINGS = 1;
 constexpr uint8_t KIND_BOND = 2;
 constexpr uint8_t KIND_STEPS = 3;
 constexpr uint8_t KIND_POWER = 4;
+constexpr uint8_t KIND_BUTTONS = 5;
 
 constexpr size_t SETTINGS_LENGTH = 4;
 constexpr size_t BOND_LENGTH = 24;
 constexpr size_t STEPS_LENGTH = 60;
 constexpr size_t POWER_LENGTH = 4;
+constexpr size_t BUTTONS_LENGTH = 4;
 
 }  // namespace
 
@@ -318,9 +320,27 @@ bool WatchConfigStore::saveRadioOn(bool on) {
   return save(KIND_POWER, payload, sizeof(payload));
 }
 
+bool WatchConfigStore::loadButtons(uint8_t roles[4]) {
+  uint8_t payload[BUTTONS_LENGTH];
+  if (!load(KIND_BUTTONS, payload, sizeof(payload))) {
+    return false;
+  }
+  memcpy(roles, payload, BUTTONS_LENGTH);
+  return true;
+}
+
+bool WatchConfigStore::saveButtons(const uint8_t roles[4]) {
+  uint8_t payload[BUTTONS_LENGTH];
+  if (load(KIND_BUTTONS, payload, sizeof(payload)) &&
+      memcmp(payload, roles, BUTTONS_LENGTH) == 0) {
+    return true;  // unchanged: no flash wear
+  }
+  return save(KIND_BUTTONS, roles, BUTTONS_LENGTH);
+}
+
 void WatchConfigStore::printStatus(Print& out) {
   static const char* const NAMES[KIND_COUNT] = {"settings", "bond", "steps",
-                                                "power"};
+                                                "power", "buttons"};
   out.print(F("Config store: "));
   if (flash_ == nullptr || !flash_->present()) {
     out.println(F("no external flash (RAM only)"));

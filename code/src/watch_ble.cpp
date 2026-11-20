@@ -682,6 +682,18 @@ WatchBle::ParseResult WatchBle::parse(char* const* fields, uint8_t count,
       return ParseResult::Parse;
     }
     update.type = PhoneUpdateType::Settings;
+  } else if (strcmp(type, "BUTTONS") == 0) {
+    uint8_t seen = 0;
+    for (uint8_t i = 0; i < 4; ++i) {
+      if (field(1 + i)[0] == '\0' || !parseInteger(field(1 + i), 0, 3, n[i])) {
+        return ParseResult::Parse;
+      }
+      seen |= static_cast<uint8_t>(1U << n[i]);
+    }
+    if (seen != 0x0F) {
+      return ParseResult::Parse;  // each role exactly once
+    }
+    update.type = PhoneUpdateType::Buttons;
   } else if (strcmp(type, "TONE_PREVIEW") == 0) {
     if (field(1)[0] == '\0' || !parseInteger(field(1), 1, 5, n[0])) {
       return ParseResult::Parse;

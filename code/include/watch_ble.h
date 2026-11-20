@@ -30,6 +30,8 @@ enum class PhoneUpdateType : uint8_t {
   Settings,        // number[0..1]=vibration, quiet; number[2]=tone 0-5 or
                    // -1 when the field is missing (unchanged)
   TonePreview,     // number[0]=tone 1-5
+  Buttons,         // number[0..3]=role of top-left, top-right, bottom-left,
+                   // bottom-right (0 home, 1 next, 2 previous, 3 select)
   FindWatch,
   RequestStatus,
   RequestHistory,

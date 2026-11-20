@@ -18,7 +18,8 @@ class WatchFlash;
 //   0x002000 / 0x003000  2  bond key
 //   0x004000 / 0x005000  3  step history
 //   0x006000 / 0x007000  4  power policy
-//   0x008000 - 0x00FFFF  unused
+//   0x008000 / 0x009000  5  button layout
+//   0x00A000 - 0x00FFFF  unused
 //
 // Record, little-endian, at the start of its sector:
 //   0  u32 magic      0x47464357 ("WCFG")
@@ -38,6 +39,9 @@ class WatchFlash;
 //   power (4):     u8 deep_sleep_mode (0 off, 1 radio-off only, 2 always),
 //                  u8 radio_on (1 = Bluetooth was on; restore it at boot),
 //                  u8 reserved[2]
+//   buttons (4):   role of the top-left, top-right, bottom-left and
+//                  bottom-right button (0 Home, 1 Next, 2 Previous,
+//                  3 Select; each once)
 //
 // When the flash is absent, or after a write fails, every save returns false
 // and the callers simply keep running from RAM.
@@ -92,10 +96,14 @@ class WatchConfigStore {
   bool loadRadioOn(bool& on);
   bool saveRadioOn(bool on);
 
+  // Button roles by corner (see WatchButtons). No record = default layout.
+  bool loadButtons(uint8_t roles[4]);
+  bool saveButtons(const uint8_t roles[4]);
+
   void printStatus(Print& out);
 
  private:
-  static constexpr uint8_t KIND_COUNT = 4;
+  static constexpr uint8_t KIND_COUNT = 5;
   static constexpr size_t MAX_PAYLOAD = 60;
   static constexpr size_t HEADER_SIZE = 12;
   static constexpr size_t MAX_RECORD = HEADER_SIZE + MAX_PAYLOAD + 4;

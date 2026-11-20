@@ -4,21 +4,42 @@
 
 namespace {
 
-// Index order is the logical role: 0 Home/back, 1 Next, 2 Previous,
-// 3 Select.
+// Index order is ButtonCorner; roles_ maps each corner to its role.
 constexpr uint32_t BUTTON_PINS[] = {
-    BoardPins::BUTTON_4,  // bottom-right: Home
-    BoardPins::BUTTON_2,  // top-left: Next
-    BoardPins::BUTTON_3,  // top-right: Previous
-    BoardPins::BUTTON_1,  // bottom-left: Select
+    BoardPins::BUTTON_2,  // top-left
+    BoardPins::BUTTON_3,  // top-right
+    BoardPins::BUTTON_1,  // bottom-left (also the DFU button at reset)
+    BoardPins::BUTTON_4,  // bottom-right
 };
 
 // BUTTON_4 shares its pin with the display SPI bus.
-constexpr uint8_t SHARED_SPI_INDEX = 0;
+constexpr uint8_t SHARED_SPI_INDEX =
+    static_cast<uint8_t>(ButtonCorner::BottomRight);
 static_assert(BUTTON_PINS[SHARED_SPI_INDEX] == BoardPins::BUTTON_4,
               "SHARED_SPI_INDEX must point at BUTTON_4");
 
 }  // namespace
+
+const uint8_t WatchButtons::DEFAULT_LAYOUT[BUTTON_COUNT] = {1, 2, 3, 0};
+
+bool WatchButtons::validLayout(const uint8_t roles[BUTTON_COUNT]) {
+  uint8_t seen = 0;
+  for (uint8_t corner = 0; corner < BUTTON_COUNT; ++corner) {
+    if (roles[corner] >= BUTTON_COUNT) {
+      return false;
+    }
+    seen |= static_cast<uint8_t>(1U << roles[corner]);
+  }
+  return seen == 0x0F;
+}
+
+bool WatchButtons::setLayout(const uint8_t roles[BUTTON_COUNT]) {
+  if (!validLayout(roles)) {
+    return false;
+  }
+  memcpy(roles_, roles, BUTTON_COUNT);
+  return true;
+}
 
 void WatchButtons::begin() {
   const uint32_t now = millis();
@@ -45,7 +66,7 @@ bool WatchButtons::popPendingButton(WatchButtonEvent& event) {
       continue;
     }
     pending_release_mask_ &= static_cast<uint8_t>(~bit);
-    event.button_index = index;
+    event.button_index = roles_[index];
     return true;
   }
   return false;

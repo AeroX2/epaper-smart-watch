@@ -23,7 +23,7 @@ IO2/WP# PD6, IO3/HOLD# PD7.
 
 | Range | Owner | Use |
 |---|---|---|
-| `0x000000`–`0x00FFFF` | application | Config store (settings, bond keys, step history). Format is private to the application. The bootloader never touches it. |
+| `0x000000`–`0x00FFFF` | application | Config store (settings, bond keys, step history, power policy, button layout). Format is private to the application. The bootloader never touches it. |
 | `0x100000`–`0x100FFF` | both | OTA header sector |
 | `0x101000`–`0x1BAFFF` | application writes, bootloader reads | Staged firmware image (max 761856 bytes) |
 | `0x200000`–`0x3FFFFF` | application | Power log: a ring of 64-byte `PowerLogRecord`s (`include/watch_power_log.h`), one a minute, about 22 days. Records carry a sequence number and a CRC-32; the oldest 4 KiB sector is erased when the ring wraps. Console `c` dumps it, `C` twice erases it; `tools/power_log.py` reads and summarises it. The bootloader never touches it. |

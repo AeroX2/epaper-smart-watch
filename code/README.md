@@ -300,7 +300,9 @@ command uses mode `0x00`: measured here, mode `0x01` (the datasheet's black/whit
 table's length and runs 1.9 s. Console `y` switches ordinary updates back to the older GC fast
 update (1.1 s: it powers the controller up twice and runs a 31-frame waveform) for comparison.
 
-The four active-low buttons currently map as follows:
+The four active-low buttons map as follows by default. The companion app can give each corner any
+of the four roles (`BUTTONS` message, stored in external flash and restored at boot); everything
+below describes the roles, wherever they sit:
 
 | PCB button | Physical corner | Action |
 | --- | --- | --- |
@@ -316,9 +318,9 @@ already uses, so they add next to no current): a **double tap** on the face show
 notification as the pop-up (or closes it); **turning the wrist to look** (orientation change
 ending with the face roughly flat, |z| ≥ 0.75 g) lights the front light for 5 s between 19:00
 and 06:00. A button press while it is lit gives it the normal 30 s.
-While an alarm rings, bottom-right (home) dismisses it and bottom-left (select) snoozes it. The
-roles are set by the order of `BUTTON_PINS` in `watch_buttons.cpp`. Holding PCB button 1 during
-reset for DFU is a bootloader feature and is unchanged.
+While an alarm rings, bottom-right (home) dismisses it and bottom-left (select) snoozes it. Holding
+PCB button 1 (bottom-left) during reset for DFU is a bootloader feature and does not move with the
+layout.
 
 Console equivalents are `[` for previous, `]` for next, `m` for home, `o` for select, and `u` to
 redraw the current screen. Button inputs use a 35 ms debounce interval. PB4 is restored to its

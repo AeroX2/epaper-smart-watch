@@ -76,7 +76,7 @@ Phone → watch writes are not fragmented by the protocol: the ATT layer's prepa
 1. Phone connects, negotiates MTU, discovers services, enables notifications.
 2. Phone sends `HELLO` (seq'd). Watch replies `ACK`, then `HELLO` and `STATUS`.
 3. Phone then sends, in order: `TIME`, `SETTINGS`, `PHONE`, `NEXT_ALARM`, `EVENT`,
-   `MUSIC`, and current notifications (newest last, max 5).
+   `BUTTONS`, `MUSIC`, and current notifications (newest last, max 5).
 
 ## Phone → watch messages
 
@@ -92,6 +92,7 @@ Phone → watch writes are not fragmented by the protocol: the ATT layer's prepa
 | `EVENT` | `utc`, `title`(28) | Next calendar event starting within 24 h, `0|` = none. |
 | `PHONE` | `battery`, `charging`, `dnd` | Phone battery %, `1`/`0` charging, `1`/`0` Do Not Disturb active. |
 | `SETTINGS` | `vibration`, `quiet`, `tone` | `vibration`/`quiet` `1`/`0`. `tone` = notification alert tone: `0` none, `1` Chirp, `2` Double, `3` Rise, `4` Fall, `5` Triple (missing = unchanged). Phone's stored copy wins at session start. Quiet mode silences the tone; vibration is governed by `vibration`. |
+| `BUTTONS` | `tl`, `tr`, `bl`, `br` | Button layout: the role of the top-left, top-right, bottom-left and bottom-right button, `0` Home/back, `1` Next, `2` Previous, `3` Select. Each role exactly once, else `NAK\|seq\|PARSE`. Stored in the watch's flash; the phone sends it at session start after `SETTINGS`. Default `1\|2\|3\|0`. |
 | `TONE_PREVIEW` | `tone` | Play tone `1`–`5` once now (ignores quiet mode). |
 | `FIND_WATCH` | — | Watch alerts (vibrate + buzzer) for ~10 s or until any button. |
 | `CAMERA` | `state\|number\|detail` | The phone's camera screen for the watch's Camera app. `state`: `CLOSED`, `OPENING`, `READY`, `COUNTDOWN` (`number` = seconds), `SAVED` (`number` = photos since it opened) or `ERROR` (`detail`, ≤ 20 chars, e.g. `NO PERMISSION`, `CAMERA BUSY`, `TAP THE PHONE`, `PHOTO FAILED`). |

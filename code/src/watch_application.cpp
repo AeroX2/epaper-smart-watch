@@ -546,6 +546,10 @@ void WatchApplication::loadStoredSettings() {
     ble_.setBond(bond);
   }
   model_.phone_bonded = ble_.bond().valid;
+  uint8_t roles[WatchButtons::BUTTON_COUNT];
+  if (config_.loadButtons(roles) && buttons_.setLayout(roles)) {
+    Serial.println(F("Button layout restored from flash."));
+  }
 }
 
 void WatchApplication::persistSettings() {
@@ -1029,6 +1033,26 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
       }
       persistSettings();  // writes flash only if something changed
       return screen == WatchScreen::Settings && ui_.isInside();
+    case PhoneUpdateType::Buttons: {
+      const uint8_t roles[WatchButtons::BUTTON_COUNT] = {
+          static_cast<uint8_t>(n[0]), static_cast<uint8_t>(n[1]),
+          static_cast<uint8_t>(n[2]), static_cast<uint8_t>(n[3])};
+      if (buttons_.setLayout(roles)) {
+        Serial.print(F("Button layout (TL TR BL BR):"));
+        for (const uint8_t role : roles) {
+          Serial.print(' ');
+          Serial.print(role);
+        }
+        Serial.println();
+        // A half-finished double press belongs to the old layout.
+        home_press_armed_ = false;
+        select_press_armed_ = false;
+        if (!config_.saveButtons(roles) && flash_.present()) {
+          Serial.println(F("[WARN] Button layout not saved to flash."));
+        }
+      }
+      return false;
+    }
     case PhoneUpdateType::TonePreview:
       alarm_.notifyAlert(false, static_cast<uint8_t>(n[0]));
       return false;
