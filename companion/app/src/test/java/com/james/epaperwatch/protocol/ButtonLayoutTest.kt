@@ -21,15 +21,16 @@ class ButtonLayoutTest {
 
     @Test
     fun assigningARoleSwapsItWithTheCornerThatHadIt() {
-        // Top left becomes Next; top right (which had Next) takes Select.
-        assertEquals(listOf(1, 3, 0, 2), Protocol.assignButton(Protocol.DEFAULT_BUTTONS, 0, 1))
-        assertEquals(Protocol.DEFAULT_BUTTONS, Protocol.assignButton(Protocol.DEFAULT_BUTTONS, 0, 3))
+        // Top left becomes Next; bottom right (which had Next) takes Home.
+        assertEquals(listOf(1, 2, 3, 0), Protocol.assignButton(Protocol.DEFAULT_BUTTONS, 0, 1))
+        assertEquals(Protocol.DEFAULT_BUTTONS, Protocol.assignButton(Protocol.DEFAULT_BUTTONS, 0, 0))
     }
 
     @Test
-    fun theFirstFormatsDefaultIsTodaysDefault() {
+    fun earlierFormatsDefaultsAreTodaysDefault() {
         // Same buttons, same roles: only the corner names were wrong.
         assertEquals(Protocol.DEFAULT_BUTTONS, Protocol.buttonsFromFirstFormat(listOf(1, 2, 3, 0)))
+        assertEquals(Protocol.DEFAULT_BUTTONS, Protocol.buttonsFromSecondFormat(listOf(3, 1, 0, 2)))
     }
 
     @Test

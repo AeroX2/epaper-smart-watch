@@ -28,11 +28,12 @@ class Prefs(context: Context) {
 
     /** Button roles by corner (see [Protocol.BUTTON_CORNERS]); the default until changed. */
     var buttonLayout: List<Int>
-        get() = parseButtons(sp.getString("button_layout_v2", null))
+        get() = parseButtons(sp.getString("button_layout_v3", null))
+            ?: parseButtons(sp.getString("button_layout_v2", null))?.let(Protocol::buttonsFromSecondFormat)
             ?: parseButtons(sp.getString("button_layout", null))?.let(Protocol::buttonsFromFirstFormat)
             ?: Protocol.DEFAULT_BUTTONS
-        set(value) = sp.edit().putString("button_layout_v2", value.joinToString(","))
-            .remove("button_layout").apply()
+        set(value) = sp.edit().putString("button_layout_v3", value.joinToString(","))
+            .remove("button_layout_v2").remove("button_layout").apply()
 
     private fun parseButtons(value: String?): List<Int>? =
         value?.split(',')?.mapNotNull { it.toIntOrNull() }?.takeIf { Protocol.validButtons(it) }
