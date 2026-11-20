@@ -10,6 +10,9 @@ namespace {
 // BKP14: "CR" in the top half, watchdog resets in a row in the bottom byte.
 #define WATCH_CRASH_REGISTER (RTC->BKP14R)
 #define WATCH_DFU_REQUEST_REGISTER (RTC->BKP19R)
+// BKP11: start-up stage breadcrumbs (not used by the core, STM32RTC or the rest).
+#define WATCH_BOOT_STAGE_REGISTER (RTC->BKP11R)
+constexpr uint32_t BOOT_STAGE_MAGIC = 0xB0070000UL;
 #define WATCH_HANG_MAGIC_REGISTER (RTC->BKP16R)
 #define WATCH_HANG_PC_REGISTER (RTC->BKP17R)
 #define WATCH_HANG_LR_REGISTER (RTC->BKP18R)
@@ -166,6 +169,17 @@ void WatchWatchdog::begin() {
     hang_lr_ = WATCH_HANG_LR_REGISTER;
     WATCH_HANG_MAGIC_REGISTER = 0;
   }
+  // Where the previous boot's setup() got to, if it never finished.
+  const uint32_t stage = WATCH_BOOT_STAGE_REGISTER;
+  if ((stage & 0xFFFF0000UL) == BOOT_STAGE_MAGIC &&
+      (stage & 0xFFU) != BOOT_STAGE_DONE) {
+    last_boot_stage_ = static_cast<uint8_t>(stage & 0xFFU);
+  }
+  // The location registers keep the last recorded hang until the radio's
+  // backup-domain reset clears them, even after an earlier boot consumed
+  // the magic: worth printing as a hint.
+  stale_hang_pc_ = WATCH_HANG_PC_REGISTER;
+  stale_hang_lr_ = WATCH_HANG_LR_REGISTER;
   startHangMonitor();
 }
 
@@ -176,6 +190,11 @@ void WatchWatchdog::service() {
   healthy_ = true;
   LL_PWR_EnableBkUpAccess();
   WATCH_CRASH_REGISTER = CRASH_MAGIC;
+}
+
+void WatchWatchdog::bootStage(uint8_t stage) {
+  LL_PWR_EnableBkUpAccess();
+  WATCH_BOOT_STAGE_REGISTER = BOOT_STAGE_MAGIC | stage;
 }
 
 void WatchWatchdog::feed() {
@@ -208,5 +227,15 @@ void WatchWatchdog::printStatus(Print& out) const {
     out.print(hang_pc_, HEX);
     out.print(F(" LR=0x"));
     out.println(hang_lr_, HEX);
+  }
+  if (last_boot_stage_ != 0) {
+    out.print(F("[WARN] The previous start-up stopped at stage "));
+    out.println(last_boot_stage_);
+  }
+  if (hang_pc_ == 0 && stale_hang_pc_ != 0 && stale_hang_pc_ != 0xFFFFFFFFUL) {
+    out.print(F("Hang monitor registers (last hang, already reported): PC=0x"));
+    out.print(stale_hang_pc_, HEX);
+    out.print(F(" LR=0x"));
+    out.println(stale_hang_lr_, HEX);
   }
 }

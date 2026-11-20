@@ -38,7 +38,8 @@ struct __attribute__((packed)) PowerLogRecord {
   uint8_t battery_pct;
   uint8_t busy_seen;     // WatchSleepBusy bits seen (boot: deep sleep mode)
   uint16_t blocks_seen;  // WatchSleepBlock bits seen
-  uint16_t renders;      // display refreshes
+  uint16_t renders;      // display refreshes (boot: stage the previous
+                         // start-up stopped at, 0 = it finished)
   uint16_t display_cs;   // time spent refreshing, centiseconds
   uint16_t ble_rx;       // writes from the phone
   uint16_t ble_tx;       // notifications to the phone

@@ -78,6 +78,8 @@ def summarise(rows: list[dict[str, int]]) -> None:
           f"{len(boots)} boots "
           f"({sum(1 for b in boots if b['flags'] & 64)} after a watchdog reset)")
     for b in boots:
+        if b["renders"]:
+            print(f"  boot #{b['seq']}: the previous start-up stopped at stage {b['renders']}")
         if b["stop_ms"]:
             when = (dt.datetime.utcfromtimestamp(b["local_epoch"]).strftime("%Y-%m-%d %H:%M")
                     if b["local_epoch"] else f"#{b['seq']}")

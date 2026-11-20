@@ -33,6 +33,12 @@ class WatchWatchdog {
   // Does not return when it sends a crash-looping watch to USB DFU.
   void begin();
   static void feed();
+  // Start-up breadcrumbs: setup() records each stage it reaches in a backup
+  // register (BOOT_STAGE_DONE at the end). If a boot hangs, the next one
+  // reports the last stage reached (lastBootStage(), 0 = finished/unknown).
+  static constexpr uint8_t BOOT_STAGE_DONE = 99;
+  static void bootStage(uint8_t stage);
+  uint8_t lastBootStage() const { return last_boot_stage_; }
   // Call from the main loop; clears the crash-loop count once healthy.
   void service();
   uint8_t watchdogResetsInARow() const { return resets_in_a_row_; }
@@ -58,4 +64,7 @@ class WatchWatchdog {
   bool healthy_ = false;
   uint32_t hang_pc_ = 0;
   uint32_t hang_lr_ = 0;
+  uint8_t last_boot_stage_ = 0;
+  uint32_t stale_hang_pc_ = 0;  // the registers as found, magic or not
+  uint32_t stale_hang_lr_ = 0;
 };

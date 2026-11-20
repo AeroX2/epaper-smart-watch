@@ -412,6 +412,7 @@ void WatchApplication::writePowerLog(uint8_t type) {
     r.stop_ms = watchdog_.hangPc();
     r.idle_ms = watchdog_.hangLr();
     r.awake_ms = watchdog_.watchdogResetsInARow();
+    r.renders = watchdog_.lastBootStage();  // where a hung start-up stopped
   } else {
     const uint32_t interval = now - power_log_ms_;
     r.interval_s = clamp16((interval + 500UL) / 1000UL);
@@ -1602,6 +1603,7 @@ void WatchApplication::pollButtons() {
 void WatchApplication::setup() {
   configureGpio();
   watchdog_.begin();
+  WatchWatchdog::bootStage(1);
   // Take the external flash pins early (the bootloader leaves them analog)
   // so its chip select is never left floating; reported further down.
   flash_.begin();
@@ -1609,18 +1611,35 @@ void WatchApplication::setup() {
   display_.setWaitHook(displayWaitHook);
   display_.setIdleBusPins(BoardPins::DISPLAY_SCK, BoardPins::DISPLAY_MOSI);
   i2c_.begin();
+  WatchWatchdog::bootStage(2);
 
-  // Let the nPM1100 finish port detection before attaching the USB console.
-  delay(750);
-  Serial.begin(115200);
-  usb_started_ = true;
-  const uint32_t console_started = millis();
-  while (!Serial && millis() - console_started < 3000) {
-    delay(10);
+  // USB only with USB power present (the VDDUSB monitor, set up properly by
+  // WatchPower later): started with no supply, the USB core can raise
+  // interrupts nonstop, which starves the lowest-priority SysTick so
+  // delay() never returns. serviceUsb() starts it when a cable appears.
+  // The monitor's output takes a while to settle after it is switched on:
+  // poll for a few ms before concluding there is no USB power.
+  PWR->CR2 |= PWR_CR2_PVME1;
+  bool usb_power = false;
+  for (uint8_t i = 0; i < 50 && !usb_power; ++i) {
+    delayMicroseconds(100);
+    usb_power = (PWR->SR2 & PWR_SR2_PVMO1) == 0;
   }
+  if (usb_power) {
+    // Let the nPM1100 finish port detection before attaching the console.
+    delay(750);
+    Serial.begin(115200);
+    usb_started_ = true;
+    const uint32_t console_started = millis();
+    while (!Serial && millis() - console_started < 3000) {
+      delay(10);
+    }
+  }
+  WatchWatchdog::bootStage(3);
 
   printBanner();
   rtc_.begin(Serial);
+  WatchWatchdog::bootStage(4);
   WatchWatchdog::feed();
   // External flash: non-destructive probe, then settings/bond/steps and any
   // firmware-update result. Everything below works without it (RAM only).
@@ -1631,10 +1650,14 @@ void WatchApplication::setup() {
   ota_.setIdleHook(backgroundHook);
   ble_.setOtaDataHandler(otaDataThunk);
   WatchWatchdog::feed();
+  WatchWatchdog::bootStage(5);
   diagnostics_.runAll(Serial);
   WatchWatchdog::feed();
+  WatchWatchdog::bootStage(6);
   activity_.begin(Serial);
+  WatchWatchdog::bootStage(7);
   gestures_ready_ = accelerometer_.configureGestures();
+  WatchWatchdog::bootStage(8);
   Serial.println(gestures_ready_ ? F("Gestures: double tap, wrist turn.")
                                  : F("[WARN] Gestures unavailable."));
   alarm_.begin();
@@ -1644,13 +1667,17 @@ void WatchApplication::setup() {
   if (config_.loadPowerMode(stored_sleep_mode)) {
     power_.setMode(static_cast<DeepSleepMode>(stored_sleep_mode));
   }
+  WatchWatchdog::bootStage(9);
   power_log_.begin(flash_, Serial);
   writePowerLog(PowerLogRecord::TYPE_BOOT);
   printHelp();
   updateUiSensors();
   WatchWatchdog::feed();
+  WatchWatchdog::bootStage(10);
   display_controller_.begin(Serial);
+  WatchWatchdog::bootStage(11);
   restoreBluetooth();
+  WatchWatchdog::bootStage(WatchWatchdog::BOOT_STAGE_DONE);
 }
 
 void WatchApplication::loop() {
