@@ -138,7 +138,7 @@ constexpr int16_t COLON_RADIUS = 5;
 constexpr int16_t COLON_SPREAD = 10;  // digit middle to each dot's centre
 constexpr int16_t COLON_NUDGE = 0;    // rows to raise both dots
 constexpr int16_t EVENT_TOP = 99;
-constexpr int16_t EVENT_MAX_WIDTH = 190;
+constexpr int16_t EVENT_LINE_HEIGHT = 17;  // a second line, if needed
 constexpr int16_t SKY_TOP = 110;   // first row of the dusk and dawn bands
 constexpr int16_t SHORE_Y = 164;   // waterline
 constexpr float LEFT_PEAK_X = 70;
@@ -1419,9 +1419,24 @@ void WatchUi::drawLakeClock(const WatchUiModel& model) {
                when.minute);
     }
     if (buffer[0] != '\0') {
-      canvas_.centeredFittedFontText(
-          WatchAssets::LakeEvent16, buffer, 120,
-          line_y(WatchAssets::LakeEvent16, EVENT_TOP), EVENT_MAX_WIDTH, ink);
+      // Up to two lines; a long title is cut with "..." on the second.
+      static peek::Layout event;
+      event.count = 0;
+      const BitmapFont& font = WatchAssets::LakeEvent16;
+      peek::wrap(event, font, buffer, EVENT_TOP, EVENT_LINE_HEIGHT, 2, 3);
+      for (uint8_t i = 0; i < event.count; ++i) {
+        // A strip of background behind the text keeps it readable where the
+        // second line reaches the sky, the sun and the dusk dithering.
+        const int16_t width = canvas_.fontTextWidth(font, event.lines[i].text);
+        canvas_.fillRect(static_cast<int16_t>(120 - width / 2 - 3),
+                         static_cast<int16_t>(event.lines[i].top - 2),
+                         static_cast<int16_t>(width + 6),
+                         static_cast<int16_t>(peek::capHeight(font) + 7),
+                         !ink);
+        canvas_.centeredFontText(font, event.lines[i].text, 120,
+                                 event.lines[i].top - peek::capOffset(font),
+                                 ink);
+      }
     }
   }
 }
@@ -1512,7 +1527,11 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
   if (canvas_.fontTextWidth(WatchAssets::Bold36, selected) <= 200) {
     textAt(WatchAssets::Bold36, selected, 120, 98);
   } else {
-    textAt(WatchAssets::Bold22, selected, 120, 104);
+    // Long names ("FIND PHONE"): a little smaller, on the same middle line.
+    textAt(WatchAssets::Bold30, selected, 120,
+           static_cast<int16_t>(98 + (peek::capHeight(WatchAssets::Bold36) -
+                                      peek::capHeight(WatchAssets::Bold30)) /
+                                         2));
   }
 
   char status[32] = {};

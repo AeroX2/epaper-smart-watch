@@ -160,6 +160,11 @@ class WatchApplication {
   static constexpr uint32_t DOUBLE_PRESS_MS = 600;
   bool home_press_armed_ = false;
   uint32_t home_press_ms_ = 0;
+  // Any app goes back to the clock after this long without a button press.
+  static constexpr uint32_t SCREEN_TIMEOUT_MS = 10000;
+  uint32_t last_input_ms_ = 0;
+  bool screenTimeoutHeld() const;
+  void serviceScreenTimeout();
   // Double press of select on the clock plays/pauses music; a single press
   // opens the app menu after the window (only while music is loaded).
   bool select_press_armed_ = false;

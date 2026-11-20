@@ -254,6 +254,9 @@ uint32_t WatchApplication::sleepBudgetMs() {
   if (select_press_armed_) {
     consider(remaining(DOUBLE_PRESS_MS + 1, now - select_press_ms_));
   }
+  if (!screenTimeoutHeld()) {
+    consider(remaining(SCREEN_TIMEOUT_MS, now - last_input_ms_));
+  }
   if (display_light_on_) {
     consider(remaining(DISPLAY_LIGHT_TIMEOUT_MS,
                        now - display_light_since_ms_));
@@ -1128,6 +1131,37 @@ void WatchApplication::serviceNotificationPeek() {
   }
 }
 
+// Things that keep an app open past the timeout: the phone's camera is in
+// use, the phone is ringing, or a full-screen overlay is up.
+bool WatchApplication::screenTimeoutHeld() const {
+  if (ui_.screen() == WatchScreen::Clock) {
+    return true;  // nothing to go back from
+  }
+  if (ui_.screen() == WatchScreen::Camera && ui_.isInside() &&
+      model_.camera_state != CameraState::Closed &&
+      model_.camera_state != CameraState::Error) {
+    return true;
+  }
+  if (model_.find_phone_active) {
+    return true;
+  }
+  return model_.call_active || model_.alarm_ringing ||
+         model_.notification_peek || ota_.screenShown();
+}
+
+// Back to the clock after SCREEN_TIMEOUT_MS without a button press.
+void WatchApplication::serviceScreenTimeout() {
+  if (screenTimeoutHeld() ||
+      millis() - last_input_ms_ < SCREEN_TIMEOUT_MS) {
+    return;
+  }
+  Serial.println(F("No buttons for 10 s: back to the clock."));
+  ui_.showScreen(WatchScreen::Clock);
+  if (display_controller_.active()) {
+    renderUi();
+  }
+}
+
 // A single select on the clock (with music loaded) opens the app menu once
 // no second press came within DOUBLE_PRESS_MS.
 void WatchApplication::serviceSelectPress() {
@@ -1382,6 +1416,7 @@ void WatchApplication::handleButton(size_t index) {
   Serial.print(F("Button "));
   Serial.print(index + 1);
   Serial.println(F(" press"));
+  last_input_ms_ = millis();
   // Only two home presses in a row on the clock face count as a double press.
   const bool second_home_press =
       index == 0 && home_press_armed_ &&
@@ -1546,6 +1581,7 @@ void WatchApplication::loop() {
   serviceNotificationPeek();
   serviceFindPhone();
   serviceSelectPress();
+  serviceScreenTimeout();
   servicePhoneLink();
   if (ble_.takeBondChange()) {
     // A phone has just paired: keep its key (flash work stays out of the

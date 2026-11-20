@@ -28,6 +28,7 @@ FONT_SPECS = [
     ("Ui16", "AtkinsonHyperlegibleNext-Regular.ttf", 16),
     ("Ui20", "AtkinsonHyperlegibleNext-Regular.ttf", 20),  # notification body
     ("Bold22", "AtkinsonHyperlegibleNext-ExtraBold.ttf", 22),
+    ("Bold30", "AtkinsonHyperlegibleNext-ExtraBold.ttf", 30),  # long app names
     ("Bold36", "AtkinsonHyperlegibleNext-ExtraBold.ttf", 36),
     ("Clock64", "AtkinsonHyperlegibleNext-ExtraBold.ttf", 64),
     # Mountain lake clock face.
