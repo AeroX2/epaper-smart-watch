@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watch Lug Studies</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+[hidden] { display: none !important; }
+body { margin: 0; }
+/* Layout: a workbench. Variant picker on top, 3D stage left, measured facts right. */
+:root {
+  --bg: #f3f4f6; --panel: #ffffff; --stage: #e4e7ec; --fg: #1b1f27; --muted: #5d6573;
+  --line: #d3d8e0; --accent: #c2500a; --accent-soft: #fbe6d6; --good: #1c7c4a; --bad: #b3261e;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #14171c; --panel: #1c2027; --stage: #252a33; --fg: #e8ebf0; --muted: #9aa3b2;
+  --line: #333a46; --accent: #ff8f45; --accent-soft: #3d2a1c; --good: #5fcf93; --bad: #ff8a80; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #14171c; --panel: #1c2027; --stage: #252a33; --fg: #e8ebf0; --muted: #9aa3b2;
+  --line: #333a46; --accent: #ff8f45; --accent-soft: #3d2a1c; --good: #5fcf93; --bad: #ff8a80; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 18px; }
+h1 { font-family: var(--display); font-size: 26px; font-weight: 600; margin: 0; text-wrap: balance; }
+.lede { margin: 4px 0 0; color: var(--muted); max-width: 68ch; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tabs button { font: 500 14px var(--body); color: var(--fg); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 12px; cursor: pointer; text-align: left; }
+.tabs button small { display: block; font: 400 11px var(--mono); color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.tabs button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.tabs button:focus-visible, .ctl button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bench { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.stagebox { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+#stage { background: var(--stage); border-radius: 8px; aspect-ratio: 4 / 3; max-width: 100%; position: relative; overflow: hidden; touch-action: none; }
+#stage canvas { display: block; width: 100%; height: 100%; }
+#fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; color: var(--muted); text-align: center; }
+.ctl { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--muted); }
+.ctl .grp { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ctl button { font: 500 13px var(--body); color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 5px; padding: 5px 10px; cursor: pointer; }
+.ctl label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; color: var(--fg); }
+.ctl input[type=range] { width: 130px; accent-color: var(--accent); }
+.ctl input[type=checkbox] { accent-color: var(--accent); }
+.info { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.info h2 { font-family: var(--display); font-size: 20px; margin: 0; text-wrap: balance; }
+.info p { margin: 0; }
+.big { display: flex; gap: 18px; flex-wrap: wrap; }
+.big div { min-width: 0; }
+.big b { display: block; font: 500 26px var(--mono); font-variant-numeric: tabular-nums; }
+.big span { font-size: 12px; color: var(--muted); }
+.delta { font: 500 12px var(--mono); }
+.delta.good { color: var(--good); } .delta.bad { color: var(--bad); }
+dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: 14px; }
+dt { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; padding-top: 2px; }
+dd { margin: 0; }
+.verdict { border-top: 1px solid var(--line); padding-top: 12px; font-size: 14px; }
+.note { font-size: 12.5px; color: var(--muted); max-width: 90ch; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Watch Lug Studies</h1>
+    <p class="lede">The proposal keeps the board, display and USB where they are and reshapes the outside. The current case and last round's flat-topped version are here for comparison. Drag to orbit, scroll to zoom.</p>
+  </header>
+
+  <div class="tabs" id="tabs" role="group" aria-label="Design"></div>
+
+  <div class="bench">
+    <div class="stagebox">
+      <div id="stage"><div id="fallback" hidden>The 3D view could not start in this browser.</div></div>
+      <div class="ctl">
+        <div class="grp"><span>View</span>
+          <button type="button" id="v-iso">3/4</button><button type="button" id="v-side">Side</button><button type="button" id="v-top">Top</button></div>
+        <div class="grp">
+          <label><input type="checkbox" id="t-wrist" checked> Wrist</label>
+          <label><input type="checkbox" id="t-strap" checked> Strap</label>
+          <label><input type="checkbox" id="t-gap"> Gap</label>
+          <label><input type="checkbox" id="t-plug"> USB plug</label>
+          <label><input type="checkbox" id="t-int"> Internals</label></div>
+        <div class="grp"><label for="r-wrist">Wrist</label>
+          <input type="range" id="r-wrist" min="140" max="210" step="5" value="170"><span id="o-wrist" style="font-family:var(--mono)">170 mm</span></div>
+      </div>
+      
+    </div>
+
+    <aside class="info" id="info"></aside>
+  </div>
+
+  <p class="note">Taken from case.FCStd: body 46 × 40 mm and 8.1 mm tall plus a 1 mm lid, display module 41 mm long, USB opening 3.3 to 7.3 mm below the top face. The wrist is an approximation (a rounded oval with the chosen circumference, not compressed by the case), so the strap line is indicative. The plug is drawn 12.4 × 6.5 mm.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  // Coordinates: x along the strap, y up (0 = top face of the body), z across the wrist. Millimetres.
+  var LID_Y = -9.08, USB_Y = -5.27, STRAP_T = 2.0, BAR_R = 0.75;
+  var PLUG = { w: 12.4, h: 6.5, len: 24 };
+
+  // ---- sculpted shapes, described as distance fields ----
+  function smin(a, b, k) { var h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; }
+  function smax(a, b, k) { return -smin(-a, -b, k); }
+  function sstep(a, b, x) { var t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); }
+  function plugCut(x, y, z) { return Math.max(Math.abs(z) - 6.7, 21.2 - x, y + 1.8, -8.8 - y); }
+
+  // A / B: round 48 mm case, lugs sweep down and pinch in
+  var A_TIP = 28.6;
+  function topA(ax) { var s = Math.max(0, (ax - 16) / 12.6); return -0.8 - 7.8 * s * s; }
+  function botA(ax) { return LID_Y - 4.0 * sstep(20, A_TIP, ax); }
+  function caseRound(x, y, z) {
+    var r = Math.hypot(x, z);
+    var d = smax(r - 24, y, 0.5);
+    d = smax(d, (r - 22.3) * 0.55 + y * 0.835, 0.6);
+    return smax(d, LID_Y - y, 1.0);
+  }
+  function sdfA(x, y, z) {
+    var ax = Math.abs(x), az = Math.abs(z);
+    var hw = 21 + (13.8 - 21) * sstep(13, A_TIP, ax);
+    var lug = smax(az - hw, y - topA(ax), 1.6);
+    lug = smax(lug, botA(ax) - y, 1.2);
+    lug = smax(lug, ax - A_TIP, 1.4);
+    lug = smax(lug, 10.4 - az, 0.5);
+    var d = smin(caseRound(x, y, z), lug, 2.6);
+    d = smax(d, y, 0.3);
+    return smax(d, -plugCut(x, y, z), 0.4);
+  }
+  // Same-size case (46 x 40 body as today) with swept lugs
+  function slotCut(x, y, z) { return Math.max(Math.abs(z) - 5, 21.5 - x, y + 3.27, -7.27 - y); }
+  function topD(ax) { var s = Math.max(0, ax - 19); return ax <= 29 ? -0.3 - 0.073 * s * s : -7.6 - 1.46 * (ax - 29); }
+  function caseSmall(x, y, z) {
+    var d = smin(Math.hypot(x, z) - 20, Math.max(Math.abs(x) - 23, Math.abs(z) - 13.7), 3.5);
+    d = smax(d, y, 0.6);
+    return smax(d, LID_Y - y, 0.8);
+  }
+  function sdfSmall(x, y, z, lower, hwTip) {
+    var ax = Math.abs(x), az = Math.abs(z);
+    var hw = 14.2 + (hwTip - 14.2) * sstep(21, 29, ax);
+    var lug = smax(az - hw, y - (topD(ax) - lower), 1.4);
+    lug = smax(lug, LID_Y - 4.0 * sstep(21, 29, ax) - y, 1.2);
+    lug = smax(lug, ax - 29, 1.4);
+    lug = smax(lug, 10.4 - az, 0.5);
+    var d = smin(caseSmall(x, y, z), lug, 2.4);
+    d = smax(d, y, 0.3);
+    return smax(d, -slotCut(x, y, z), 0.3);
+  }
+  function sdfD(x, y, z) { return sdfSmall(x, y, z, 0, 13.4); }
+  function sdfF(x, y, z) { return sdfSmall(x, y, z, 1.5, 13.0); }
+  function sdfHeadE(x, y, z) {
+    var ax = Math.abs(x), az = Math.abs(z);
+    var top = topD(ax) - 0.3, bot = top - (2.2 + 4.8 * sstep(31, 25, ax));
+    var d = smax(az - 10.1, y - top, 0.8);
+    d = smax(d, bot - y, 0.8);
+    d = Math.max(d, ax - 31.6);
+    return smax(d, 23.3 - ax, 0.3);
+  }
+  function sdfHeadF(x, y, z) {
+    var ax = Math.abs(x), az = Math.abs(z);
+    var hw = 10.1 + 5.6 * sstep(32.5, 24, ax);
+    var top = topD(ax) + 0.2, bot = top - (2.2 + 7.0 * sstep(32.5, 27, ax));
+    var d = smax(az - hw, y - top, 1.3);
+    d = smax(d, bot - y, 1.0);
+    d = Math.max(d, ax - 32.6, 22.8 - ax);
+    return smax(d, 0.35 - sdfF(x, y, z), 0.3);
+  }
+
+  // Sculpted: a dish slopes up from the recessed display to a crest, then a cone runs down to the edge; undercut below
+  var CREST = 0.9, CREST_R = 16.8, CONE = 0.51, KX = 0.86;  // KX flattens the slope along the strap so the display ears stay covered
+  function dishY(r) { return -0.1 + Math.max(0, r - 14.6) * (CREST + 0.1) / (CREST_R - 14.6); }
+  function topG(ax) { var s = Math.max(0, ax - 23); return CREST - (ax * KX - CREST_R) * CONE - 0.3 - 0.09 * s * s; }
+  // Lug: last round's slab, with its outer edges and tip rounded at LUG_R instead of left square
+  var LUG_R = 1.6;
+  function lugG(ax, y, az) {
+    var hw = 14.6 + (13.6 - 14.6) * sstep(21, 29, ax);
+    var q1 = Math.max(az - hw + LUG_R, 0), q2 = Math.max(y - topG(ax) + LUG_R, 0);
+    var q3 = Math.max(LID_Y - 4.0 * sstep(21, 29, ax) - y + LUG_R, 0), q4 = Math.max(ax - 29 + LUG_R, 0);
+    var inside = Math.max(az - hw, y - topG(ax), LID_Y - 4.0 * sstep(21, 29, ax) - y, ax - 29);
+    var d = Math.hypot(q1, Math.max(q2, q3), q4) + Math.min(inside + LUG_R, 0) - LUG_R;
+    return smax(d, 10.4 - az, 0.4);
+  }
+  function sdfG(x, y, z) {
+    var ax = Math.abs(x), az = Math.abs(z), r = Math.hypot(x, z);
+    var plan = smin(r - 21, Math.max(ax - 23, az - 14.2), 3.5);
+    var cone = (Math.hypot(x * KX, z) - CREST_R) * 0.454 + (y - CREST) * 0.891;
+    var d = smax(plan, cone, 1.5);
+    d = smax(d, (plan - 6.9 - y) * 0.707, 0.6);
+    d = smax(d, LID_Y - y, 0.5);
+    var lug = lugG(ax, y, az);
+    d = smin(d, lug, 2.2);
+    d = smax(d, cone, 0.4);
+    d = smax(d, y - CREST, 0.5);
+    d = smax(d, (y - dishY(r)) * 0.91, 0.3);
+    d = smax(d, -Math.max(r - 14.6, -1.15 - y), 0.15);
+    return smax(d, -slotCut(x, y, z), 0.3);
+  }
+
+  // surface nets: turns a distance field into a smooth mesh
+  function meshField(sdf, h) {
+    var b = [-34, 34, -15, 2.6, -25.6, 25.6];
+    var nx = Math.ceil((b[1] - b[0]) / h) + 1, ny = Math.ceil((b[3] - b[2]) / h) + 1, nz = Math.ceil((b[5] - b[4]) / h) + 1;
+    var f = new Float32Array(nx * ny * nz), i, j, k, n = 0;
+    for (k = 0; k < nz; k++) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) f[n++] = sdf(b[0] + i * h, b[2] + j * h, b[4] + k * h);
+    var idx = new Int32Array(nx * ny * nz).fill(-1), pos = [], cnt = 0;
+    var off = [0, 1, nx, nx + 1, nx * ny, nx * ny + 1, nx * ny + nx, nx * ny + nx + 1];
+    var E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+    var v = new Float32Array(8);
+    for (k = 0; k < nz - 1; k++) for (j = 0; j < ny - 1; j++) for (i = 0; i < nx - 1; i++) {
+      var base = i + nx * (j + ny * k), neg = 0, c;
+      for (c = 0; c < 8; c++) { v[c] = f[base + off[c]]; if (v[c] < 0) neg++; }
+      if (neg === 0 || neg === 8) continue;
+      var sx = 0, sy = 0, sz = 0, m = 0;
+      for (var e = 0; e < 12; e++) {
+        var p = E[e][0], q = E[e][1];
+        if ((v[p] < 0) === (v[q] < 0)) continue;
+        var t = v[p] / (v[p] - v[q]);
+        var px = p & 1, py = (p >> 1) & 1, pz = (p >> 2) & 1, qx = q & 1, qy = (q >> 1) & 1, qz = (q >> 2) & 1;
+        sx += px + (qx - px) * t; sy += py + (qy - py) * t; sz += pz + (qz - pz) * t; m++;
+      }
+      pos.push(b[0] + (i + sx / m) * h, b[2] + (j + sy / m) * h, b[4] + (k + sz / m) * h);
+      idx[base] = cnt++;
+    }
+    var tri = [], sxy = nx * ny;
+    function quad(a, b2, c2, d2, flip) { if (a < 0 || b2 < 0 || c2 < 0 || d2 < 0) return; if (flip) tri.push(a, c2, b2, a, d2, c2); else tri.push(a, b2, c2, a, c2, d2); }
+    for (k = 1; k < nz - 1; k++) for (j = 1; j < ny - 1; j++) for (i = 1; i < nx - 1; i++) {
+      var g = i + nx * (j + ny * k), s0 = f[g] < 0;
+      if (s0 !== (f[g + 1] < 0)) quad(idx[g - nx - sxy], idx[g - sxy], idx[g], idx[g - nx], !s0);
+      if (s0 !== (f[g + nx] < 0)) quad(idx[g - 1 - sxy], idx[g - sxy], idx[g], idx[g - 1], s0);
+      if (s0 !== (f[g + sxy] < 0)) quad(idx[g - 1 - nx], idx[g - nx], idx[g], idx[g - 1], !s0);
+    }
+    var P = new Float32Array(pos), N = new Float32Array(pos.length), d = 0.15;
+    for (i = 0; i < P.length; i += 3) {
+      var x = P[i], y = P[i + 1], z = P[i + 2];
+      var gx = sdf(x + d, y, z) - sdf(x - d, y, z), gy = sdf(x, y + d, z) - sdf(x, y - d, z), gz = sdf(x, y, z + d) - sdf(x, y, z - d);
+      var l = Math.hypot(gx, gy, gz) || 1; N[i] = gx / l; N[i + 1] = gy / l; N[i + 2] = gz / l;
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+    geo.setIndex(tri); geo.userData.keep = true; return geo;
+  }
+  var geoCache = {};
+  function cached(key, sdf) { return geoCache[key] || (geoCache[key] = meshField(sdf, 0.4)); }
+
+  var VARIANTS = [
+    { id: 'current', tag: 'Baseline', name: 'Current case',
+      lug: { prof: [[23, 0], [26.1, -1.1], [26.1, -7.3], [23, -8.08]], z0: 10.5, z1: 13.6 },
+      bar: { x: 24.54, y: -2.22 }, l2l: 52.2, width: 40, portX: 23,
+      what: 'Flat top, square lugs, spring bar 2.2 mm under the top face so the strap passes over the USB plug.',
+      usb: 'Strap must be lifted off the port to plug in.',
+      print: 'Open rim on the bed, no supports.',
+      band: 'Any 20 mm band.',
+      verdict: 'Reference for the others.' },
+    { id: "d", tag: "Last round", name: "Swept lugs, flat top", small: true,
+      sdf: sdfD, bar: { x: 27, y: -11.3 }, l2l: 58, width: 40, portX: 23,
+      what: "The body, bezel and display stay exactly as they are now. Only the lugs change: they grow out of the case shoulders, curve down past the caseback and end 4 mm below it, the way they do on Study A.",
+      usb: "Plug goes in between the lugs, over the bar. Open at all times.",
+      print: "Lug tips hang below the rim, so supports under the tips or a split line.",
+      band: "Any 20 mm band.",
+      verdict: "The smallest change that gets the Study A strap line. The lugs are slim, 3 mm each, because the body is only 27 mm wide at the ends." },
+    { id: "g", tag: "Proposal", name: "Sculpted case, swept lugs", small: true, sculpt: true,
+      sdf: sdfG, bar: { x: 27, y: -11.3 }, l2l: 58, width: 42, portX: 23,
+      what: "The display stays where it is, 1.1 mm below the old top face. Around it the top is a shallow dish that rises from the display to a rounded crest 2.2 mm further out, then falls away to the edge at about 27 degrees. The crest is 0.9 mm above the old top face, slightly lower than today's bezel lip. The side wall is rounded at the top and cut back underneath, and the lugs carry the outer slope down past the caseback, with their outer edges and tips rounded at 1.6 mm.",
+      usb: "Plug goes in between the lugs, over the bar. Open at all times.",
+      print: "Face up as today. The slope is 27 degrees across the wrist and 24 along the strap, steep enough to print cleanly; anything flatter than about 20 degrees shows layer steps. Supports only under the four lug tips.",
+      band: "Any 20 mm band, attached 9 mm lower than today.",
+      verdict: "Costs 2 mm of diameter (42 mm) and no height. Checked against the display and PCB from the CAD: nothing pokes through and the display has at least 0.9 mm of material over it. Tick Internals to see them." }
+,
+    { id: "cad", tag: "Built in FreeCAD", name: "Sculpted case, CAD result", small: true, sculpt: true, cad: true,
+      bar: { x: 27, y: -11.3 }, l2l: 59.1, width: 42, portX: 23, glass: true,
+      what: "The real body, rebuilt by editing its own base steps. The wall is 1 mm further out all the way down (42 mm), the deck sits at the glass lip height and falls away as the cone, and the rim has a 45 degree bevel that carries on down the lid. The lugs are flush with the case flanks, their tops are cut by the same cone, and the shoulder and lug edges share one 1.5 mm rounding. The outside wall is whole over the buttons: the thinning that lets each door tongue bend is a 4.7 mm wide groove on the inside face, leaving 1 mm of wall. The finger pads are 1 mm longer. The strap opening and the lug tops are rounded.",
+      usb: "Unchanged slot. Plug goes in between the lugs, over the bar.",
+      print: "Face up. Lug noses end 5.4 mm below the rim, so supports under the four lugs.",
+      band: "Any 20 mm band. 1.6 mm of material round each bar hole.",
+      verdict: "Valid single solid with no enclosed voids. No overlap with the PCB, battery or lid. The glass pocket is unchanged. The buttons should be roughly twice as stiff as now by a simple beam estimate, so they need a test print. Tick Internals to see inside." }
+  ];
+
+  var stage = document.getElementById('stage');
+  var tabs = document.getElementById('tabs');
+  var info = document.getElementById('info');
+  var state = { v: 3, wrist: 170 };
+
+  VARIANTS.forEach(function (v, i) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.id = 'tab-' + v.id;
+    b.innerHTML = '<small></small><span></span>';
+    b.firstChild.textContent = v.tag; b.lastChild.textContent = v.name;
+    b.addEventListener('click', function () { state.v = i; rebuild(); });
+    tabs.appendChild(b);
+  });
+
+  if (!window.THREE || !THREE.OrbitControls) { document.getElementById('fallback').hidden = false; renderInfo(null); return; }
+  var renderer;
+  try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); }
+  catch (e) { document.getElementById('fallback').hidden = false; renderInfo(null); return; }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  stage.appendChild(renderer.domElement);
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(30, 4 / 3, 1, 2000);
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, -10, 0);
+  controls.addEventListener('change', draw);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3d44, 0.5));
+  var sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-50, 120, 70); scene.add(sun);
+  var rim = new THREE.DirectionalLight(0xffffff, 0.35); rim.position.set(90, 40, -80); scene.add(rim);
+
+  var M = {
+    caseM: new THREE.MeshStandardMaterial({ color: 0x4a4e58, roughness: 0.42, metalness: 0.35, side: THREE.DoubleSide }),
+    flat: new THREE.MeshStandardMaterial({ color: 0x4a4e58, roughness: 0.7, side: THREE.DoubleSide }),
+    lid: new THREE.MeshStandardMaterial({ color: 0x3a3d45, roughness: 0.8, side: THREE.DoubleSide }),
+    bezel: new THREE.MeshStandardMaterial({ color: 0x1c1d20, roughness: 0.5 }),
+    steel: new THREE.MeshStandardMaterial({ color: 0xc9ced6, roughness: 0.3, metalness: 0.7 }),
+    strap: new THREE.MeshStandardMaterial({ color: 0x17181c, roughness: 0.95, side: THREE.DoubleSide }),
+    skin: new THREE.MeshStandardMaterial({ color: 0xd8a68b, roughness: 0.95, side: THREE.DoubleSide }),
+    gap: new THREE.MeshBasicMaterial({ color: 0xdd3333, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }),
+    port: new THREE.MeshBasicMaterial({ color: 0x0c0c0e }),
+    plug: new THREE.MeshStandardMaterial({ color: 0xf1f1ee, roughness: 0.6 })
+  };
+
+  function faceTexture() {
+    var c = document.createElement('canvas'); c.width = c.height = 512; var g = c.getContext('2d');
+    g.fillStyle = '#d9dcd3'; g.fillRect(0, 0, 512, 512);
+    g.fillStyle = '#16171a'; g.textAlign = 'center';
+    g.font = '600 150px "Space Grotesk", Arial, sans-serif'; g.fillText('4:33', 256, 300);
+    g.font = '500 34px Arial, sans-serif'; g.fillText('THU 19 NOV', 256, 130);
+    g.fillText('24°C   6 214 STEPS', 256, 390);
+    return new THREE.CanvasTexture(c);
+  }
+  function ringTexture() {
+    var c = document.createElement('canvas'); c.width = c.height = 1024; var g = c.getContext('2d');
+    g.fillStyle = '#17181b'; g.fillRect(0, 0, 1024, 1024);
+    g.fillStyle = '#e8e8e4'; g.font = '600 40px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    var words = ['LIGHT', 'SELECT', 'BACK', 'MENU'], r = 425, a, t;
+    words.forEach(function (w, k) {
+      var mid = -Math.PI / 4 + k * Math.PI / 2, step = 0.08, a0 = mid - step * (w.length - 1) / 2;
+      for (var i = 0; i < w.length; i++) {
+        var aa = a0 + i * step;
+        g.save(); g.translate(512 + r * Math.sin(aa), 512 - r * Math.cos(aa)); g.rotate(aa); g.fillText(w[i], 0, 0); g.restore();
+      }
+    });
+    for (t = 0; t < 60; t++) { if (t % 15 > 3 && t % 15 < 12) continue;
+      a = t / 60 * Math.PI * 2 + Math.PI / 4; g.save(); g.translate(512 + r * Math.sin(a), 512 - r * Math.cos(a)); g.rotate(a); g.fillRect(-2, -12, 4, 24); g.restore(); }
+    g.strokeStyle = '#6d7078'; g.lineWidth = 3; g.beginPath(); g.arc(512, 512, 372, 0, 7); g.stroke();
+    return new THREE.CanvasTexture(c);
+  }
+  var TEX = { face: faceTexture(), ring: ringTexture() };
+
+  function extrudeProfile(pts, z0, z1, mat) {
+    var s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]);
+    for (var i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
+    s.closePath();
+    var m = new THREE.Mesh(new THREE.ExtrudeGeometry(s, { depth: z1 - z0, bevelEnabled: false }), mat);
+    m.position.z = z0; return m;
+  }
+  function planShape(xe, R, w) {
+    var xc = 0.65 * R, yc = Math.sqrt(R * R - xc * xc), a = Math.atan2(yc, xc);
+    var s = new THREE.Shape();
+    s.moveTo(xe, -w); s.lineTo(xe, w); s.lineTo(xc, yc);
+    s.absarc(0, 0, R, a, Math.PI - a, false);
+    s.lineTo(-xe, w); s.lineTo(-xe, -w); s.lineTo(-xc, -yc);
+    s.absarc(0, 0, R, Math.PI + a, 2 * Math.PI - a, false);
+    s.closePath(); return s;
+  }
+  function slab(shape, yBottom, h, mat) {
+    var m = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false }), mat);
+    m.rotation.x = -Math.PI / 2; m.position.y = yBottom; return m;
+  }
+  function barZ(x, y, z0, z1, r, mat) {
+    var m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, z1 - z0, 20), mat);
+    m.rotation.x = Math.PI / 2; m.position.set(x, y, (z0 + z1) / 2); return m;
+  }
+
+  // Wrist outline: rounded oval, top touching the caseback. Index 0 = bottom, 360 = top, going up the +x side.
+  function wrist(C) {
+    var n = 2.4, e = 2 / n, N = 720, u = [], i;
+    for (i = 0; i <= N; i++) { var th = (-90 + i * 0.5) * Math.PI / 180, c = Math.cos(th), s = Math.sin(th);
+      u.push([1.5 * Math.sign(c) * Math.pow(Math.abs(c), e), Math.sign(s) * Math.pow(Math.abs(s), e)]); }
+    var per = 0; for (i = 0; i < N; i++) per += Math.hypot(u[i + 1][0] - u[i][0], u[i + 1][1] - u[i][1]);
+    var k = C / per, yc = LID_Y - k;
+    return u.map(function (p) { return [p[0] * k, yc + p[1] * k]; });
+  }
+  function offsetPts(P, d) {
+    return P.map(function (p, i) { var a = P[Math.max(i - 1, 0)], b = P[Math.min(i + 1, P.length - 1)];
+      var tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1; return [p[0] + ty / l * d, p[1] - tx / l * d]; });
+  }
+  function ribbon(path, t, z0, z1, mat) {
+    var L = offsetPts(path, t / 2), Rr = offsetPts(path, -t / 2), s = new THREE.Shape(), i;
+    s.moveTo(L[0][0], L[0][1]); for (i = 1; i < L.length; i++) s.lineTo(L[i][0], L[i][1]);
+    for (i = Rr.length - 1; i >= 0; i--) s.lineTo(Rr[i][0], Rr[i][1]);
+    s.closePath();
+    var m = new THREE.Mesh(new THREE.ExtrudeGeometry(s, { depth: z1 - z0, bevelEnabled: false }), mat);
+    m.position.z = z0; return m;
+  }
+  function solve(v, W) {
+    var O = offsetPts(W, STRAP_T / 2), P = v.strapStart || [v.bar.x, v.bar.y], B = [v.bar.x, v.bar.y], i, it = -1, s0 = 0;
+    for (i = 20; i < 359; i++) {
+      var c = (O[i][0] - P[0]) * (O[i + 1][1] - O[i][1]) - (O[i][1] - P[1]) * (O[i + 1][0] - O[i][0]);
+      if (!s0) s0 = Math.sign(c); else if (Math.sign(c) !== s0) { it = i; break; }
+    }
+    var near = 1e9, ni = 0;
+    for (i = 0; i <= 360; i++) { var d = Math.hypot(W[i][0] - B[0], W[i][1] - B[1]); if (d < near) { near = d; ni = i; } }
+    if (it < 0) it = ni;
+    var path = [P]; for (i = it; i >= 0; i--) path.push(O[i]);
+    var poly = [B]; for (i = it; i <= ni; i++) poly.push(W[i]);
+    if (poly.length < 3) poly = [B, W[it], W[it]];
+    var area = 0; for (i = 0; i < poly.length; i++) { var a = poly[i], b = poly[(i + 1) % poly.length]; area += a[0] * b[1] - b[0] * a[1]; }
+    return { path: path, poly: poly, area: Math.abs(area) / 2, clear: near - BAR_R - STRAP_T };
+  }
+
+  var cadGeo = null, lidGeo = null;
+  fetch("cad-body.json").then(function (r) { return r.json(); }).then(function (data) {
+    cadGeo = new THREE.BufferGeometry();
+    cadGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.p), 3));
+    cadGeo.setIndex(data.i); cadGeo = cadGeo.toNonIndexed(); cadGeo.computeVertexNormals(); cadGeo.userData.keep = true;
+    if (data.lid) {
+      lidGeo = new THREE.BufferGeometry();
+      lidGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.lid.p), 3));
+      lidGeo.setIndex(data.lid.i); lidGeo = lidGeo.toNonIndexed(); lidGeo.computeVertexNormals(); lidGeo.userData.keep = true;
+    }
+    rebuild();
+  }).catch(function () {});
+  var internals = null;
+  fetch("internals.json").then(function (r) { return r.json(); }).then(function (data) {
+    var cols = { display: 0xe8963c, pcb: 0x2f9e5b, battery: 0x4a7fd6 };
+    internals = new THREE.Group();
+    Object.keys(data).forEach(function (k) {
+      var g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data[k].p), 3));
+      g.setIndex(data[k].i); g.computeVertexNormals(); g.userData.keep = true;
+      internals.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: cols[k], roughness: 0.7, side: THREE.DoubleSide })));
+    });
+    rebuild();
+  }).catch(function () {});
+
+  var root = null, parts = {};
+  function rebuild() {
+    var v = VARIANTS[state.v], W = wrist(state.wrist), S = solve(v, W);
+    if (root) { scene.remove(root); root.traverse(function (o) { if (o.geometry && !o.geometry.userData.keep) o.geometry.dispose(); }); }
+    root = new THREE.Group(); parts = {};
+
+    var faceY;
+    if (v.cad) {
+      if (cadGeo) root.add(new THREE.Mesh(cadGeo, M.flat));
+      if (lidGeo) root.add(new THREE.Mesh(lidGeo, M.lid));
+    } else if (v.sdf) {
+      root.add(new THREE.Mesh(cached(v.sdf === sdfD ? 'd' : v.id, v.sdf), M.caseM));
+      var ring = new THREE.Mesh(new THREE.RingGeometry(14.5, v.ringR || 16, 128), new THREE.MeshStandardMaterial({ map: TEX.ring, color: 0xb8b8b8, roughness: 0.45 }));
+      ring.rotation.set(-Math.PI / 2, 0, Math.PI / 2); ring.position.y = 0.06; root.add(ring);
+      faceY = 0.08;
+    }
+    if (v.small) { root.remove(ring); }
+    if (!v.sdf && !v.cad) {
+      root.add(slab(planShape(23, 20, 13.7), -8.08, 8.08, M.flat));
+      root.add(slab(planShape(22.6, 19.6, 13.3), LID_Y, 1, M.lid));
+    }
+    if ((!v.sdf && !v.cad) || (v.small && !v.sculpt)) {
+      var bz = new THREE.Mesh(new THREE.CylinderGeometry(15.2, 16.5, 1, 96), M.bezel); bz.position.y = 0.5; root.add(bz);
+      faceY = 1.02;
+    }
+    var face = new THREE.Mesh(new THREE.CircleGeometry(v.sculpt ? 14.7 : 14.5, 96), new THREE.MeshStandardMaterial({ map: TEX.face, roughness: 0.9 }));
+    face.rotation.set(-Math.PI / 2, 0, Math.PI / 2); face.position.y = v.glass ? 0.7 : (v.sculpt ? -1.09 : faceY); root.add(face);
+
+    var port = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 10), M.port); port.position.set(v.portX + 0.06, USB_Y, 0); root.add(port);
+    var plug = new THREE.Group();
+    var pb = new THREE.Mesh(new THREE.BoxGeometry(PLUG.len, PLUG.h, PLUG.w), M.plug); pb.position.set(v.portX + 0.3 + PLUG.len / 2, USB_Y, 0); plug.add(pb);
+    var cable = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 30, 16), M.plug); cable.rotation.z = Math.PI / 2; cable.position.set(v.portX + PLUG.len + 15, USB_Y, 0); plug.add(cable);
+    root.add(plug); parts.plug = plug;
+
+    var straps = new THREE.Group(), gaps = new THREE.Group();
+    if (v.head) straps.add(new THREE.Mesh(cached('head' + v.id, v.head), M.strap));
+    [1, -1].forEach(function (sx) {
+      var end = new THREE.Group(); end.scale.x = sx;
+      if (v.lug) {
+        end.add(extrudeProfile(v.lug.prof, v.lug.z0, v.lug.z1, M.flat));
+        end.add(extrudeProfile(v.lug.prof, -v.lug.z1, -v.lug.z0, M.flat));
+      }
+      end.add(barZ(v.bar.x, v.bar.y, -10.5, 10.5, BAR_R, M.steel));
+      root.add(end);
+
+      var st = new THREE.Group(); st.scale.x = sx;
+      st.add(ribbon(S.path, STRAP_T, -10, 10, M.strap));
+      if (!v.head) st.add(barZ(v.bar.x, v.bar.y, -10, 10, BAR_R + STRAP_T * 0.8, M.strap));
+      straps.add(st);
+
+      var gp = new THREE.Group(); gp.scale.x = sx;
+      if (S.area > 0.5) gp.add(extrudeProfile(S.poly, 10.6, 10.8, M.gap)); gaps.add(gp);
+    });
+    root.add(straps); root.add(gaps); parts.strap = straps; parts.gap = gaps;
+
+    var ws = new THREE.Shape(); ws.moveTo(W[0][0], W[0][1]); for (var j = 1; j < W.length; j++) ws.lineTo(W[j][0], W[j][1]); ws.closePath();
+    var wm = new THREE.Mesh(new THREE.ExtrudeGeometry(ws, { depth: 80, bevelEnabled: false, curveSegments: 4 }), M.skin);
+    wm.position.z = -40; root.add(wm); parts.wrist = wm;
+
+    if (internals) { root.add(internals); parts.int = internals; }
+    scene.add(root); applyToggles(); renderInfo(S); draw();
+  }
+
+  function applyToggles() {
+    if (!parts.wrist) return;
+    parts.wrist.visible = document.getElementById('t-wrist').checked;
+    parts.strap.visible = document.getElementById('t-strap').checked;
+    parts.gap.visible = document.getElementById('t-gap').checked;
+    parts.plug.visible = document.getElementById('t-plug').checked;
+    var see = document.getElementById('t-int').checked;
+    if (parts.int) parts.int.visible = see;
+    [M.caseM, M.flat, M.lid].forEach(function (m) { m.transparent = see; m.opacity = see ? 0.28 : 1; m.depthWrite = !see; m.needsUpdate = true; });
+  }
+
+  function renderInfo(S) {
+    var v = VARIANTS[state.v];
+    VARIANTS.forEach(function (x, i) { document.getElementById('tab-' + x.id).setAttribute('aria-pressed', i === state.v ? 'true' : 'false'); });
+    var h = '<h2></h2><p class="what"></p><div class="big">' +
+      '<div><b>' + v.l2l.toFixed(1) + ' mm</b><span>lug to lug</span></div>' +
+      '<div><b>' + v.width + ' mm</b><span>across</span></div>' +
+      (S ? '<div><b>' + S.clear.toFixed(1) + ' mm</b><span>strap at the bar, off the skin</span></div>' : '') + '</div>' +
+      '<dl><dt>USB</dt><dd class="usb"></dd><dt>Print</dt><dd class="print"></dd><dt>Band</dt><dd class="band"></dd></dl><p class="verdict"></p>';
+    info.innerHTML = h;
+    info.querySelector('h2').textContent = v.name;
+    info.querySelector('.what').textContent = v.what;
+    info.querySelector('.usb').textContent = v.usb;
+    info.querySelector('.print').textContent = v.print;
+    info.querySelector('.band').textContent = v.band;
+    info.querySelector('.verdict').textContent = v.verdict;
+  }
+
+  function setView(k) {
+    if (k === 'iso') camera.position.set(-70, 62, 105);
+    if (k === 'side') camera.position.set(0, -10, 185);
+    if (k === 'top') camera.position.set(0, 175, 0.01);
+    controls.target.set(0, -10, 0); controls.update(); draw();
+  }
+  function draw() { renderer.render(scene, camera); }
+  function resize() {
+    var w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); draw();
+  }
+
+  ['iso', 'side', 'top'].forEach(function (k) { document.getElementById('v-' + k).addEventListener('click', function () { setView(k); }); });
+  ['wrist', 'strap', 'gap', 'plug', 'int'].forEach(function (k) { document.getElementById('t-' + k).addEventListener('change', function () { applyToggles(); draw(); }); });
+  document.getElementById('r-wrist').addEventListener('input', function (e) {
+    state.wrist = +e.target.value; document.getElementById('o-wrist').textContent = state.wrist + ' mm'; rebuild(); });
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage); else window.addEventListener('resize', resize);
+
+  rebuild(); setView('iso'); resize();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { TEX.face.dispose(); TEX.face = faceTexture(); rebuild(); });
+})();
+</script>
+</body>
+</html>
