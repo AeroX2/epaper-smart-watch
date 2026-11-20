@@ -108,6 +108,36 @@ bool Bma400::configureActivityInterrupts() {
          device_.enableInterrupt(BMA400_DRDY_INT_EN, false) == BMA400_OK;
 }
 
+bool Bma400::configureGestures() {
+  if (address_ == 0) {
+    return false;
+  }
+  bma400_tap_conf tap{};
+  tap.axes_sel = BMA400_TAP_Z_AXIS_EN;           // a tap on the watch face
+  tap.sensitivity = BMA400_TAP_SENSITIVITY_3;    // 0 most sensitive, 7 least
+  tap.tics_th = BMA400_TICS_TH_12_DATA_SAMPLES;
+  tap.quiet = BMA400_QUIET_80_DATA_SAMPLES;      // longest gap between taps
+  tap.quiet_dt = BMA400_QUIET_DT_8_DATA_SAMPLES; // shortest gap between taps
+  tap.int_chan = BMA400_INT_CHANNEL_1;
+
+  bma400_orient_int_conf orient{};
+  orient.axes_sel = BMA400_AXIS_XYZ_EN;
+  orient.data_src = BMA400_DATA_SRC_ACC_FILT2;
+  orient.ref_update = BMA400_ORIENT_REFU_ACC_FILT_LP;  // follows the wrist
+  orient.orient_thres = 50;     // 400 mg change
+  orient.stability_thres = 16;  // steady within 128 mg ...
+  orient.orient_int_dur = 15;   // ... for 150 ms
+  orient.int_chan = BMA400_INT_CHANNEL_1;
+
+  return device_.setTapInterrupt(&tap) == BMA400_OK &&
+         device_.setOrientationChangeInterrupt(&orient) == BMA400_OK &&
+         device_.enableInterrupt(BMA400_DOUBLE_TAP_INT_EN, true) ==
+             BMA400_OK &&
+         device_.enableInterrupt(BMA400_ORIENT_CHANGE_INT_EN, true) ==
+             BMA400_OK &&
+         device_.enableInterrupt(BMA400_LATCH_INT_EN, true) == BMA400_OK;
+}
+
 bool Bma400::enableDataReadyInterrupt(bool enable) {
   return address_ != 0 &&
          device_.enableInterrupt(BMA400_DRDY_INT_EN, enable) == BMA400_OK;

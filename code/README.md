@@ -312,6 +312,12 @@ The four active-low buttons currently map as follows:
 | 1 | Bottom-left | Select: clock: open carousel; with notifications waiting, a double press within 0.6 s shows the newest one again as the pop-up (and a single press opens the carousel after that 0.6 s). Browse: enter card. Inside: activate |
 
 Each press acts when the button is released. There are no long presses and no two-button gestures.
+
+Motion gestures (BMA400 on INT1, latched, on the 100 Hz normal-mode path the step counter
+already uses, so they add next to no current): a **double tap** on the face shows the newest
+notification as the pop-up (or closes it); **turning the wrist to look** (orientation change
+ending with the face roughly flat, |z| ≥ 0.75 g) lights the front light for 5 s between 19:00
+and 06:00. A button press while it is lit gives it the normal 30 s.
 While an alarm rings, bottom-right (home) dismisses it and bottom-left (select) snoozes it. The
 roles are set by the order of `BUTTON_PINS` in `watch_buttons.cpp`. Holding PCB button 1 during
 reset for DFU is a bootloader feature and is unchanged.

@@ -163,6 +163,16 @@ class WatchApplication {
   // Any app goes back to the clock after this long without a button press.
   static constexpr uint32_t SCREEN_TIMEOUT_MS = 10000;
   uint32_t last_input_ms_ = 0;
+
+  // Gestures from the BMA400 (INT1, latched): double tap shows the newest
+  // notification; turning the wrist to look at the watch lights the front
+  // light for GESTURE_LIGHT_MS, at night only.
+  static constexpr uint32_t GESTURE_LIGHT_MS = 5000;
+  static constexpr uint8_t NIGHT_FROM_HOUR = 19;  // 19:00 ...
+  static constexpr uint8_t NIGHT_TO_HOUR = 6;     // ... to 06:00
+  bool gestures_ready_ = false;
+  bool gesture_light_ = false;  // the light is on because of a wrist turn
+  void serviceGestures(uint8_t wake_events);
   bool screenTimeoutHeld() const;
   void serviceScreenTimeout();
   // Double press of select on the clock plays/pauses music; a single press

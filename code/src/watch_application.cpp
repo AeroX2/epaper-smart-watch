@@ -143,6 +143,7 @@ void WatchApplication::runBuzzerTest() {
 }
 
 void WatchApplication::setDisplayLight(bool on) {
+  gesture_light_ = false;  // a deliberate change: the normal timeout applies
   display_light_on_ = on;
   model_.led_ring_on = on;
   display_light_since_ms_ = millis();
@@ -158,10 +159,12 @@ void WatchApplication::toggleDisplayLight() {
 // The front-light boost converter draws milliamps for as long as it is on,
 // asleep or not: never leave it on unattended.
 void WatchApplication::serviceDisplayLight() {
-  if (!display_light_on_ ||
-      millis() - display_light_since_ms_ < DISPLAY_LIGHT_TIMEOUT_MS) {
+  const uint32_t timeout =
+      gesture_light_ ? GESTURE_LIGHT_MS : DISPLAY_LIGHT_TIMEOUT_MS;
+  if (!display_light_on_ || millis() - display_light_since_ms_ < timeout) {
     return;
   }
+  gesture_light_ = false;
   setDisplayLight(false);
   Serial.println(F("Display LED ring: auto-off."));
   if (display_controller_.active() && ui_.screen() == WatchScreen::Settings) {
@@ -1160,6 +1163,54 @@ void WatchApplication::serviceUsb() {
   }
 }
 
+// INT1 is latched: read (and so clear) the BMA400's interrupt status whenever
+// the line is high, whether or not the wake event was seen, so it can never
+// stay stuck high and stop further gestures.
+void WatchApplication::serviceGestures(uint8_t wake_events) {
+  if (!gestures_ready_) {
+    return;
+  }
+  if ((wake_events & WATCH_WAKE_ACCELEROMETER) == 0 &&
+      digitalRead(BoardPins::ACCEL_INT1) == LOW) {
+    return;
+  }
+  uint16_t status = 0;
+  if (!accelerometer_.readInterruptStatus(status)) {
+    return;
+  }
+
+  if ((status & BMA400_ASSERTED_D_TAP_INT) != 0) {
+    Serial.println(F("Gesture: double tap."));
+    if (model_.notification_peek) {
+      endNotificationPeek();
+    } else if (model_.notification_count > 0 && !model_.call_active &&
+               !model_.alarm_ringing && !ota_.screenShown() &&
+               display_controller_.active()) {
+      model_.notification_peek = true;
+      renderUi();
+      peek_since_ms_ = millis();
+    }
+  }
+
+  if ((status & BMA400_ASSERTED_ORIENT_CH) != 0) {
+    // Looking at the watch: the face lies roughly flat (most of gravity on
+    // the Z axis), which it rarely does with the arm down.
+    AccelReading reading{};
+    rtc_.updateModel(model_);
+    const bool night =
+        model_.time_valid &&
+        (model_.hour >= NIGHT_FROM_HOUR || model_.hour < NIGHT_TO_HOUR);
+    if (accelerometer_.read(reading) && fabsf(reading.z_g) >= 0.75f) {
+      Serial.println(night ? F("Gesture: wrist turned (night: light).")
+                           : F("Gesture: wrist turned."));
+      if (night && !display_light_on_) {
+        setDisplayLight(true);
+        gesture_light_ = true;
+      }
+    }
+  }
+}
+
 // Things that keep an app open past the timeout: the phone's camera is in
 // use, the phone is ringing, or a full-screen overlay is up.
 bool WatchApplication::screenTimeoutHeld() const {
@@ -1576,6 +1627,9 @@ void WatchApplication::setup() {
   diagnostics_.runAll(Serial);
   WatchWatchdog::feed();
   activity_.begin(Serial);
+  gestures_ready_ = accelerometer_.configureGestures();
+  Serial.println(gestures_ready_ ? F("Gestures: double tap, wrist turn.")
+                                 : F("[WARN] Gestures unavailable."));
   alarm_.begin();
   power_.begin(rtc_, watchdog_.resetByWatchdog(), Serial);
   power_.setWakeVeto(sleepVeto);
@@ -1646,6 +1700,7 @@ void WatchApplication::loop() {
                          Serial);
   }
   activity_.serviceStorage(Serial);
+  serviceGestures(wake_events);
   if ((wake_events & WATCH_WAKE_ACCELEROMETER) != 0) {
     activity_.serviceInterrupt(Serial);
   }
@@ -1670,6 +1725,7 @@ void WatchApplication::loop() {
       // console up if VDDUSB detection ever fails.
       power_.noteActivity(WatchPower::BUTTON_HOLD_MS);
       display_light_since_ms_ = millis();
+      gesture_light_ = false;  // in use: the full timeout from now on
     }
   }
   serviceDisplayLight();
