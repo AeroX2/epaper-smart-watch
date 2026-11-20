@@ -254,6 +254,12 @@ uint32_t WatchApplication::sleepBudgetMs() {
   if (select_press_armed_) {
     consider(remaining(DOUBLE_PRESS_MS + 1, now - select_press_ms_));
   }
+  if (previous_press_armed_) {
+    consider(remaining(DOUBLE_PRESS_MS + 1, now - previous_press_ms_));
+  }
+  if (usb_restart_pending_) {
+    consider(remaining(USB_SETTLE_MS, now - usb_restart_ms_));
+  }
   if (!screenTimeoutHeld()) {
     consider(remaining(SCREEN_TIMEOUT_MS, now - last_input_ms_));
   }
@@ -1131,6 +1137,39 @@ void WatchApplication::serviceNotificationPeek() {
   }
 }
 
+// A single top-right press on the clock opens the app menu once no second
+// press came within DOUBLE_PRESS_MS.
+void WatchApplication::servicePreviousPress() {
+  if (!previous_press_armed_ ||
+      millis() - previous_press_ms_ <= DOUBLE_PRESS_MS) {
+    return;
+  }
+  previous_press_armed_ = false;
+  if (ui_.screen() != WatchScreen::Clock || model_.notification_peek) {
+    return;
+  }
+  applyUiAction(ui_.previous(model_));
+  if (display_controller_.active()) {
+    renderUi();
+  }
+}
+
+// Plugging USB into a running watch: the nPM1100 probes the port first
+// (BC1.2), and with the USB device already attached the host never sees
+// it. Detach when the cable goes, attach again USB_SETTLE_MS after it
+// comes back, as setup() does at boot.
+void WatchApplication::serviceUsbRestart(uint8_t wake_events) {
+  if ((wake_events & WATCH_WAKE_USB_POWER) != 0) {
+    Serial.end();
+    usb_restart_pending_ = power_.usbPowered();
+    usb_restart_ms_ = millis();
+  }
+  if (usb_restart_pending_ && millis() - usb_restart_ms_ >= USB_SETTLE_MS) {
+    usb_restart_pending_ = false;
+    Serial.begin(115200);
+  }
+}
+
 // Things that keep an app open past the timeout: the phone's camera is in
 // use, the phone is ringing, or a full-screen overlay is up.
 bool WatchApplication::screenTimeoutHeld() const {
@@ -1424,8 +1463,12 @@ void WatchApplication::handleButton(size_t index) {
   home_press_armed_ = false;
   const bool second_select_press = index == 3 && select_press_armed_ &&
                                    millis() - select_press_ms_ <= DOUBLE_PRESS_MS;
+  const bool second_previous_press =
+      index == 2 && previous_press_armed_ &&
+      millis() - previous_press_ms_ <= DOUBLE_PRESS_MS;
   // Any other press, or a late second one, drops a pending menu open.
   select_press_armed_ = false;
+  previous_press_armed_ = false;
   if (alarm_.stopFindAlert()) {
     Serial.println(F("Find my watch: stopped by button."));
     return;
@@ -1476,6 +1519,20 @@ void WatchApplication::handleButton(size_t index) {
       model_.camera_state != CameraState::Closed) {
     ble_.send("CAMERA|CLOSE");  // leaving closes the phone's camera too
     model_.camera_state = CameraState::Closed;
+  }
+  if (index == 2 && ui_.screen() == WatchScreen::Clock) {
+    if (second_previous_press) {
+      // The newest notification, in Messages (back returns to the clock).
+      ui_.showScreen(WatchScreen::Notifications);
+      ui_.select(model_);
+      ui_.setNotificationIndex(0);
+      Serial.println(F("Clock: newest notification."));
+      renderUi();
+    } else {
+      previous_press_armed_ = true;
+      previous_press_ms_ = millis();
+    }
+    return;
   }
   if (index == 3 && ui_.screen() == WatchScreen::Clock &&
       model_.music_state != MusicState::None) {
@@ -1581,6 +1638,7 @@ void WatchApplication::loop() {
   serviceNotificationPeek();
   serviceFindPhone();
   serviceSelectPress();
+  servicePreviousPress();
   serviceScreenTimeout();
   servicePhoneLink();
   if (ble_.takeBondChange()) {
@@ -1624,6 +1682,7 @@ void WatchApplication::loop() {
       renderUi();
     }
   }
+  serviceUsbRestart(wake_events);
   if ((wake_events & WATCH_WAKE_BATTERY) != 0) {
     updateUiSensors();
   }
