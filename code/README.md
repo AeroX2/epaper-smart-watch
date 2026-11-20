@@ -314,8 +314,8 @@ below describes the roles, wherever they sit:
 Each press acts when the button is released. There are no long presses and no two-button gestures.
 
 Motion gestures (BMA400 on INT1, latched, on the 100 Hz normal-mode path the step counter
-already uses, so they add next to no current): a **double tap** on the face shows the newest
-notification as the pop-up (or closes it); **turning the wrist to look** (orientation change
+already uses, so they add next to no current): a **double tap** on the face (Z axis, sensitivity 1 of 0-7 where 0 is the most
+sensitive, taps 40-500 ms apart) shows the newest notification as the pop-up (or closes it); **turning the wrist to look** (orientation change
 ending with the face roughly flat, |z| ≥ 0.75 g) lights the front light for 5 s between 19:00
 and 06:00. A button press while it is lit gives it the normal 30 s.
 While an alarm rings, bottom-right (home) dismisses it and bottom-left (select) snoozes it. Holding

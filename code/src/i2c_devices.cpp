@@ -114,9 +114,9 @@ bool Bma400::configureGestures() {
   }
   bma400_tap_conf tap{};
   tap.axes_sel = BMA400_TAP_Z_AXIS_EN;           // a tap on the watch face
-  tap.sensitivity = BMA400_TAP_SENSITIVITY_3;    // 0 most sensitive, 7 least
+  tap.sensitivity = BMA400_TAP_SENSITIVITY_1;    // 0 most sensitive, 7 least
   tap.tics_th = BMA400_TICS_TH_12_DATA_SAMPLES;
-  tap.quiet = BMA400_QUIET_80_DATA_SAMPLES;      // longest gap between taps
+  tap.quiet = BMA400_QUIET_100_DATA_SAMPLES;     // longest gap between taps
   tap.quiet_dt = BMA400_QUIET_DT_8_DATA_SAMPLES; // shortest gap between taps
   tap.int_chan = BMA400_INT_CHANNEL_1;
 
