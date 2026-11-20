@@ -72,7 +72,7 @@ a new auto-connect is issued.
   is replaced in place if a newer one arrives before it is sent.
 - `TIME` is built at the moment of each transmission attempt, so a queued or retried `TIME` is
   never stale.
-- State messages (`TIME`, `SETTINGS`, `PHONE`, `NEXT_ALARM`, `EVENT`, `MUSIC`) count as
+- State messages (`TIME`, `SETTINGS`, `PHONE`, `NEXT_ALARM`, `EVENT`, `BUTTONS`, `MUSIC`) count as
   delivered only when the watch ACKed them. If one is dropped (NAK, retries exhausted, queue
   overflow) the then-current value is sent again after 5 s, doubling up to 5 min while resends keep
   being dropped. After three `PARSE`/`UNKNOWN` NAKs in a
@@ -86,7 +86,7 @@ a new auto-connect is issued.
 ### Session
 
 After `HELLO` is ACKed the phone sends `TIME` (UTC + zone offset incl. DST, and the next DST change),
-`SETTINGS` (the phone's stored copy), `PHONE`, `NEXT_ALARM`, `EVENT`, `MUSIC`,
+`SETTINGS` (the phone's stored copy), `PHONE`, `NEXT_ALARM`, `EVENT`, `BUTTONS`, `MUSIC`,
 `NOTIFY_CLEAR|0`, the newest five notifications (oldest first, `alert` 0), a ringing `CALL` if there
 is one, and `REQUEST|HISTORY`. If the watch never ACKs `HELLO`, the app drops the link and
 reconnects with backoff; after eight failed connections in a row it stops (see *Battery*).
@@ -130,6 +130,7 @@ as the download and the resulting messages are done (30 s at most). See *Battery
 | Calendar | Optional. The next visible, non-all-day, non-declined event that starts within 24 h, from `CalendarContract.Instances`. Updates when the calendar changes and when that event starts. |
 | Phone status | Battery %, charging and Do Not Disturb. Charging and DND changes are sent at once, the battery level in steps of 5 points (and at 100 %). |
 | Find phone | `FIND_PHONE\|1` rings the default alarm sound on the alarm stream and vibrates, with a Stop notification. While it rings the alarm volume is raised to at least 70 % and put back afterwards (unless you changed it meanwhile). It stops on `FIND_PHONE\|0`, on Stop, after 2 min, or when the service stops. **Find watch** sends `FIND_WATCH`. |
+| Buttons | Four corner buttons pick each corner's role (Home / back, Next, Previous, Select); taking a role another corner has swaps them, and **Default layout** puts the watch's own layout back. Sent as `BUTTONS\|tl\|tr\|bl\|br` at once and at every session start; the watch stores it in flash. |
 | Test notification | **Send test notification** sends a made-up `NOTIFY` (id 65535, alert on) so the pop-up, alert tone and Messages app can be checked without waiting for a real message. |
 | Camera remote | The watch's Camera app. `CAMERA\|OPEN` opens a CameraX screen with the back camera (`CameraActivity`), also over the lock screen; the companion-device association is what lets it start from the background. If it has not appeared after 3 s a "Tap to open" notification is posted and the watch shows `TAP THE PHONE`. `CAMERA\|SHUTTER\|delay` beeps through the countdown and saves a JPEG to Pictures/E-Paper Watch; `CAMERA\|CLOSE` closes it. The screen reports `CAMERA\|state` back (opening, ready, countdown, saved count, error). The camera permission is asked for the first time it opens. CameraX adds AndroidX Activity, Camera and Guava to the dependencies. **Use Pixel Camera** (off by default) instead opens Pixel Camera (`INTENT_ACTION_STILL_IMAGE_CAMERA`, the `_SECURE` variant while locked) and presses its shutter through the optional `PixelCameraShutter` accessibility service, which its config limits to Pixel Camera's windows. It clicks the shutter by view id or description, else taps where it was last found; the countdown and beeps are this app's. Without the service enabled the own camera screen is used. |
 | Watch status | Shows battery %, voltage, charging state, firmware and flags (from `HELLO`), steps today, a 7-day step chart (`REQUEST\|HISTORY`) and the last sync time. |
@@ -191,7 +192,7 @@ The decisions are pure functions in `link/PowerPolicy.kt` (tested in `PowerPolic
 | `PHONE` | Charging or Do Not Disturb changed; battery level moved 5 points from the value the watch has, or reached 100 %. Other `BATTERY_CHANGED` broadcasts (voltage, temperature) are ignored. |
 | `MUSIC` | Track, duration or play state changed; position off by more than 3 s from where the watch has counted to, at most once per 15 s. Callbacks are debounced for 0.5 s. Never periodic. |
 | `NOTIFY` | A new notification at once; content updates of the same notification at most every 10 s, latest content wins. Identical re-posts never. |
-| `EVENT`, `NEXT_ALARM`, `SETTINGS` | Only when the value differs from the one the watch ACKed. |
+| `EVENT`, `NEXT_ALARM`, `SETTINGS`, `BUTTONS` | Only when the value differs from the one the watch ACKed. |
 | `REQUEST` | `HISTORY` once per session; `STATUS`/`HISTORY` otherwise only from the **Refresh status** button. No timer: the watch pushes `STATUS` itself. |
 | Resend of a dropped state message | After 5 s, doubling to 5 min until one gets through. |
 

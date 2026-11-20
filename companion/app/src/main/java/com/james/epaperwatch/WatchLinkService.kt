@@ -45,7 +45,7 @@ import com.james.epaperwatch.ui.MainActivity
  * the feature bridges, pushes state changes from the bridges to the watch, and hosts the
  * firmware transfer ([OtaManager]).
  *
- * State messages (TIME, SETTINGS, PHONE, NEXT_ALARM, EVENT, MUSIC) are tracked per
+ * State messages (TIME, SETTINGS, PHONE, NEXT_ALARM, EVENT, BUTTONS, MUSIC) are tracked per
  * key: a value counts as delivered only when the watch ACKed it, and a value that was dropped
  * (NAK, retries exhausted, queue overflow) is rebuilt from its source and sent again.
  */
@@ -241,6 +241,9 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
 
     /** The phone's copy of the watch settings changed. */
     fun sendSettings() = sendState(settingsMessage(), force = true)
+
+    /** The button layout changed in the app. */
+    fun sendButtons() = sendState(Out.buttons(prefs.buttonLayout), force = true)
 
     /** Play alert tone 1..5 once on the watch. */
     fun previewTone(tone: Int) {
@@ -507,6 +510,7 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         KEY_PHONE -> phone.phoneMessage()
         "NEXT_ALARM" -> phone.alarmMessage()
         "EVENT" -> calendar.eventMessage()
+        "BUTTONS" -> Out.buttons(prefs.buttonLayout)
         KEY_MUSIC -> media.currentMessage()
         else -> null
     }
@@ -759,7 +763,7 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
 
         /** State keys in PROTOCOL.md session-start order. */
         private val STATE_KEYS =
-            listOf(KEY_TIME, "SETTINGS", "PHONE", "NEXT_ALARM", "EVENT", KEY_MUSIC)
+            listOf(KEY_TIME, "SETTINGS", "PHONE", "NEXT_ALARM", "EVENT", "BUTTONS", KEY_MUSIC)
 
         /** The running service, if any. Only touched on the main thread. */
         @SuppressLint("StaticFieldLeak")

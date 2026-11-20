@@ -26,6 +26,31 @@ object Protocol {
     /** Alert tone names; the index is the wire value (`SETTINGS.tone`, `TONE_PREVIEW`). */
     val TONE_NAMES = listOf("None", "Chirp", "Double", "Rise", "Fall", "Triple")
 
+    /** Button roles; the index is the wire value in `BUTTONS`. */
+    val BUTTON_ROLES = listOf("Home / back", "Next", "Previous", "Select")
+
+    /** Corners in `BUTTONS` field order. */
+    val BUTTON_CORNERS = listOf("Top left", "Top right", "Bottom left", "Bottom right")
+
+    /** The watch's built-in layout: next, previous, select, home. */
+    val DEFAULT_BUTTONS = listOf(1, 2, 3, 0)
+
+    /** Each of the four roles exactly once. */
+    fun validButtons(layout: List<Int>) = layout.size == 4 && layout.sorted() == listOf(0, 1, 2, 3)
+
+    /**
+     * Gives [corner] the [role]; the corner that had that role takes over the old role of
+     * [corner], so the layout stays valid.
+     */
+    fun assignButton(layout: List<Int>, corner: Int, role: Int): List<Int> {
+        val result = layout.toMutableList()
+        val other = result.indexOf(role)
+        if (other < 0 || other == corner) return layout
+        result[other] = result[corner]
+        result[corner] = role
+        return result
+    }
+
     // Firmware update over Bluetooth.
     const val OTA_MIN_IMAGE_BYTES = 8
     const val OTA_MAX_IMAGE_BYTES = 761_856
@@ -126,6 +151,9 @@ object Out {
         )
 
     fun notifyClear(id: Int) = OutMessage("NOTIFY_CLEAR", listOf(id.toString()), "NOTIFY:$id")
+
+    /** Role of each corner, in [Protocol.BUTTON_CORNERS] order. */
+    fun buttons(layout: List<Int>) = OutMessage("BUTTONS", layout.map { it.toString() }, "BUTTONS")
 
     fun callRing(caller: CharSequence?) = OutMessage("CALL", listOf("RING", t(caller, 28)), "CALL")
     fun callEnd() = OutMessage("CALL", listOf("END", ""), "CALL")

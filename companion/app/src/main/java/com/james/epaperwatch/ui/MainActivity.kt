@@ -58,6 +58,7 @@ class MainActivity : Activity() {
     private lateinit var vibrationSwitch: Switch
     private lateinit var quietSwitch: Switch
     private lateinit var toneButton: Button
+    private lateinit var cornerButtons: List<Button>
     private lateinit var healthSwitch: Switch
     private lateinit var healthStatus: TextView
     private lateinit var accessButton: Button
@@ -238,6 +239,33 @@ class MainActivity : Activity() {
         }
     }
 
+    // ------------------------------------------------------------------ button layout
+
+    private fun pickButtonRole(corner: Int) {
+        val layout = prefs.buttonLayout
+        AlertDialog.Builder(this)
+            .setTitle(Protocol.BUTTON_CORNERS[corner] + " button")
+            .setSingleChoiceItems(Protocol.BUTTON_ROLES.toTypedArray(), layout[corner]) { dialog, which ->
+                if (which != layout[corner]) {
+                    prefs.buttonLayout = Protocol.assignButton(layout, corner, which)
+                    pushButtons()
+                }
+                dialog.dismiss()
+                render()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun pushButtons() {
+        val service = WatchLinkService.instance
+        if (service != null && service.sessionActive) {
+            service.sendButtons()
+        } else {
+            toast("Saved on the phone. The watch gets it when it connects.")
+        }
+    }
+
     // ------------------------------------------------------------------ alert tone
 
     private fun pickTone() {
@@ -412,6 +440,10 @@ class MainActivity : Activity() {
 
         vibrationSwitch.isChecked = prefs.vibration
         quietSwitch.isChecked = prefs.quiet
+        val layout = prefs.buttonLayout
+        cornerButtons.forEachIndexed { corner, button ->
+            button.text = Protocol.BUTTON_CORNERS[corner] + "\n" + Protocol.BUTTON_ROLES[layout[corner]]
+        }
         toneButton.text = "Alert tone: " +
             (Protocol.TONE_NAMES.getOrNull(prefs.tone) ?: "watch default")
         healthSwitch.isChecked = prefs.healthSync
@@ -536,6 +568,23 @@ class MainActivity : Activity() {
         toneButton = ui.button("Alert tone", primary = false) { pickTone() }
         root.addView(toneButton)
         root.addView(ui.note("The tone the watch plays for a new notification. Quiet mode silences it."))
+
+        // ---- Button layout ----
+        root.addView(ui.section("BUTTONS", "What each corner does"))
+        cornerButtons = Protocol.BUTTON_CORNERS.indices.map { corner ->
+            ui.button("", primary = false) { pickButtonRole(corner) }
+        }
+        root.addView(ui.row(cornerButtons[0], cornerButtons[1]))
+        root.addView(ui.row(cornerButtons[2], cornerButtons[3]))
+        root.addView(ui.button("Default layout", primary = false) {
+            prefs.buttonLayout = Protocol.DEFAULT_BUTTONS
+            pushButtons()
+            render()
+        })
+        root.addView(ui.note(
+            "Picking a role another corner has swaps the two. Holding the bottom-left button " +
+                "while the watch restarts still starts its update mode.",
+        ))
 
         // ---- Health Connect ----
         root.addView(ui.section("HEALTH CONNECT", "Step sync"))

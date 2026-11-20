@@ -2,6 +2,7 @@ package com.james.epaperwatch.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.james.epaperwatch.protocol.Protocol
 
 /** All persisted state: pairing, user settings, filters and the last watch status. */
 class Prefs(context: Context) {
@@ -24,6 +25,14 @@ class Prefs(context: Context) {
     var quiet: Boolean
         get() = sp.getBoolean("quiet", false)
         set(value) = sp.edit().putBoolean("quiet", value).apply()
+
+    /** Button roles by corner (see [Protocol.BUTTON_CORNERS]); the default until changed. */
+    var buttonLayout: List<Int>
+        get() = sp.getString("button_layout", null)
+            ?.split(',')?.mapNotNull { it.toIntOrNull() }
+            ?.takeIf { Protocol.validButtons(it) }
+            ?: Protocol.DEFAULT_BUTTONS
+        set(value) = sp.edit().putString("button_layout", value.joinToString(",")).apply()
 
     /** Notification alert tone 0..5, or -1 while neither the user nor the watch has said. */
     var tone: Int
