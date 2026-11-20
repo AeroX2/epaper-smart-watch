@@ -302,7 +302,7 @@ void WatchApplication::updateUiSensors() {
 
   // A forced BME280 conversion keeps the MCU awake for about 10 ms. The
   // clock face (redrawn every minute) only shows whole degrees, so measure
-  // at most every few minutes unless a screen with live values is up.
+  // at most every few minutes.
   const WatchScreen screen = ui_.screen();
   const uint32_t now = millis();
   if (!model_.environment_valid ||
@@ -820,7 +820,7 @@ void WatchApplication::dismissShownNotification() {
   }
   const uint16_t id = model_.notifications[index].id;
   removeNotification(id);
-  // id 0 is a local Sleep as Android message with no phone counterpart.
+  // id 0 is a local message (the 'n' sample) with no phone counterpart.
   if (id != 0) {
     ble_.sendf("NOTIFY_DISMISS|%u", id);
   }
@@ -996,19 +996,6 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
         return true;
       }
       return false;
-    case PhoneUpdateType::Weather:
-      model_.phone_weather_valid = true;
-      model_.forecast_temperature_c = static_cast<int16_t>(n[0]);
-      model_.forecast_high_c = static_cast<int8_t>(n[1]);
-      model_.forecast_low_c = static_cast<int8_t>(n[2]);
-      model_.weather_code = static_cast<int16_t>(n[3]);
-      copyPhoneText(model_.weather_condition, update.text_a);
-      // The clock face shows an altitude worked out from this.
-      model_.sea_level_pressure_tenths_hpa =
-          (update.utc >= 8000 && update.utc <= 11000)
-              ? static_cast<uint16_t>(update.utc)
-              : 0;
-      return screen == WatchScreen::Clock;
     case PhoneUpdateType::Music:
       model_.music_state = static_cast<MusicState>(n[0]);
       music_base_position_ = static_cast<uint32_t>(n[1]);
@@ -1088,36 +1075,6 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
     case PhoneUpdateType::StepsReset:
       activity_.resetSteps(Serial);
       return screen == WatchScreen::Activity;
-    case PhoneUpdateType::SleepStart:
-      activity_.startSleepTracking(Serial);
-      return false;
-    case PhoneUpdateType::SleepStop:
-      activity_.stopSleepTracking(Serial);
-      return false;
-    case PhoneUpdateType::SleepPause:
-      activity_.pauseSleepTracking(n[0], Serial);
-      return false;
-    case PhoneUpdateType::SleepAlarm:
-      alarm_.scheduleSleepAlarm(n[0], Serial);
-      return false;
-    case PhoneUpdateType::SleepAlarmStop:
-      return alarm_.stopSleepAlarm(Serial);
-    case PhoneUpdateType::SleepNotify:
-      storeNotification(0, "SLEEP AS ANDROID", update.text_a, update.text_b);
-      return false;
-    case PhoneUpdateType::SleepHint: {
-      const int32_t repeats = n[0] < 5 ? n[0] : 5;
-      for (int32_t i = 0; i < repeats; ++i) {
-        analogWrite(BoardPins::VIBRATION, 128);
-        delay(80);
-        analogWrite(BoardPins::VIBRATION, 0);
-        delay(80);
-      }
-      if (repeats > 0) {
-        WatchAlarm::vibrationOff();
-      }
-      return false;
-    }
     default:
       return false;
   }
@@ -1735,9 +1692,6 @@ void WatchApplication::loop() {
   }
   activity_.serviceStorage(Serial);
   serviceGestures(wake_events);
-  if ((wake_events & WATCH_WAKE_ACCELEROMETER) != 0) {
-    activity_.serviceInterrupt(Serial);
-  }
   // The clock face shows a charging bolt while USB power is present.
   const bool charging = power_.usbPowered();
   if (charging != model_.charging) {

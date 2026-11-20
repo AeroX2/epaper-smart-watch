@@ -650,20 +650,6 @@ WatchBle::ParseResult WatchBle::parse(char* const* fields, uint8_t count,
     }
     copyField(update.text_a, field(2), 28);
     update.type = PhoneUpdateType::Call;
-  } else if (strcmp(type, "WEATHER") == 0) {
-    if (!parseInteger(field(1), -99, 99, n[0]) ||
-        !parseInteger(field(2), -99, 99, n[1]) ||
-        !parseInteger(field(3), -99, 99, n[2]) ||
-        !parseInteger(field(4), -1, 255, n[3])) {
-      return ParseResult::Parse;
-    }
-    copyField(update.text_a, field(5), 20);
-    // Optional sea-level pressure in tenths of a hPa; empty = unknown.
-    update.utc = 0;
-    if (field(6)[0] != '\0' && !parseUnsigned(field(6), update.utc)) {
-      return ParseResult::Parse;
-    }
-    update.type = PhoneUpdateType::Weather;
   } else if (strcmp(type, "MUSIC") == 0) {
     if (!parseInteger(field(1), 0, 2, n[0]) ||
         !parseInteger(field(2), 0, INT32_MAX, n[1]) ||
@@ -742,29 +728,6 @@ WatchBle::ParseResult WatchBle::parse(char* const* fields, uint8_t count,
     }
   } else if (strcmp(type, "STEPS_RESET") == 0) {
     update.type = PhoneUpdateType::StepsReset;
-  } else if (strcmp(type, "SLEEP_START") == 0) {
-    update.type = PhoneUpdateType::SleepStart;
-  } else if (strcmp(type, "SLEEP_STOP") == 0) {
-    update.type = PhoneUpdateType::SleepStop;
-  } else if (strcmp(type, "SLEEP_PAUSE") == 0) {
-    if (!parseInteger(field(1), INT32_MIN + 1, INT32_MAX, n[0])) {
-      return ParseResult::Parse;
-    }
-    update.type = PhoneUpdateType::SleepPause;
-  } else if (strcmp(type, "SLEEP_ALARM") == 0) {
-    if (!parseInteger(field(1), INT32_MIN + 1, INT32_MAX, n[0])) {
-      return ParseResult::Parse;
-    }
-    update.type = PhoneUpdateType::SleepAlarm;
-  } else if (strcmp(type, "SLEEP_ALARM_STOP") == 0) {
-    update.type = PhoneUpdateType::SleepAlarmStop;
-  } else if (strcmp(type, "SLEEP_NOTIFY") == 0) {
-    copyField(update.text_a, field(1), 28);
-    copyField(update.text_b, field(2), 28);
-    update.type = PhoneUpdateType::SleepNotify;
-  } else if (strcmp(type, "SLEEP_HINT") == 0) {
-    if (!parseInteger(field(1), 0, 65535, n[0])) return ParseResult::Parse;
-    update.type = PhoneUpdateType::SleepHint;
   } else {
     return ParseResult::Unknown;
   }

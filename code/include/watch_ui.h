@@ -57,7 +57,7 @@ enum class OtaScreen : uint8_t {
 };
 
 struct WatchNotification {
-  uint16_t id = 0;  // 1-65535 from the phone; 0 = local (Sleep as Android)
+  uint16_t id = 0;  // 1-65535 from the phone; 0 = local (console sample)
   char app[25]{};
   char title[29]{};
   char text[57]{};
@@ -82,8 +82,6 @@ struct WatchUiModel {
   uint8_t humidity_percent = 0;
   uint16_t pressure_hpa = 0;
   uint32_t pressure_pa = 0;  // the same reading, unrounded
-  // Sea-level pressure from the phone's weather, tenths of a hPa; 0 = unknown.
-  uint16_t sea_level_pressure_tenths_hpa = 0;
   uint8_t battery_percent = 0;
   uint16_t battery_millivolts = 0;
   int16_t accel_x_mg = 0;
@@ -130,12 +128,6 @@ struct WatchUiModel {
   bool call_active = false;
   char call_caller[29]{};
 
-  bool phone_weather_valid = false;
-  int16_t forecast_temperature_c = 0;
-  int8_t forecast_high_c = 0;
-  int8_t forecast_low_c = 0;
-  int16_t weather_code = -1;
-  char weather_condition[21] = "PARTLY CLOUDY";
 
   MusicState music_state = MusicState::None;
   uint32_t music_position_seconds = 0;  // extrapolated while playing

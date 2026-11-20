@@ -64,47 +64,6 @@ void WatchActivity::begin(Print& out) {
   }
 }
 
-void WatchActivity::startSleepTracking(Print& out) {
-  sleep_tracking_ = true;
-  sleep_accel_seeded_ = false;
-  sleep_max_delta_mg_ = 0;
-  sleep_interval_started_at_ = millis();
-  if (hardware_activity_ready_) {
-    // 12.5 samples/s is plenty for a ten-second movement maximum and wakes
-    // the MCU an eighth as often as the normal 100 Hz rate.
-    accelerometer_.setTrackingRate(true);
-    if (!accelerometer_.enableDataReadyInterrupt(true)) {
-      out.println(F("[WARN] Could not enable BMA400 sleep data-ready IRQ."));
-    }
-  }
-  out.println(F("Sleep as Android movement tracking started."));
-}
-
-void WatchActivity::stopSleepTracking(Print& out) {
-  sleep_tracking_ = false;
-  sleep_pause_until_epoch_ = 0;
-  sleep_max_delta_mg_ = 0;
-  if (hardware_activity_ready_) {
-    accelerometer_.enableDataReadyInterrupt(false);
-    accelerometer_.setTrackingRate(false);
-  }
-  out.println(F("Sleep as Android movement tracking stopped."));
-}
-
-void WatchActivity::pauseSleepTracking(int32_t seconds, Print& out) {
-  if (seconds <= 0) {
-    sleep_pause_until_epoch_ = 0;
-    out.println(F("Sleep tracking resumed."));
-    return;
-  }
-  const uint64_t until =
-      static_cast<uint64_t>(rtc_.epoch()) + static_cast<uint64_t>(seconds);
-  sleep_pause_until_epoch_ =
-      until > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(until);
-  out.print(F("Sleep tracking paused for seconds: "));
-  out.println(seconds);
-}
-
 namespace {
 
 // Days since 1970-01-01 -> YYYYMMDD (Howard Hinnant's civil_from_days).
@@ -281,15 +240,6 @@ bool WatchActivity::historyEntry(uint8_t index, uint32_t& yyyymmdd,
   return false;
 }
 
-void WatchActivity::sendSleepMovement(uint32_t max_delta_mg, Print& out) {
-  char message[36]{};
-  snprintf(message, sizeof(message), "SLEEP_DATA|%lu",
-           static_cast<unsigned long>(max_delta_mg));
-  if (!ble_.send(message)) {
-    out.println(F("Sleep movement sample dropped: phone not connected."));
-  }
-}
-
 void WatchActivity::resetSteps(Print& out) {
   uint8_t activity_type = 0;
   uint32_t sensor_steps = 0;
@@ -318,52 +268,3 @@ void WatchActivity::pollSteps() {
   }
 }
 
-void WatchActivity::serviceInterrupt(Print& out) {
-  // INT1 carries only data-ready, and only during a tracking session; the
-  // step counter is no longer mapped to a pin (see pollSteps()).
-  if (!hardware_activity_ready_ || !sleep_tracking_) {
-    return;
-  }
-  processSleepSample(out);
-}
-
-void WatchActivity::processSleepSample(Print& out) {
-  const uint32_t now = millis();
-
-  AccelReading reading{};
-  if (!accelerometer_.read(reading)) {
-    return;
-  }
-  const int32_t x = lroundf(reading.x_g * 1000.0f);
-  const int32_t y = lroundf(reading.y_g * 1000.0f);
-  const int32_t z = lroundf(reading.z_g * 1000.0f);
-  model_.accel_x_mg = static_cast<int16_t>(x);
-  model_.accel_y_mg = static_cast<int16_t>(y);
-  model_.accel_z_mg = static_cast<int16_t>(z);
-  model_.accelerometer_valid = true;
-
-  if (sleep_accel_seeded_) {
-    const int32_t dx = x - sleep_last_x_mg_;
-    const int32_t dy = y - sleep_last_y_mg_;
-    const int32_t dz = z - sleep_last_z_mg_;
-    const int64_t delta_sq =
-        static_cast<int64_t>(dx) * dx + static_cast<int64_t>(dy) * dy +
-        static_cast<int64_t>(dz) * dz;
-    const uint32_t delta_mg =
-        static_cast<uint32_t>(lroundf(sqrtf(static_cast<float>(delta_sq))));
-    sleep_max_delta_mg_ = max(sleep_max_delta_mg_, delta_mg);
-  }
-  sleep_last_x_mg_ = static_cast<int16_t>(x);
-  sleep_last_y_mg_ = static_cast<int16_t>(y);
-  sleep_last_z_mg_ = static_cast<int16_t>(z);
-  sleep_accel_seeded_ = true;
-
-  if (now - sleep_interval_started_at_ >= SLEEP_REPORT_INTERVAL_MS) {
-    const bool paused =
-        sleep_pause_until_epoch_ != 0 &&
-        static_cast<uint32_t>(rtc_.epoch()) < sleep_pause_until_epoch_;
-    sendSleepMovement(paused ? 0 : sleep_max_delta_mg_, out);
-    sleep_interval_started_at_ = now;
-    sleep_max_delta_mg_ = 0;
-  }
-}

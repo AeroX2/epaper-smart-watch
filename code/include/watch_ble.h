@@ -22,7 +22,6 @@ enum class PhoneUpdateType : uint8_t {
                    // text_a=app, text_b=title, text_c=text
   NotifyClear,     // number[0]=id (0 = all)
   Call,            // number[0]=1 ring / 0 end, text_a=caller
-  Weather,         // number[0..3]=temp, high, low, code; text_a=condition
   Music,           // number[0..2]=state, position, duration;
                    // text_a=title, text_b=artist
   NextAlarm,       // utc (0 = none)
@@ -35,13 +34,6 @@ enum class PhoneUpdateType : uint8_t {
   RequestStatus,
   RequestHistory,
   StepsReset,
-  SleepStart,
-  SleepStop,
-  SleepPause,      // number[0]=seconds
-  SleepAlarm,      // number[0]=delay seconds
-  SleepAlarmStop,
-  SleepNotify,     // text_a=title, text_b=text
-  SleepHint,       // number[0]=repeats
   Camera,          // number[0]=CameraState, number[1]=countdown seconds or
                    // photos saved; text_a=error detail
   OtaBegin,        // number[0]=size, utc=crc32, text_a=version

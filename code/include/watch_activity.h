@@ -17,19 +17,12 @@ class WatchActivity {
                 WatchConfigStore& store);
 
   void begin(Print& out);
-  // BMA400 INT1: only the data-ready interrupt of a sleep-tracking session.
-  void serviceInterrupt(Print& out);
   // Reads the BMA400's own step counter into model.steps. Cheap (one I2C
   // read); called before anything shows, sends or stores the count.
   void pollSteps();
   void resetSteps(Print& out);
   // Milliseconds until the next periodic step read or step save is due.
   uint32_t msUntilNextService(uint32_t now) const;
-
-  void startSleepTracking(Print& out);
-  void stopSleepTracking(Print& out);
-  // seconds <= 0 resumes; otherwise movement reports read 0 for that long.
-  void pauseSleepTracking(int32_t seconds, Print& out);
 
   // Daily step history. Call with the current local day number
   // (local epoch / 86400). Advancing by exactly one day archives the count
@@ -48,7 +41,6 @@ class WatchActivity {
   bool historyEntry(uint8_t index, uint32_t& yyyymmdd, uint32_t& steps) const;
 
  private:
-  static constexpr uint32_t SLEEP_REPORT_INTERVAL_MS = 10000;
   static constexpr uint8_t HISTORY_DAYS = 6;  // + today = 7 reported
 
   struct StepDay {
@@ -66,8 +58,6 @@ class WatchActivity {
   void archive(uint32_t day, uint32_t steps);
   void dropHistoryFrom(uint32_t day);
   void save(Print& out);
-  void sendSleepMovement(uint32_t max_delta_mg, Print& out);
-  void processSleepSample(Print& out);
 
   Bma400& accelerometer_;
   WatchDiagnostics& diagnostics_;
@@ -79,15 +69,6 @@ class WatchActivity {
   uint32_t sensor_step_baseline_ = 0;
   uint32_t reported_step_baseline_ = 0;
   bool hardware_activity_ready_ = false;
-
-  bool sleep_tracking_ = false;
-  bool sleep_accel_seeded_ = false;
-  uint32_t sleep_interval_started_at_ = 0;
-  uint32_t sleep_pause_until_epoch_ = 0;
-  uint32_t sleep_max_delta_mg_ = 0;
-  int16_t sleep_last_x_mg_ = 0;
-  int16_t sleep_last_y_mg_ = 0;
-  int16_t sleep_last_z_mg_ = 0;
 
   StepDay history_[HISTORY_DAYS]{};
   uint8_t history_count_ = 0;  // oldest at index 0

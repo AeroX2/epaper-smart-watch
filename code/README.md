@@ -124,7 +124,7 @@ real deadline (`WatchApplication::sleepBudgetMs()`), and `WatchPower` picks one 
 see continuous time. The deadline is the earliest of: 10 ms while a button is being debounced/held,
 an actuator pulse or tone is running, step history is being sent or a message to the phone is
 pending; 250 ms while a firmware update is in progress; the next minute boundary (only while the
-clock face is displayed); timer expiry, Sleep as Android alarm, snooze end, today's alarm, local
+clock face is displayed); timer expiry, snooze end, today's alarm, local
 midnight; the 10-minute `STATUS` (only with a phone session); the 10-minute background step read
 and the hourly step save; the end of the fast-advertising window; the front-light auto-off.
 
@@ -134,7 +134,7 @@ Wake sources in Stop 2:
 | --- | --- | --- |
 | RTC alarm A | EXTI 17 | Deadline / watchdog feed. Always re-armed and verified before every Stop |
 | Buttons | EXTI 2, 4, 10, 12 | Input |
-| BMA400 INT1 | EXTI 0 | Data-ready, only during a Sleep as Android session |
+| BMA400 INT1 | EXTI 0 | Motion gestures (double tap, wrist turn), latched |
 | MAX17048 ALRT | EXTI 3 | Fuel-gauge alert |
 | VDDUSB monitor (PVM1) | EXTI 31 | USB plugged in or removed |
 | IPCC CPU1 receive | EXTI 36 | BLE controller traffic (only relevant with the radio on) |
@@ -195,10 +195,8 @@ under the default setting, with the same dual-core sequence.
 
 - BMA400: normal mode, 100 Hz, OSR 0 (about 4 uA; its low-power mode cannot count steps). The step
   counter runs without an interrupt pin; `WatchActivity::pollSteps()` reads it before every render,
-  `STATUS`, save and midnight roll-over, and every 10 minutes otherwise. Data-ready is enabled only
-  for a Sleep as Android session, at 12.5 Hz.
-- BME280: forced mode, one conversion at most every 5 minutes unless the Sensors or Weather screen
-  is drawn.
+  `STATUS`, save and midnight roll-over, and every 10 minutes otherwise.
+- BME280: forced mode, one conversion at most every 5 minutes.
 - MAX17048: forced into hibernate (`HIBRT = 0xFFFF`, about 4 uA instead of 23 uA); read on render
   and for `STATUS`.
 - ET011TJ1: after every update the booster is powered off and the controller held in reset with
@@ -332,10 +330,10 @@ entry. This keeps the button meanings deterministic: PREV/NEXT never trigger an 
 browsing, and never leave the current card while inside it.
 
 Implemented screens mirror the browser playground: clock, notification, timer, alarms, music,
-activity, find phone, camera, and settings (the phone's weather and the BME280 readings appear on the
+activity, find phone, camera, and settings (the BME280 temperature, humidity and air pressure appear on the
 clock face). Temperature, humidity, pressure, acceleration, battery
 percentage, battery voltage, time, timer state, alarms, and steps are live watch data. Phone
-notifications, forecast data, time sync, and music metadata/control use the companion BLE link.
+notifications, time sync, and music metadata/control use the companion BLE link.
 
 The STM32 RTC uses the fitted 32.768 kHz LSE and retains time through ordinary MCU resets while
 backup power remains present. If LSE startup fails, firmware falls back to LSI so recovery and
@@ -480,7 +478,7 @@ in `include/watch_version.h`.
   nested entry, so `BLE.poll()` is never re-entered and a render is never started from the hook.
 - The main loop applies every queued update after each wake, then renders at most once.
   Notifications, events, and phone status never start an e-paper refresh by themselves; screens
-  that show the changed data (Weather, Music, Settings, Messages after a clear) are redrawn.
+  that show the changed data (Music, Settings, Messages after a clear) are redrawn.
 
 What the watch does with the link:
 
@@ -496,7 +494,6 @@ What the watch does with the link:
 | Find | Opening the Find Phone app sends `FIND_PHONE\|1`; inside it select sends `\|0` or `\|1` again, and back stops the ringing as it leaves. The watch shows it as ringing for at most 2 min, as long as the phone rings. `FIND_WATCH` vibrates and buzzes for 10 s or until any button. |
 | Settings | Vibration, quiet mode and alert tone are applied from the phone (`SETTINGS\|v\|q\|tone`, tone optional) and sent back in the same form when changed on the watch. They are stored in external flash. |
 | Status / history | `STATUS\|battery\|mV\|steps\|charging` after `HELLO`, on request, when the battery percentage or the USB power state changes, and every 10 min. `charging` is 1 while USB power is present (the board has no charger status line), else 0. Steps roll over at local midnight into a history of six completed days; `REQUEST\|HISTORY` sends those plus today, oldest first, then `HISTORY_END`. The history survives resets when the external flash works. Both are suspended during a firmware transfer. |
-| Sleep as Android | `SLEEP_START`/`STOP`/`PAUSE`/`ALARM`/`ALARM_STOP`/`NOTIFY`/`HINT`; the watch sends `SLEEP_DATA\|max-delta-mg` every ten seconds while tracking, plus `SLEEP_SNOOZE`/`SLEEP_DISMISS` from the alarm. |
 
 ### Secure link (optional, off by default)
 
@@ -569,8 +566,7 @@ verify if the controller logic works but the booster does not.
    Before that, check the boot log (or press `q`) for `External flash JEDEC ID 0x0B4016` and a
    `Config store: ok` line; change a setting, reset, and confirm it is restored.
 8. Watch serial for `Phone HELLO, protocol 2` and the UTC offset from the time sync. Then test
-   live Android notifications (page and dismiss), an incoming call, weather, media controls,
+   live Android notifications (page and dismiss), an incoming call, media controls,
    find phone/watch, and the quiet/vibration settings sync.
-9. Start the companion's test tracking and watch serial for a movement sample every ten seconds.
 
 Then work through "Hardware checks, in order" in the power section before relying on deep sleep.

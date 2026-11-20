@@ -1274,19 +1274,12 @@ void WatchUi::drawLakeClock(const WatchUiModel& model) {
     snprintf(temperature, sizeof(temperature), "--C");
     snprintf(humidity, sizeof(humidity), "--%%");
   }
-  // Altitude needs the sea-level pressure of the day, which comes with the
-  // phone's weather. Without it the standard 1013.25 hPa can be 100 m out,
-  // so show nothing rather than a wrong figure.
-  if (model.environment_valid && model.phone_weather_valid &&
-      model.sea_level_pressure_tenths_hpa != 0) {
-    const float sea_level_pa = model.sea_level_pressure_tenths_hpa * 10.0f;
-    snprintf(altitude, sizeof(altitude), "%dm",
-             static_cast<int>(floorf(
-                 44330.0f *
-                     (1.0f - powf(model.pressure_pa / sea_level_pa, 0.1903f)) +
-                 0.5f)));
+  // Air pressure from the watch's own sensor (a falling value hints at
+  // worse weather on the way).
+  if (model.environment_valid) {
+    snprintf(altitude, sizeof(altitude), "%uhPa", model.pressure_hpa);
   } else {
-    snprintf(altitude, sizeof(altitude), "--m");
+    snprintf(altitude, sizeof(altitude), "--hPa");
   }
   const BitmapFont& reading = WatchAssets::LakeReading18;
   const int16_t reading_half = static_cast<int16_t>(
@@ -1476,11 +1469,10 @@ void WatchUi::drawClassicClock(const WatchUiModel& model) {
   }
   canvas_.line(48, 133, 192, 133);
 
-  // Weather and movement are useful at a glance, but deliberately secondary.
+  // Temperature and movement are useful at a glance, but deliberately
+  // secondary.
   canvas_.icon(WatchIcon::Weather, 78, 157, 16);
-  if (model.phone_weather_valid) {
-    snprintf(buffer, sizeof(buffer), "%dC", model.forecast_temperature_c);
-  } else if (model.environment_valid) {
+  if (model.environment_valid) {
     snprintf(buffer, sizeof(buffer), "%dC",
              model.temperature_tenths_c / 10);
   } else {
@@ -1489,7 +1481,7 @@ void WatchUi::drawClassicClock(const WatchUiModel& model) {
   canvas_.centeredFontText(WatchAssets::Bold22, buffer, 78, 169);
   canvas_.centeredFittedFontText(
       WatchAssets::Ui16,
-      model.phone_weather_valid ? model.weather_condition : "WEATHER", 78,
+      "TEMP", 78,
       197, 72);
 
   canvas_.icon(WatchIcon::Activity, 162, 157, 16);

@@ -76,7 +76,7 @@ Phone → watch writes are not fragmented by the protocol: the ATT layer's prepa
 1. Phone connects, negotiates MTU, discovers services, enables notifications.
 2. Phone sends `HELLO` (seq'd). Watch replies `ACK`, then `HELLO` and `STATUS`.
 3. Phone then sends, in order: `TIME`, `SETTINGS`, `PHONE`, `NEXT_ALARM`, `EVENT`,
-   `WEATHER` (if known), `MUSIC`, and current notifications (newest last, max 5).
+   `MUSIC`, and current notifications (newest last, max 5).
 
 ## Phone → watch messages
 
@@ -87,7 +87,6 @@ Phone → watch writes are not fragmented by the protocol: the ATT layer's prepa
 | `NOTIFY` | `id`, `app`(24), `title`(28), `text`(56), `alert` | Add or replace notification `id` (1–65535). Watch keeps the newest 5. `alert` `1` = a new arrival: vibrate / play the alert tone (subject to the watch's vibration, quiet and tone settings); `0` or missing = silent (session-start replays, and content updates that would not alert on the phone either). A re-post the phone itself alerts for, such as a new message in an existing chat, is sent with `1`. |
 | `NOTIFY_CLEAR` | `id` | Remove notification `id`; `0` clears all. |
 | `CALL` | `state`, `caller`(28) | `state` = `RING` or `END`. On `RING` the watch shows the call screen and alerts (unless quiet). `END` closes it. |
-| `WEATHER` | `temp`, `high`, `low`, `code`, `condition`(20), `sea_level` | Whole °C. `code` is a WMO weather code (Open-Meteo), `-1` if unknown. `sea_level` (optional) is the sea-level pressure at the phone's location in tenths of a hPa (`10132` = 1013.2 hPa); empty or missing = unknown. The watch uses it to turn its own pressure reading into an altitude. Values outside 8000–11000 are treated as unknown. |
 | `MUSIC` | `state`, `position`, `duration`, `title`(24), `artist`(24) | `state`: `0` none, `1` playing, `2` paused. `position`/`duration` in seconds at the moment of sending; while playing the watch advances position itself. `0|0|0||` = nothing playing. Sent on change only, not periodically. |
 | `NEXT_ALARM` | `utc` | Phone's next alarm clock, `0` = none. |
 | `EVENT` | `utc`, `title`(28) | Next calendar event starting within 24 h, `0|` = none. |
@@ -98,12 +97,6 @@ Phone → watch writes are not fragmented by the protocol: the ATT layer's prepa
 | `CAMERA` | `state\|number\|detail` | The phone's camera screen for the watch's Camera app. `state`: `CLOSED`, `OPENING`, `READY`, `COUNTDOWN` (`number` = seconds), `SAVED` (`number` = photos since it opened) or `ERROR` (`detail`, ≤ 20 chars, e.g. `NO PERMISSION`, `CAMERA BUSY`, `TAP THE PHONE`, `PHOTO FAILED`). |
 | `REQUEST` | `what` | `STATUS` or `HISTORY`. |
 | `STEPS_RESET` | — | Reset today's step count. |
-| `SLEEP_START` / `SLEEP_STOP` | — | Sleep as Android tracking. |
-| `SLEEP_PAUSE` | `seconds` | Pause tracking. |
-| `SLEEP_ALARM` | `delay_seconds` | Start Sleep alarm after delay. |
-| `SLEEP_ALARM_STOP` | — | |
-| `SLEEP_NOTIFY` | `title`(28), `text`(28) | |
-| `SLEEP_HINT` | `repeats` | Lucid-dream hint vibration. |
 
 ## Watch → phone messages
 
@@ -120,8 +113,6 @@ Phone → watch writes are not fragmented by the protocol: the ATT layer's prepa
 | `FIND_PHONE` | `on` | `1` start ringing the phone, `0` stop. |
 | `CAMERA` | `action\|delay` | `OPEN` the phone's camera screen, `SHUTTER` take a photo after `delay` seconds (0, 3 or 10), `CLOSE` it. The phone answers with `CAMERA` state messages. |
 | `SETTINGS` | `vibration`, `quiet`, `tone` | Sent when changed on the watch. |
-| `SLEEP_DATA` | `value` | Movement sample (unchanged semantics). |
-| `SLEEP_SNOOZE` / `SLEEP_DISMISS` / `SLEEP_PAUSE` / `SLEEP_RESUME` | — | |
 
 ## Firmware update over Bluetooth (OTA)
 
@@ -179,10 +170,6 @@ and the link must be encrypted with a bond before the watch will talk:
 - The watch advertises with its fixed **public** address (derived from the chip's unique
   device number), so the phone can reconnect by stored address across watch restarts.
 
-- `SLEEP_PAUSE|seconds` is a **duration** (seconds of pause remaining); `0` resumes.
-  Sleep as Android's "suspend" is sent as one year.
-- `SLEEP_ALARM|delay_seconds` is in seconds (the phone converts Sleep's milliseconds,
-  rounding up); the phone never sends a negative delay.
 - Empty trailing text fields are still sent, e.g. `CALL|END|`, `EVENT|0|`, `MUSIC|0|0|0||`.
 - If the watch cannot read the seq at all it replies `NAK|0|PARSE`. Out-of-range numbers
   (e.g. battery > 100, temperature outside ±99) are `NAK|<seq>|PARSE`.

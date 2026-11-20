@@ -52,32 +52,6 @@ void WatchAlarm::timerChanged() {
                        TIMER_REDRAW_SECONDS - 1) / TIMER_REDRAW_SECONDS;
 }
 
-void WatchAlarm::scheduleSleepAlarm(int32_t delay_seconds, Print& out) {
-  if (delay_seconds < 0) {
-    out.println(F("Sleep as Android alarm: no delay given; unchanged."));
-    return;
-  }
-  // Keep the deadline inside the signed millis() comparison window.
-  constexpr int32_t MAX_DELAY_SECONDS = 2000000;
-  const uint32_t delay_ms =
-      static_cast<uint32_t>(min(delay_seconds, MAX_DELAY_SECONDS)) * 1000UL;
-  sleep_alarm_at_ = millis() + delay_ms;
-  if (sleep_alarm_at_ == 0) {
-    sleep_alarm_at_ = 1;
-  }
-  out.println(F("Sleep as Android alarm scheduled."));
-}
-
-bool WatchAlarm::stopSleepAlarm(Print& out) {
-  sleep_alarm_at_ = 0;
-  sleep_alarm_ringing_ = false;
-  if (!model_.alarm_ringing) {
-    return false;
-  }
-  dismiss(out);
-  return true;
-}
-
 void WatchAlarm::vibrationOff() {
   digitalWrite(BoardPins::VIBRATION, LOW);
   pinMode(BoardPins::VIBRATION, OUTPUT);  // also stops the PWM timer
@@ -108,10 +82,6 @@ uint32_t WatchAlarm::msUntilNextEvent(uint32_t now) {
       }
       consider(elapsed >= to_step * 1000UL ? 0 : to_step * 1000UL - elapsed);
     }
-  }
-  if (sleep_alarm_at_ != 0) {
-    const int32_t remaining = static_cast<int32_t>(sleep_alarm_at_ - now);
-    consider(remaining <= 0 ? 0 : static_cast<uint32_t>(remaining));
   }
   const time_t epoch = rtc_.epoch();
   if (snooze_until_ != 0) {
@@ -173,10 +143,6 @@ void WatchAlarm::notifyAlert(bool vibrate, uint8_t tone_number) {
 }
 
 void WatchAlarm::dismiss(Print& out) {
-  if (sleep_alarm_ringing_) {
-    ble_.send("SLEEP_DISMISS");
-    sleep_alarm_ringing_ = false;
-  }
   model_.alarm_ringing = false;
   snooze_until_ = 0;
   stopOutput();
@@ -184,10 +150,6 @@ void WatchAlarm::dismiss(Print& out) {
 }
 
 void WatchAlarm::snooze(Print& out) {
-  if (sleep_alarm_ringing_) {
-    ble_.send("SLEEP_SNOOZE");
-    sleep_alarm_ringing_ = false;
-  }
   model_.alarm_ringing = false;
   snooze_until_ = rtc_.epoch() + 5 * 60;
   stopOutput();
@@ -368,12 +330,6 @@ bool WatchAlarm::service(Print& out) {
   }
 
   const time_t current_epoch = rtc_.epoch();
-  if (sleep_alarm_at_ != 0 &&
-      static_cast<int32_t>(now - sleep_alarm_at_) >= 0) {
-    sleep_alarm_at_ = 0;
-    sleep_alarm_ringing_ = true;
-    ui_changed |= start(F("Sleep as Android"), WatchScreen::Alarms, out);
-  }
   if (snooze_until_ != 0 && current_epoch >= snooze_until_) {
     snooze_until_ = 0;
     ui_changed |= start(F("snooze complete"), WatchScreen::Alarms, out);

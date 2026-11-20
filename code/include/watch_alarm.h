@@ -15,15 +15,12 @@ class WatchAlarm {
   void timerChanged();
   bool service(Print& out);
 
-  // delay_seconds < 0 leaves any existing schedule untouched.
-  void scheduleSleepAlarm(int32_t delay_seconds, Print& out);
-  bool stopSleepAlarm(Print& out);
   void dismiss(Print& out);
   void snooze(Print& out);
   void pulseHaptic(uint8_t strength, uint32_t duration_ms);
   bool needsFastService() const;
   // Milliseconds until the next thing service() has to act on: timer expiry,
-  // Sleep as Android alarm, snooze end, today's scheduled alarm, or local
+  // snooze end, today's scheduled alarm, or local
   // midnight (when "today" and its alarm are re-evaluated). UINT32_MAX if
   // nothing is scheduled.
   uint32_t msUntilNextEvent(uint32_t now);
@@ -69,13 +66,11 @@ class WatchAlarm {
   // screen is showing; an e-paper update is too slow to do every second.
   static constexpr uint32_t TIMER_REDRAW_SECONDS = 3;
   uint32_t timer_drawn_step_ = 0;
-  uint32_t sleep_alarm_at_ = 0;
   uint32_t alarm_feedback_at_ = 0;
   uint32_t actuator_off_at_ = 0;
   uint32_t last_alarm_minute_key_ = 0;
   uint32_t next_clock_service_at_ = 0;
   time_t snooze_until_ = 0;
-  bool sleep_alarm_ringing_ = false;
   bool call_alert_ = false;
   bool find_alert_ = false;
   uint32_t find_alert_started_ = 0;
