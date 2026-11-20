@@ -243,6 +243,9 @@ class WatchUi {
   void showScreen(WatchScreen screen);
   WatchUiAction select(WatchUiModel& model);
   void render(const WatchUiModel& model);
+  // What render() would show, as one number: changes when a different
+  // screen or overlay comes up (not when the launcher selection moves).
+  uint16_t view(const WatchUiModel& model) const;
 
   WatchScreen screen() const;
   bool isInside() const;

@@ -297,7 +297,9 @@ waveform, and 0.08 s to switch the booster off. The register set, data path and 
 a bus capture of a product that drives this panel once a second; the source direction bit and the
 gate driver settings stay at this board's values, otherwise the image is flipped. The refresh
 command uses mode `0x00`: measured here, mode `0x01` (the datasheet's black/white mode) ignores the
-table's length and runs 1.9 s. Console `y` switches ordinary updates back to the older GC fast
+table's length and runs 1.9 s. A change of screen (clock, launcher, an app, the notification pop-up, a call or the update prompt) gets
+the full cleaning refresh to clear the quick refresh's ghosting; changes within a screen (the launcher
+selection, the minute, values) use the quick one. Console `y` switches ordinary updates back to the older GC fast
 update (1.1 s: it powers the controller up twice and runs a 31-frame waveform) for comparison.
 
 The four active-low buttons map as follows by default. The companion app can give each corner any
@@ -322,7 +324,8 @@ While an alarm rings, home dismisses it and select snoozes it. Holding
 PCB button 1 (SW2, bottom-left) during reset for DFU is a bootloader feature and does not move with the
 layout.
 
-Console equivalents are `[` for previous, `]` for next, `m` for home, `o` for select, and `u` to
+Console equivalents (handled exactly like the buttons) are `[` for previous, `]` for next, `m` for
+home, `o` for select, and `u` to
 redraw the current screen. Presses are counted in the button pin interrupt, so none is missed
 however busy the watch is (a refresh, a flash write, Bluetooth); an edge within 35 ms of the last
 accepted one on the same button is contact bounce. Presses made during a refresh are queued and

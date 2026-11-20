@@ -1011,6 +1011,24 @@ WatchUiAction WatchUi::select(WatchUiModel& model) {
   return WatchUiAction::None;
 }
 
+uint16_t WatchUi::view(const WatchUiModel& model) const {
+  // Same order as render().
+  if (model.call_active && !model.alarm_ringing) {
+    return 0x100;
+  }
+  if (model.ota_screen != OtaScreen::None && !model.alarm_ringing) {
+    return 0x101;
+  }
+  if (model.notification_peek && model.notification_count > 0 &&
+      !model.alarm_ringing) {
+    return 0x102;
+  }
+  if (screen_ != WatchScreen::Clock && !inside_) {
+    return 0x103;  // the launcher, whichever app is selected
+  }
+  return static_cast<uint16_t>(screen_);
+}
+
 void WatchUi::render(const WatchUiModel& model) {
   canvas_.clear();
   // An incoming call overlays whatever screen is current; when it ends the

@@ -366,12 +366,13 @@ void WatchApplication::renderUi() {
   }
   updateUiSensors();
   const uint32_t started = millis();
-  // Quick refreshes leave faint ghosts; clean them when the face returns.
-  const WatchScreen screen = ui_.screen();
-  const bool back_to_clock = screen == WatchScreen::Clock &&
-                             last_render_screen_ != WatchScreen::Clock;
-  last_render_screen_ = screen;
-  if (back_to_clock) {
+  // Quick refreshes leave faint ghosts: a new screen or overlay (app,
+  // launcher, clock, notification pop-up, call) gets a full refresh, changes
+  // within one screen a quick one.
+  const uint16_t view = ui_.view(model_);
+  const bool new_view = view != last_render_view_;
+  last_render_view_ = view;
+  if (new_view) {
     display_controller_.renderFull(Serial);
   } else {
     display_controller_.render(Serial);
@@ -1424,22 +1425,11 @@ void WatchApplication::handleCommand(char command) {
       updateUiSensors();
       display_controller_.renderFull(Serial);
       break;
-    case '[':
-      applyUiAction(ui_.previous(model_));
-      renderUi();
-      break;
-    case ']':
-      applyUiAction(ui_.next(model_));
-      renderUi();
-      break;
-    case 'm': case 'M':
-      ui_.home();
-      renderUi();
-      break;
-    case 'o': case 'O':
-      applyUiSelection();
-      renderUi();
-      break;
+    // Exactly what the buttons do (pop-ups, timeout, double presses).
+    case '[': handleButton(2, millis()); break;
+    case ']': handleButton(1, millis()); break;
+    case 'm': case 'M': handleButton(0, millis()); break;
+    case 'o': case 'O': handleButton(3, millis()); break;
     case 'j': case 'J': rtc_.print(Serial); break;
     case 'r': case 'R':
       if (startBluetooth()) {

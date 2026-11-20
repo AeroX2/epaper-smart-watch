@@ -208,8 +208,8 @@ class WatchApplication {
   uint32_t ble_stuck_since_ms_ = 0;
   static constexpr uint32_t BLE_STUCK_RESTART_MS = 5000;
   bool render_pending_ = false;
-  // Coming back to the clock face from an app gets a full refresh.
-  WatchScreen last_render_screen_ = WatchScreen::Clock;
+  // A different screen or overlay gets a full refresh (WatchUi::view).
+  uint16_t last_render_view_ = 0;
   uint32_t render_ms_total_ = 0;  // time spent in them
   uint32_t power_log_renders_ = 0;
   uint32_t power_log_render_ms_ = 0;
