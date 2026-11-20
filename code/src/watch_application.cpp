@@ -1197,14 +1197,15 @@ void WatchApplication::serviceGestures(uint8_t wake_events) {
   }
 
   if ((status & BMA400_ASSERTED_ORIENT_CH) != 0) {
-    // Looking at the watch: the face lies roughly flat (most of gravity on
-    // the Z axis), which it rarely does with the arm down.
+    // Looking at the watch: the face points up and lies nearly flat. Face
+    // up reads negative Z on this board (about -1 g on a desk), so turning
+    // the palm up does not count.
     AccelReading reading{};
     rtc_.updateModel(model_);
     const bool night =
         model_.time_valid &&
         (model_.hour >= NIGHT_FROM_HOUR || model_.hour < NIGHT_TO_HOUR);
-    if (accelerometer_.read(reading) && fabsf(reading.z_g) >= 0.75f) {
+    if (accelerometer_.read(reading) && reading.z_g <= -FACE_UP_MIN_G) {
       Serial.println(night ? F("Gesture: wrist turned (night: light).")
                            : F("Gesture: wrist turned."));
       if (night && !display_light_on_) {

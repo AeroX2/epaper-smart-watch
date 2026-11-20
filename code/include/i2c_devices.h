@@ -56,15 +56,11 @@ class Bma400 {
   // Step counter running with no interrupt pin mapped (it is read on a slow
   // cadence instead); data-ready routed to INT1 but disabled.
   bool configureActivityInterrupts();
-  bool enableDataReadyInterrupt(bool enable);
   // Double tap (on the face, Z axis) and orientation change on INT1, with
   // the interrupt latched until readInterruptStatus() so the cause can
-  // always be read. Both run on the 100 Hz normal-mode data path the step
-  // counter already uses.
+  // always be read. Tap sensing needs the 200 Hz data rate set in begin();
+  // the step counter has its own fixed 100 Hz path and is not affected.
   bool configureGestures();
-  // Data-ready rate: 12.5 Hz while sleep tracking, 100 Hz otherwise. The
-  // step counter has its own fixed 100 Hz path and is not affected.
-  bool setTrackingRate(bool tracking);
   bool readInterruptStatus(uint16_t& status);
   bool readStepCount(uint32_t& count, uint8_t& activity_type);
   uint8_t address() const;

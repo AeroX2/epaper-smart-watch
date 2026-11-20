@@ -193,7 +193,7 @@ under the default setting, with the same dual-core sequence.
 
 ### Peripherals
 
-- BMA400: normal mode, 100 Hz, OSR 0 (about 4 uA; its low-power mode cannot count steps). The step
+- BMA400: normal mode, 200 Hz (for tap sensing), OSR 0 (a few uA; its low-power mode cannot count steps). The step
   counter runs without an interrupt pin; `WatchActivity::pollSteps()` reads it before every render,
   `STATUS`, save and midnight roll-over, and every 10 minutes otherwise.
 - BME280: forced mode, one conversion at most every 5 minutes.
@@ -313,10 +313,10 @@ below describes the roles, wherever they sit:
 
 Each press acts when the button is released. There are no long presses and no two-button gestures.
 
-Motion gestures (BMA400 on INT1, latched, on the 100 Hz normal-mode path the step counter
-already uses, so they add next to no current): a **double tap** on the face (Z axis, sensitivity 1 of 0-7 where 0 is the most
-sensitive, taps 40-500 ms apart) shows the newest notification as the pop-up (or closes it); **turning the wrist to look** (orientation change
-ending with the face roughly flat, |z| ≥ 0.75 g) lights the front light for 5 s between 19:00
+Motion gestures (BMA400 on INT1, latched; tap sensing needs the 200 Hz data rate, a few uA
+more than 100 Hz; the step counter has its own fixed path): a **double tap** on the face (Z axis, sensitivity 1 of 0-7 where 0 is the most
+sensitive, taps 40-500 ms apart) shows the newest notification as the pop-up (or closes it); **turning the wrist to look** (an orientation change
+of at least 640 mg, steady for 300 ms, ending face up within about 30° of flat, z ≤ -0.85 g) lights the front light for 5 s between 19:00
 and 06:00. A button press while it is lit gives it the normal 30 s.
 While an alarm rings, home dismisses it and select snoozes it. Holding
 PCB button 1 (top-left) during reset for DFU is a bootloader feature and does not move with the

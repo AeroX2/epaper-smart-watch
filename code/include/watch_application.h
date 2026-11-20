@@ -169,6 +169,9 @@ class WatchApplication {
   // notification; turning the wrist to look at the watch lights the front
   // light for GESTURE_LIGHT_MS, at night only.
   static constexpr uint32_t GESTURE_LIGHT_MS = 5000;
+  // Wrist turn: share of gravity on the face-up axis (0.85 g = within
+  // about 30 degrees of flat).
+  static constexpr float FACE_UP_MIN_G = 0.85f;
   static constexpr uint8_t NIGHT_FROM_HOUR = 19;  // 19:00 ...
   static constexpr uint8_t NIGHT_TO_HOUR = 6;     // ... to 06:00
   bool gestures_ready_ = false;

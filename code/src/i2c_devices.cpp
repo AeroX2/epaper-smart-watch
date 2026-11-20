@@ -68,7 +68,9 @@ bool Bma400::begin() {
   }
 
   return device_.setRange(BMA400_RANGE_2G) == BMA400_OK &&
-         device_.setODR(BMA400_ODR_100HZ) == BMA400_OK &&
+         // Tap sensing works on 200 Hz data only (Bosch); at 100 Hz taps
+         // need a hard knock and are often missed.
+         device_.setODR(BMA400_ODR_200HZ) == BMA400_OK &&
          device_.setOSR(BMA400_ACCEL_OSR_SETTING_0) == BMA400_OK;
 }
 
@@ -115,6 +117,8 @@ bool Bma400::configureGestures() {
   bma400_tap_conf tap{};
   tap.axes_sel = BMA400_TAP_Z_AXIS_EN;           // a tap on the watch face
   tap.sensitivity = BMA400_TAP_SENSITIVITY_1;    // 0 most sensitive, 7 least
+  // Sample counts at 200 Hz: a tap's peak at most 60 ms wide, taps 40 to
+  // 500 ms apart.
   tap.tics_th = BMA400_TICS_TH_12_DATA_SAMPLES;
   tap.quiet = BMA400_QUIET_100_DATA_SAMPLES;     // longest gap between taps
   tap.quiet_dt = BMA400_QUIET_DT_8_DATA_SAMPLES; // shortest gap between taps
@@ -124,9 +128,9 @@ bool Bma400::configureGestures() {
   orient.axes_sel = BMA400_AXIS_XYZ_EN;
   orient.data_src = BMA400_DATA_SRC_ACC_FILT2;
   orient.ref_update = BMA400_ORIENT_REFU_ACC_FILT_LP;  // follows the wrist
-  orient.orient_thres = 50;     // 400 mg change
+  orient.orient_thres = 80;     // 640 mg change (a real turn of the wrist)
   orient.stability_thres = 16;  // steady within 128 mg ...
-  orient.orient_int_dur = 15;   // ... for 150 ms
+  orient.orient_int_dur = 30;   // ... for 300 ms
   orient.int_chan = BMA400_INT_CHANNEL_1;
 
   return device_.setTapInterrupt(&tap) == BMA400_OK &&
@@ -136,17 +140,6 @@ bool Bma400::configureGestures() {
          device_.enableInterrupt(BMA400_ORIENT_CHANGE_INT_EN, true) ==
              BMA400_OK &&
          device_.enableInterrupt(BMA400_LATCH_INT_EN, true) == BMA400_OK;
-}
-
-bool Bma400::enableDataReadyInterrupt(bool enable) {
-  return address_ != 0 &&
-         device_.enableInterrupt(BMA400_DRDY_INT_EN, enable) == BMA400_OK;
-}
-
-bool Bma400::setTrackingRate(bool tracking) {
-  return address_ != 0 &&
-         device_.setODR(tracking ? BMA400_ODR_12_5HZ : BMA400_ODR_100HZ) ==
-             BMA400_OK;
 }
 
 bool Bma400::readInterruptStatus(uint16_t& status) {
