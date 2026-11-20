@@ -168,11 +168,6 @@ class WatchApplication {
   // Double press of select on the clock plays/pauses music; a single press
   // opens the app menu after the window (only while music is loaded).
   bool select_press_armed_ = false;
-  // Double press of the top-right button on the clock opens Messages at the
-  // newest notification; a single press opens the app menu after the window.
-  bool previous_press_armed_ = false;
-  uint32_t previous_press_ms_ = 0;
-  void servicePreviousPress();
   // USB is started only once the charger has finished probing a new port
   // (as at boot): stopped when the cable is pulled, restarted this long
   // after it is plugged in.

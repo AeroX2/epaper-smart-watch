@@ -254,9 +254,6 @@ uint32_t WatchApplication::sleepBudgetMs() {
   if (select_press_armed_) {
     consider(remaining(DOUBLE_PRESS_MS + 1, now - select_press_ms_));
   }
-  if (previous_press_armed_) {
-    consider(remaining(DOUBLE_PRESS_MS + 1, now - previous_press_ms_));
-  }
   if (usb_power_seen_ && !usb_started_) {
     consider(remaining(USB_SETTLE_MS, now - usb_power_since_ms_));
   }
@@ -1137,23 +1134,6 @@ void WatchApplication::serviceNotificationPeek() {
   }
 }
 
-// A single top-right press on the clock opens the app menu once no second
-// press came within DOUBLE_PRESS_MS.
-void WatchApplication::servicePreviousPress() {
-  if (!previous_press_armed_ ||
-      millis() - previous_press_ms_ <= DOUBLE_PRESS_MS) {
-    return;
-  }
-  previous_press_armed_ = false;
-  if (ui_.screen() != WatchScreen::Clock || model_.notification_peek) {
-    return;
-  }
-  applyUiAction(ui_.previous(model_));
-  if (display_controller_.active()) {
-    renderUi();
-  }
-}
-
 // Plugging USB into a running watch: the nPM1100 probes the port first
 // (BC1.2), and with the USB device already attached the host never sees
 // it. So USB is detached whenever there is no USB power and attached once
@@ -1211,7 +1191,7 @@ void WatchApplication::serviceScreenTimeout() {
   }
 }
 
-// A single select on the clock (with music loaded) opens the app menu once
+// A single select on the clock (with notifications waiting) opens the app menu once
 // no second press came within DOUBLE_PRESS_MS.
 void WatchApplication::serviceSelectPress() {
   if (!select_press_armed_ || millis() - select_press_ms_ <= DOUBLE_PRESS_MS) {
@@ -1473,12 +1453,8 @@ void WatchApplication::handleButton(size_t index) {
   home_press_armed_ = false;
   const bool second_select_press = index == 3 && select_press_armed_ &&
                                    millis() - select_press_ms_ <= DOUBLE_PRESS_MS;
-  const bool second_previous_press =
-      index == 2 && previous_press_armed_ &&
-      millis() - previous_press_ms_ <= DOUBLE_PRESS_MS;
   // Any other press, or a late second one, drops a pending menu open.
   select_press_armed_ = false;
-  previous_press_armed_ = false;
   if (alarm_.stopFindAlert()) {
     Serial.println(F("Find my watch: stopped by button."));
     return;
@@ -1530,28 +1506,17 @@ void WatchApplication::handleButton(size_t index) {
     ble_.send("CAMERA|CLOSE");  // leaving closes the phone's camera too
     model_.camera_state = CameraState::Closed;
   }
-  if (index == 2 && ui_.screen() == WatchScreen::Clock) {
-    if (second_previous_press) {
-      // The newest notification, in Messages (back returns to the clock).
-      ui_.showScreen(WatchScreen::Notifications);
-      ui_.select(model_);
-      ui_.setNotificationIndex(0);
-      Serial.println(F("Clock: newest notification."));
-      renderUi();
-    } else {
-      previous_press_armed_ = true;
-      previous_press_ms_ = millis();
-    }
-    return;
-  }
   if (index == 3 && ui_.screen() == WatchScreen::Clock &&
-      model_.music_state != MusicState::None) {
-    // With music loaded, a double press plays or pauses it. A single press
-    // still opens the app menu, once the double-press window has passed
-    // (serviceSelectPress). The face does not show music: no redraw.
+      model_.notification_count > 0) {
+    // With notifications waiting, a double press shows the newest one again,
+    // as the pop-up (any button or 5 s closes it). A single press still
+    // opens the app menu, once the double-press window has passed
+    // (serviceSelectPress). With none, select opens the menu at once.
     if (second_select_press) {
-      applyUiAction(WatchUiAction::MediaPlayPause);
-      Serial.println(F("Clock: music play/pause."));
+      model_.notification_peek = true;
+      Serial.println(F("Clock: newest notification again."));
+      renderUi();
+      peek_since_ms_ = millis();
     } else {
       select_press_armed_ = true;
       select_press_ms_ = millis();
@@ -1649,7 +1614,6 @@ void WatchApplication::loop() {
   serviceNotificationPeek();
   serviceFindPhone();
   serviceSelectPress();
-  servicePreviousPress();
   serviceScreenTimeout();
   servicePhoneLink();
   if (ble_.takeBondChange()) {

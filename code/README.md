@@ -307,9 +307,9 @@ The four active-low buttons currently map as follows:
 | PCB button | Physical corner | Action |
 | --- | --- | --- |
 | 2 | Top-left | Browse: next card. Inside: next value/item |
-| 3 | Top-right | Browse: previous card. Inside: previous value/item. Clock: double press within 0.6 s opens Messages at the newest notification (a single press opens the carousel after that 0.6 s) |
+| 3 | Top-right | Browse: previous card. Inside: previous value/item |
 | 4 | Bottom-right | Home: inside: back to card. Browse: return to clock. Clock: press twice within 0.6 s to switch the LED ring on or off |
-| 1 | Bottom-left | Select: clock: open carousel; with the phone's music loaded, a double press within 0.6 s plays/pauses it instead (and a single press opens the carousel after that 0.6 s). Browse: enter card. Inside: activate |
+| 1 | Bottom-left | Select: clock: open carousel; with notifications waiting, a double press within 0.6 s shows the newest one again as the pop-up (and a single press opens the carousel after that 0.6 s). Browse: enter card. Inside: activate |
 
 Each press acts when the button is released. There are no long presses and no two-button gestures.
 While an alarm rings, bottom-right (home) dismisses it and bottom-left (select) snoozes it. The
