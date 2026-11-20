@@ -59,23 +59,12 @@ void WatchButtons::restoreSharedSpiButton() {
   changed_at_[index] = millis();
 }
 
-bool WatchButtons::popPendingButton(WatchButtonEvent& event) {
-  for (uint8_t index = 0; index < BUTTON_COUNT; ++index) {
-    const uint8_t bit = static_cast<uint8_t>(1U << index);
-    if ((pending_release_mask_ & bit) == 0) {
-      continue;
-    }
-    pending_release_mask_ &= static_cast<uint8_t>(~bit);
-    event.button_index = roles_[index];
-    return true;
-  }
-  return false;
-}
-
-bool WatchButtons::poll(WatchButtonEvent& event) {
-  event = {};
+void WatchButtons::sample(bool shared_pin_free) {
   const uint32_t now = millis();
   for (uint8_t index = 0; index < BUTTON_COUNT; ++index) {
+    if (!shared_pin_free && index == SHARED_SPI_INDEX) {
+      continue;
+    }
     const bool pressed = digitalRead(BUTTON_PINS[index]) == LOW;
     if (pressed != raw_state_[index]) {
       raw_state_[index] = pressed;
@@ -86,15 +75,30 @@ bool WatchButtons::poll(WatchButtonEvent& event) {
       continue;
     }
     stable_state_[index] = pressed;
-    if (!pressed) {
-      pending_release_mask_ |= static_cast<uint8_t>(1U << index);
+    if (!pressed && queue_count_ < QUEUE_CAPACITY) {
+      WatchButtonEvent& event =
+          queue_[(queue_head_ + queue_count_) % QUEUE_CAPACITY];
+      event.button_index = roles_[index];
+      event.at_ms = now;
+      ++queue_count_;
     }
   }
-  return popPendingButton(event);
+}
+
+bool WatchButtons::poll(WatchButtonEvent& event) {
+  sample(true);
+  if (queue_count_ == 0) {
+    event = {};
+    return false;
+  }
+  event = queue_[queue_head_];
+  queue_head_ = static_cast<uint8_t>((queue_head_ + 1) % QUEUE_CAPACITY);
+  --queue_count_;
+  return true;
 }
 
 bool WatchButtons::needsService() const {
-  if (pending_release_mask_ != 0) {
+  if (queue_count_ != 0) {
     return true;
   }
   for (uint8_t index = 0; index < BUTTON_COUNT; ++index) {

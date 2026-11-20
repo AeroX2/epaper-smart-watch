@@ -80,7 +80,8 @@ class WatchApplication {
   void parseCapturedCommand();
   void handleCommand(char command);
   void pollButtons();
-  void handleButton(size_t index);
+  // at_ms: when the press was released (double presses are timed by it).
+  void handleButton(size_t index, uint32_t at_ms);
 
   // Power policy inputs (see WatchPower and the README power section).
   void setDisplayLight(bool on);
@@ -204,6 +205,11 @@ class WatchApplication {
   uint32_t power_log_ble_rx_ = 0;
   uint32_t power_log_ble_tx_ = 0;
   uint32_t renders_ = 0;          // display refreshes since boot
+  // While queued presses are handled, renders wait and happen once.
+  bool defer_render_ = false;
+  bool render_pending_ = false;
+  // Coming back to the clock face from an app gets a full refresh.
+  WatchScreen last_render_screen_ = WatchScreen::Clock;
   uint32_t render_ms_total_ = 0;  // time spent in them
   uint32_t power_log_renders_ = 0;
   uint32_t power_log_render_ms_ = 0;

@@ -7,6 +7,7 @@
 // role, not its position: 0 Home/back, 1 Next, 2 Previous, 3 Select.
 struct WatchButtonEvent {
   uint8_t button_index = 0;
+  uint32_t at_ms = 0;  // millis() when the release was seen
 };
 
 // Physical buttons, in the order the phone's BUTTONS message lists them
@@ -17,6 +18,10 @@ class WatchButtons {
  public:
   void begin();
   bool poll(WatchButtonEvent& event);
+  // Debounces and queues releases without handing any out. Safe from the
+  // display wait hook: shared_pin_free = false leaves the button whose pin
+  // the display SPI may be borrowing alone.
+  void sample(bool shared_pin_free);
   bool needsService() const;
 
   // SPI1 temporarily borrows button 4 as its unused MISO pin. Restore that pin
@@ -35,11 +40,13 @@ class WatchButtons {
  private:
   static constexpr uint32_t DEBOUNCE_MS = 35;
 
-  bool popPendingButton(WatchButtonEvent& event);
+  static constexpr uint8_t QUEUE_CAPACITY = 8;
 
   bool raw_state_[BUTTON_COUNT]{};
   bool stable_state_[BUTTON_COUNT]{};
   uint32_t changed_at_[BUTTON_COUNT]{};
-  uint8_t pending_release_mask_ = 0;
+  WatchButtonEvent queue_[QUEUE_CAPACITY]{};
+  uint8_t queue_head_ = 0;
+  uint8_t queue_count_ = 0;
   uint8_t roles_[BUTTON_COUNT] = {0, 2, 3, 1};
 };

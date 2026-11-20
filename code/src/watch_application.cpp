@@ -363,9 +363,22 @@ void WatchApplication::updateMusicPosition() {
 }
 
 void WatchApplication::renderUi() {
+  if (defer_render_) {
+    render_pending_ = true;
+    return;
+  }
   updateUiSensors();
   const uint32_t started = millis();
-  display_controller_.render(Serial);
+  // Quick refreshes leave faint ghosts; clean them when the face returns.
+  const WatchScreen screen = ui_.screen();
+  const bool back_to_clock = screen == WatchScreen::Clock &&
+                             last_render_screen_ != WatchScreen::Clock;
+  last_render_screen_ = screen;
+  if (back_to_clock) {
+    display_controller_.renderFull(Serial);
+  } else {
+    display_controller_.render(Serial);
+  }
   render_ms_total_ += millis() - started;
   ++renders_;
 }
@@ -624,6 +637,8 @@ void WatchApplication::backgroundService() {
   }
   last_background_ms_ = now;
   in_background_ = true;
+  // Catch presses made during a refresh (the display may hold PB4).
+  buttons_.sample(false);
   ble_.poll();
   alarm_.serviceOutput();
   in_background_ = false;
@@ -1497,18 +1512,18 @@ void WatchApplication::handleCommand(char command) {
   }
 }
 
-void WatchApplication::handleButton(size_t index) {
+void WatchApplication::handleButton(size_t index, uint32_t at_ms) {
   Serial.print(F("Button "));
   Serial.print(index + 1);
   Serial.println(F(" press"));
-  last_input_ms_ = millis();
+  last_input_ms_ = at_ms;
   // Only two home presses in a row on the clock face count as a double press.
   const bool second_home_press =
       index == 0 && home_press_armed_ &&
-      millis() - home_press_ms_ <= DOUBLE_PRESS_MS;
+      at_ms - home_press_ms_ <= DOUBLE_PRESS_MS;
   home_press_armed_ = false;
   const bool second_select_press = index == 3 && select_press_armed_ &&
-                                   millis() - select_press_ms_ <= DOUBLE_PRESS_MS;
+                                   at_ms - select_press_ms_ <= DOUBLE_PRESS_MS;
   // Any other press, or a late second one, drops a pending menu open.
   select_press_armed_ = false;
   if (alarm_.stopFindAlert()) {
@@ -1549,7 +1564,7 @@ void WatchApplication::handleButton(size_t index) {
       toggleDisplayLight();
     } else {
       home_press_armed_ = true;
-      home_press_ms_ = millis();
+      home_press_ms_ = at_ms;
     }
     return;
   }
@@ -1575,7 +1590,7 @@ void WatchApplication::handleButton(size_t index) {
       peek_since_ms_ = millis();
     } else {
       select_press_armed_ = true;
-      select_press_ms_ = millis();
+      select_press_ms_ = at_ms;
     }
     return;
   }
@@ -1590,11 +1605,18 @@ void WatchApplication::handleButton(size_t index) {
 }
 
 void WatchApplication::pollButtons() {
+  // Handle everything queued (presses made during a refresh too), then draw
+  // once: a burst of Next presses costs one refresh, not one each.
   WatchButtonEvent event{};
-  if (!buttons_.poll(event)) {
-    return;
+  defer_render_ = true;
+  while (buttons_.poll(event)) {
+    handleButton(event.button_index, event.at_ms);
   }
-  handleButton(event.button_index);
+  defer_render_ = false;
+  if (render_pending_) {
+    render_pending_ = false;
+    renderUi();
+  }
 }
 
 void WatchApplication::setup() {
