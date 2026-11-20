@@ -159,10 +159,11 @@ void WatchWatchdog::begin() {
 #endif
 
   if (WATCH_HANG_MAGIC_REGISTER == HANG_MAGIC) {
-    if (reset_by_watchdog_) {
-      hang_pc_ = WATCH_HANG_PC_REGISTER;
-      hang_lr_ = WATCH_HANG_LR_REGISTER;
-    }
+    // Also kept when this boot did not follow the watchdog reset itself:
+    // after three resets in a row the watch goes to USB DFU, and the boot
+    // after a reflash is the first chance to report where it hung.
+    hang_pc_ = WATCH_HANG_PC_REGISTER;
+    hang_lr_ = WATCH_HANG_LR_REGISTER;
     WATCH_HANG_MAGIC_REGISTER = 0;
   }
   startHangMonitor();
@@ -202,5 +203,10 @@ void WatchWatchdog::printStatus(Print& out) const {
     out.print(F(" (USB DFU at "));
     out.print(CRASH_LOOP_RESETS);
     out.println(F(")"));
+  } else if (hang_pc_ != 0) {
+    out.print(F("[WARN] A hang was recorded before an earlier reset: PC=0x"));
+    out.print(hang_pc_, HEX);
+    out.print(F(" LR=0x"));
+    out.println(hang_lr_, HEX);
   }
 }

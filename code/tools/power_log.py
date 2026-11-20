@@ -77,6 +77,12 @@ def summarise(rows: list[dict[str, int]]) -> None:
     print(f"{len(rows)} records: {len(intervals)} one-minute intervals, "
           f"{len(boots)} boots "
           f"({sum(1 for b in boots if b['flags'] & 64)} after a watchdog reset)")
+    for b in boots:
+        if b["stop_ms"]:
+            when = (dt.datetime.utcfromtimestamp(b["local_epoch"]).strftime("%Y-%m-%d %H:%M")
+                    if b["local_epoch"] else f"#{b['seq']}")
+            print(f"  boot {when}: hang recorded at PC=0x{b['stop_ms']:08X} "
+                  f"LR=0x{b['idle_ms']:08X}, watchdog resets in a row: {b['awake_ms']}")
     if not intervals:
         return
     first = next((r for r in rows if r["local_epoch"]), None)

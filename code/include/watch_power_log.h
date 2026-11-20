@@ -27,8 +27,9 @@ struct __attribute__((packed)) PowerLogRecord {
   uint8_t type;
   uint8_t flags;         // radio / link / USB / light state when written
   uint32_t stop_ms;      // time in Stop 2 during the interval
-  uint32_t idle_ms;      // time in ordinary Sleep
-  uint32_t awake_ms;     // the rest: running
+                         // (boot records: PC of a recorded hang, 0 = none)
+  uint32_t idle_ms;      // time in ordinary Sleep (boot: LR of that hang)
+  uint32_t awake_ms;     // the rest: running (boot: watchdog resets in a row)
   uint16_t sleeps;       // sleep() calls (Stop + Sleep entries)
   uint16_t stops;        // of which Stop entries
   uint16_t wake[7];      // Stop wakes by cause: RTC, button, accelerometer,

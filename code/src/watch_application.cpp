@@ -407,6 +407,11 @@ void WatchApplication::writePowerLog(uint8_t type) {
       flags |= PowerLogRecord::FLAG_WATCHDOG_RESET;
     }
     r.busy_seen = static_cast<uint8_t>(power_.mode());
+    // Where the last hang was, if the hang monitor recorded one (it
+    // survives the crash-loop -> USB DFU -> reflash path).
+    r.stop_ms = watchdog_.hangPc();
+    r.idle_ms = watchdog_.hangLr();
+    r.awake_ms = watchdog_.watchdogResetsInARow();
   } else {
     const uint32_t interval = now - power_log_ms_;
     r.interval_s = clamp16((interval + 500UL) / 1000UL);
