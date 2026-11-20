@@ -32,6 +32,11 @@ class ET011TJ1 {
   // reset (the SPI peripheral is switched off then and would leave them
   // floating).
   void setIdleBusPins(uint32_t sck_pin, uint32_t mosi_pin);
+  // The panel never sends data back, but the Arduino SPI core insists on a
+  // MISO pin and switches it to SPI when it sets the bus up. Name that pin
+  // here and it is handed back as a pulled-up input straight afterwards, so
+  // whatever else uses it (a button) keeps working through a refresh.
+  void setUnusedMisoPin(uint32_t pin);
 
   // Resets the controller and verifies that active-low BUSY_N returns high.
   // This deliberately leaves the high-voltage booster off and returns the
@@ -79,6 +84,8 @@ class ET011TJ1 {
   bool booster_on_ = false;
   bool idle_bus_pins_set_ = false;
   uint32_t idle_sck_pin_ = 0;
+  uint32_t unused_miso_pin_ = 0;
+  bool unused_miso_set_ = false;
   uint32_t idle_mosi_pin_ = 0;
 
   int hardwareReset();

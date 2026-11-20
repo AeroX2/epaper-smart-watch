@@ -145,6 +145,12 @@ void ET011TJ1::prepare() {
   spi_.endTransaction();
   spi_.beginTransaction(spi_settings_);
   spi_.endTransaction();
+  // Only that set-up touches the pins (later transactions reuse the same
+  // settings), so the MISO pin can go back to its other use now. Transmit
+  // works the same: received bits are thrown away.
+  if (unused_miso_set_) {
+    pinMode(unused_miso_pin_, INPUT_PULLUP);
+  }
   prepared_ = true;
   controller_awake_ = false;
   booster_on_ = false;
@@ -548,6 +554,11 @@ void ET011TJ1::safeShutdown(Print& out) {
   booster_on_ = false;
   holdInReset();
   out.println(F("Safety shutdown: POF sent and ET011TJ1 held in reset"));
+}
+
+void ET011TJ1::setUnusedMisoPin(uint32_t pin) {
+  unused_miso_pin_ = pin;
+  unused_miso_set_ = true;
 }
 
 void ET011TJ1::holdInReset() {

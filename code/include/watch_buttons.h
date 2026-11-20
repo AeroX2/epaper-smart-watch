@@ -19,13 +19,13 @@ class WatchButtons {
   void begin();
   bool poll(WatchButtonEvent& event);
   // Debounces and queues releases without handing any out. Safe from the
-  // display wait hook: shared_pin_free = false leaves the button whose pin
-  // the display SPI may be borrowing alone.
-  void sample(bool shared_pin_free);
+  // display wait hook.
+  void sample();
   bool needsService() const;
 
-  // SPI1 temporarily borrows button 4 as its unused MISO pin. Restore that pin
-  // and resynchronise its debounce state after each display transaction.
+  // SPI1 names button 4's pin as its unused MISO. The display driver hands
+  // it back right after setting SPI up; this makes sure it is an input again
+  // after display work, without disturbing a press in progress.
   void restoreSharedSpiButton();
 
   static constexpr uint8_t BUTTON_COUNT = 4;

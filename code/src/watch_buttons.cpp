@@ -52,19 +52,12 @@ void WatchButtons::begin() {
 }
 
 void WatchButtons::restoreSharedSpiButton() {
-  constexpr uint8_t index = SHARED_SPI_INDEX;
-  pinMode(BUTTON_PINS[index], INPUT_PULLUP);
-  raw_state_[index] = digitalRead(BUTTON_PINS[index]) == LOW;
-  stable_state_[index] = raw_state_[index];
-  changed_at_[index] = millis();
+  pinMode(BUTTON_PINS[SHARED_SPI_INDEX], INPUT_PULLUP);
 }
 
-void WatchButtons::sample(bool shared_pin_free) {
+void WatchButtons::sample() {
   const uint32_t now = millis();
   for (uint8_t index = 0; index < BUTTON_COUNT; ++index) {
-    if (!shared_pin_free && index == SHARED_SPI_INDEX) {
-      continue;
-    }
     const bool pressed = digitalRead(BUTTON_PINS[index]) == LOW;
     if (pressed != raw_state_[index]) {
       raw_state_[index] = pressed;
@@ -86,7 +79,7 @@ void WatchButtons::sample(bool shared_pin_free) {
 }
 
 bool WatchButtons::poll(WatchButtonEvent& event) {
-  sample(true);
+  sample();
   if (queue_count_ == 0) {
     event = {};
     return false;

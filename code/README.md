@@ -323,9 +323,10 @@ PCB button 1 (SW2, bottom-left) during reset for DFU is a bootloader feature and
 layout.
 
 Console equivalents are `[` for previous, `]` for next, `m` for home, `o` for select, and `u` to
-redraw the current screen. Button inputs use a 35 ms debounce interval. PB4 is restored to its
-button input mode immediately after the display SPI core temporarily uses it as the required dummy
-MISO pin.
+redraw the current screen. Button inputs use a 35 ms debounce interval, and are also sampled
+every 20 ms while the display refreshes, so presses made then are queued rather than lost. PB4 is
+named as the display SPI's MISO (the Arduino core needs one; the panel sends nothing back), and the
+display driver hands it straight back to the button after setting SPI up.
 
 Navigation has two explicit levels. A card says `SELECT OPEN` while browsing and shows `IN` after
 entry. This keeps the button meanings deterministic: PREV/NEXT never trigger an action while

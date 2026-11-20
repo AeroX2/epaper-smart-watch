@@ -664,8 +664,8 @@ void WatchApplication::backgroundService() {
   }
   last_background_ms_ = now;
   in_background_ = true;
-  // Catch presses made during a refresh (the display may hold PB4).
-  buttons_.sample(false);
+  // Catch presses made during a refresh.
+  buttons_.sample();
   ble_.poll();
   alarm_.serviceOutput();
   in_background_ = false;
@@ -1618,6 +1618,7 @@ void WatchApplication::setup() {
   instance_ = this;
   display_.setWaitHook(displayWaitHook);
   display_.setIdleBusPins(BoardPins::DISPLAY_SCK, BoardPins::DISPLAY_MOSI);
+  display_.setUnusedMisoPin(BoardPins::DISPLAY_DUMMY_MISO);
   i2c_.begin();
   WatchWatchdog::bootStage(2);
 

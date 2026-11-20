@@ -33,7 +33,8 @@ constexpr uint32_t DISPLAY_SCK = PA5;
 constexpr uint32_t DISPLAY_MOSI = PA7;
 // The STM32 Arduino SPI core requires a valid MISO pin even for transmit-only
 // buses. PB4 is physically button 4, not connected to the display data line,
-// and is used only to let the core initialize SPI1.
+// and is used only to let the core initialize SPI1; the display driver hands
+// it straight back to the button afterwards (ET011TJ1::setUnusedMisoPin).
 constexpr uint32_t DISPLAY_DUMMY_MISO = PB4;
 constexpr uint32_t DISPLAY_CS = PA4;
 constexpr uint32_t DISPLAY_DC = PA8;
