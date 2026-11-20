@@ -826,13 +826,15 @@ void WatchApplication::sendStatus() {
   }
   activity_.pollSteps();
   readBattery();
-  // The board has no charger-status input wired to the MCU: -1 = unknown.
+  // The board has no charger-status input wired to the MCU; USB power
+  // present (the VDDUSB monitor) is reported as charging: with USB in, the
+  // nPM1100 is charging or holding the battery full.
   const bool sent = ble_.sendf(
-      "STATUS|%d|%u|%lu|-1",
+      "STATUS|%d|%u|%lu|%d",
       model_.battery_valid ? static_cast<int>(model_.battery_percent) : -1,
       model_.battery_valid ? static_cast<unsigned>(model_.battery_millivolts)
                            : 0U,
-      static_cast<unsigned long>(model_.steps));
+      static_cast<unsigned long>(model_.steps), model_.charging ? 1 : 0);
   if (sent) {
     last_status_ms_ = millis();
     last_status_battery_ =
@@ -1708,6 +1710,9 @@ void WatchApplication::loop() {
   const bool charging = power_.usbPowered();
   if (charging != model_.charging) {
     model_.charging = charging;
+    if (phone_session_) {
+      sendStatus();  // the app shows Charging / On battery
+    }
     if (display_controller_.active() && ui_.screen() == WatchScreen::Clock) {
       renderUi();
     }
