@@ -309,7 +309,7 @@ below describes the roles, wherever they sit:
 | 2 | SW3 | Bottom-right | Next. Browse: next card. Inside: next value/item |
 | 3 | SW4 | Top-right | Previous. Browse: previous card. Inside: previous value/item |
 | 4 | SW5 | Top-left | Home: inside: back to card. Browse: return to clock. Clock: press twice within 0.6 s to switch the LED ring on or off |
-| 1 | SW2 | Bottom-left | Select: clock: open carousel; with notifications waiting, a double press within 0.6 s shows the newest one again as the pop-up (and a single press opens the carousel after that 0.6 s). Browse: enter card. Inside: activate |
+| 1 | SW2 | Bottom-left | Select: clock: open the app launcher at once (the double tap gesture shows the newest notification). Browse: enter card. Inside: activate |
 
 Each press acts when the button is released. There are no long presses and no two-button gestures.
 

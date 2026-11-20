@@ -29,6 +29,16 @@ EDITS = {
                  "  return 0xFFFF;\n}\n// Get the encryption state", 1)],
     "HCI.cpp": [("if(connectionHandle>ATT_MAX_PEERS){",
                  "if(connectionHandle==0xFFFF){", 2)],
+    # A previous ACL packet not taken by CPU2 made every send spin for 10 s,
+    # long enough (twice) for the 20 s watchdog. Give up after 250 ms instead;
+    # the application restarts Bluetooth if CPU2 stays silent.
+    "HCISharedMemTransport.cpp": [
+        ("  for (unsigned long start = millis(); (millis() - start) < BLE_IPCC_TIMEOUT;) {\n"
+         "    /* Wait for 10sec max - if not return an error */\n"
+         "    if (!acl_data_on) {",
+         "  for (unsigned long start = millis(); (millis() - start) < 250;) {\n"
+         "    /* Wait for 250 ms max - if not return an error */\n"
+         "    if (!acl_data_on) {", 1)],
     "STM32_WPAN/app_conf_default.h": [
         ("#define BLE_MODULE_SHARED_MEM_BUFFER_SIZE 128\n",
          "#define BLE_MODULE_SHARED_MEM_BUFFER_SIZE 1024\n", 1)],

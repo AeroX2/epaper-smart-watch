@@ -34,6 +34,8 @@ struct __attribute__((packed)) PowerLogRecord {
   uint16_t stops;        // of which Stop entries
   uint16_t wake[7];      // Stop wakes by cause: RTC, button, accelerometer,
                          // battery, radio, USB, other
+                         // (boot records: sleeps, stops and wake[] hold the
+                         // time start-up stages 1-9 began, in 10 ms units)
   uint16_t battery_mv;
   uint8_t battery_pct;
   uint8_t busy_seen;     // WatchSleepBusy bits seen (boot: deep sleep mode)

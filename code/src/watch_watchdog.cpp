@@ -192,9 +192,20 @@ void WatchWatchdog::service() {
   WATCH_CRASH_REGISTER = CRASH_MAGIC;
 }
 
+namespace {
+uint32_t boot_stage_ms[16]{};
+}  // namespace
+
 void WatchWatchdog::bootStage(uint8_t stage) {
   LL_PWR_EnableBkUpAccess();
   WATCH_BOOT_STAGE_REGISTER = BOOT_STAGE_MAGIC | stage;
+  if (stage < 16) {
+    boot_stage_ms[stage] = millis();
+  }
+}
+
+uint32_t WatchWatchdog::bootStageMs(uint8_t stage) {
+  return stage < 16 ? boot_stage_ms[stage] : 0;
 }
 
 void WatchWatchdog::feed() {

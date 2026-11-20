@@ -254,9 +254,6 @@ uint32_t WatchApplication::sleepBudgetMs() {
   if (model_.find_phone_active) {
     consider(remaining(FIND_PHONE_RING_MS, now - find_phone_since_ms_));
   }
-  if (select_press_armed_) {
-    consider(remaining(DOUBLE_PRESS_MS + 1, now - select_press_ms_));
-  }
   if (usb_power_seen_ && !usb_started_) {
     consider(remaining(USB_SETTLE_MS, now - usb_power_since_ms_));
   }
@@ -426,6 +423,15 @@ void WatchApplication::writePowerLog(uint8_t type) {
     r.idle_ms = watchdog_.hangLr();
     r.awake_ms = watchdog_.watchdogResetsInARow();
     r.renders = watchdog_.lastBootStage();  // where a hung start-up stopped
+    // When each start-up stage began (10 ms units), to see a slow one.
+    auto stage_at = [&](uint8_t stage) {
+      return clamp16(WatchWatchdog::bootStageMs(stage) / 10);
+    };
+    r.sleeps = stage_at(1);
+    r.stops = stage_at(2);
+    for (uint8_t stage = 3; stage <= 9; ++stage) {
+      r.wake[stage - 3] = stage_at(stage);
+    }
   } else {
     const uint32_t interval = now - power_log_ms_;
     r.interval_s = clamp16((interval + 500UL) / 1000UL);
@@ -520,6 +526,27 @@ void WatchApplication::restoreBluetooth() {
   }
   Serial.println(F("Bluetooth was on before the restart; switching it on."));
   startBluetooth();
+}
+
+// If the radio core stops taking packets, every send gives up after 250 ms
+// (patched library) and the link is dead. Restart Bluetooth rather than
+// leave it like that.
+void WatchApplication::serviceBleTransport() {
+  if (!ble_.transportBusy()) {
+    ble_stuck_since_ms_ = 0;
+    return;
+  }
+  const uint32_t now = millis();
+  if (ble_stuck_since_ms_ == 0) {
+    ble_stuck_since_ms_ = now | 1U;
+    return;
+  }
+  if (now - ble_stuck_since_ms_ < BLE_STUCK_RESTART_MS) {
+    return;
+  }
+  ble_stuck_since_ms_ = 0;
+  Serial.println(F("[WARN] Radio core stopped taking packets; restarting Bluetooth."));
+  restartBluetooth();
 }
 
 void WatchApplication::restartBluetooth() {
@@ -1074,7 +1101,6 @@ bool WatchApplication::applyPhoneUpdate(const PhoneUpdate& update) {
         Serial.println();
         // A half-finished double press belongs to the old layout.
         home_press_armed_ = false;
-        select_press_armed_ = false;
         if (!config_.saveButtons(roles) && flash_.present()) {
           Serial.println(F("[WARN] Button layout not saved to flash."));
         }
@@ -1257,22 +1283,6 @@ void WatchApplication::serviceScreenTimeout() {
   }
   Serial.println(F("No buttons for 10 s: back to the clock."));
   ui_.showScreen(WatchScreen::Clock);
-  if (display_controller_.active()) {
-    renderUi();
-  }
-}
-
-// A single select on the clock (with notifications waiting) opens the app menu once
-// no second press came within DOUBLE_PRESS_MS.
-void WatchApplication::serviceSelectPress() {
-  if (!select_press_armed_ || millis() - select_press_ms_ <= DOUBLE_PRESS_MS) {
-    return;
-  }
-  select_press_armed_ = false;
-  if (ui_.screen() != WatchScreen::Clock || model_.notification_peek) {
-    return;
-  }
-  applyUiSelection();
   if (display_controller_.active()) {
     renderUi();
   }
@@ -1522,10 +1532,6 @@ void WatchApplication::handleButton(size_t index, uint32_t at_ms) {
       index == 0 && home_press_armed_ &&
       at_ms - home_press_ms_ <= DOUBLE_PRESS_MS;
   home_press_armed_ = false;
-  const bool second_select_press = index == 3 && select_press_armed_ &&
-                                   at_ms - select_press_ms_ <= DOUBLE_PRESS_MS;
-  // Any other press, or a late second one, drops a pending menu open.
-  select_press_armed_ = false;
   if (alarm_.stopFindAlert()) {
     Serial.println(F("Find my watch: stopped by button."));
     return;
@@ -1576,23 +1582,6 @@ void WatchApplication::handleButton(size_t index, uint32_t at_ms) {
       model_.camera_state != CameraState::Closed) {
     ble_.send("CAMERA|CLOSE");  // leaving closes the phone's camera too
     model_.camera_state = CameraState::Closed;
-  }
-  if (index == 3 && ui_.screen() == WatchScreen::Clock &&
-      model_.notification_count > 0) {
-    // With notifications waiting, a double press shows the newest one again,
-    // as the pop-up (any button or 5 s closes it). A single press still
-    // opens the app menu, once the double-press window has passed
-    // (serviceSelectPress). With none, select opens the menu at once.
-    if (second_select_press) {
-      model_.notification_peek = true;
-      Serial.println(F("Clock: newest notification again."));
-      renderUi();
-      peek_since_ms_ = millis();
-    } else {
-      select_press_armed_ = true;
-      select_press_ms_ = at_ms;
-    }
-    return;
   }
   switch (index) {
     case 0: ui_.home(); break;
@@ -1720,9 +1709,9 @@ void WatchApplication::loop() {
   processPhoneUpdates();
   serviceNotificationPeek();
   serviceFindPhone();
-  serviceSelectPress();
   serviceScreenTimeout();
   servicePhoneLink();
+  serviceBleTransport();
   if (ble_.takeBondChange()) {
     // A phone has just paired: keep its key (flash work stays out of the
     // BLE callback that reported it).

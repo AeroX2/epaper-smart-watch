@@ -38,6 +38,8 @@ class WatchWatchdog {
   // reports the last stage reached (lastBootStage(), 0 = finished/unknown).
   static constexpr uint8_t BOOT_STAGE_DONE = 99;
   static void bootStage(uint8_t stage);
+  // millis() when bootStage(stage) was called, 0 if it was not (1-15).
+  static uint32_t bootStageMs(uint8_t stage);
   uint8_t lastBootStage() const { return last_boot_stage_; }
   // Call from the main loop; clears the crash-loop count once healthy.
   void service();

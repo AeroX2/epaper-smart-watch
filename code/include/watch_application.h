@@ -49,6 +49,7 @@ class WatchApplication {
   uint8_t helloFlags() const;
   void loadStoredSettings();
   void persistSettings();
+  void serviceBleTransport();
   void syncButtonCorners();
   void forgetPhone();
   void printStorageStatus();
@@ -180,9 +181,6 @@ class WatchApplication {
   void serviceGestures(uint8_t wake_events);
   bool screenTimeoutHeld() const;
   void serviceScreenTimeout();
-  // Double press of select on the clock plays/pauses music; a single press
-  // opens the app menu after the window (only while music is loaded).
-  bool select_press_armed_ = false;
   // USB is started only once the charger has finished probing a new port
   // (as at boot): stopped when the cable is pulled, restarted this long
   // after it is plugged in.
@@ -191,8 +189,6 @@ class WatchApplication {
   bool usb_power_seen_ = false;    // USB power present at the last look
   uint32_t usb_power_since_ms_ = 0;
   void serviceUsb();
-  uint32_t select_press_ms_ = 0;
-  void serviceSelectPress();
   uint32_t environment_read_ms_ = 0;
 
   // Battery-use log (console c = dump, C twice = clear): one record a
@@ -207,6 +203,9 @@ class WatchApplication {
   uint32_t renders_ = 0;          // display refreshes since boot
   // While queued presses are handled, renders wait and happen once.
   bool defer_render_ = false;
+  // CPU2 has not taken an outgoing packet since this time (0 = it has).
+  uint32_t ble_stuck_since_ms_ = 0;
+  static constexpr uint32_t BLE_STUCK_RESTART_MS = 5000;
   bool render_pending_ = false;
   // Coming back to the clock face from an app gets a full refresh.
   WatchScreen last_render_screen_ = WatchScreen::Clock;
