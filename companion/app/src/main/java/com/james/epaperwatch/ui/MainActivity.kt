@@ -582,7 +582,7 @@ class MainActivity : Activity() {
             render()
         })
         root.addView(ui.note(
-            "Picking a role another corner has swaps the two. Holding the bottom-left button " +
+            "Picking a role another corner has swaps the two. Holding the top-left button " +
                 "while the watch restarts still starts its update mode.",
         ))
 

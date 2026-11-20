@@ -32,8 +32,14 @@ object Protocol {
     /** Corners in `BUTTONS` field order. */
     val BUTTON_CORNERS = listOf("Top left", "Top right", "Bottom left", "Bottom right")
 
-    /** The watch's built-in layout: next, previous, select, home. */
-    val DEFAULT_BUTTONS = listOf(1, 2, 3, 0)
+    /** The watch's built-in layout: select, next, home, previous. */
+    val DEFAULT_BUTTONS = listOf(3, 1, 0, 2)
+
+    /**
+     * The first app version listed the same buttons as (top right, bottom right, top left,
+     * bottom left) under the wrong corner names; this puts such a layout in corner order.
+     */
+    fun buttonsFromFirstFormat(old: List<Int>): List<Int> = listOf(old[2], old[0], old[3], old[1])
 
     /** Each of the four roles exactly once. */
     fun validButtons(layout: List<Int>) = layout.size == 4 && layout.sorted() == listOf(0, 1, 2, 3)

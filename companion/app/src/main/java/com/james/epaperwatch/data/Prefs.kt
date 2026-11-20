@@ -28,11 +28,14 @@ class Prefs(context: Context) {
 
     /** Button roles by corner (see [Protocol.BUTTON_CORNERS]); the default until changed. */
     var buttonLayout: List<Int>
-        get() = sp.getString("button_layout", null)
-            ?.split(',')?.mapNotNull { it.toIntOrNull() }
-            ?.takeIf { Protocol.validButtons(it) }
+        get() = parseButtons(sp.getString("button_layout_v2", null))
+            ?: parseButtons(sp.getString("button_layout", null))?.let(Protocol::buttonsFromFirstFormat)
             ?: Protocol.DEFAULT_BUTTONS
-        set(value) = sp.edit().putString("button_layout", value.joinToString(",")).apply()
+        set(value) = sp.edit().putString("button_layout_v2", value.joinToString(","))
+            .remove("button_layout").apply()
+
+    private fun parseButtons(value: String?): List<Int>? =
+        value?.split(',')?.mapNotNull { it.toIntOrNull() }?.takeIf { Protocol.validButtons(it) }
 
     /** Notification alert tone 0..5, or -1 while neither the user nor the watch has said. */
     var tone: Int
