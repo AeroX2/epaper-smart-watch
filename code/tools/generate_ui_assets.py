@@ -79,6 +79,44 @@ def pack_image(image: Image.Image) -> list[int]:
     return packed
 
 
+def solid_colon_dots(image: Image.Image) -> Image.Image:
+    """At small sizes a colon's dots threshold to one or two stray pixels and
+    almost vanish next to 2-pixel digit strokes. Make each dot at least a
+    solid 2x2 square, keeping the top dot's top row and the bottom dot on the
+    baseline (the image's last row)."""
+    width, height = image.size
+    on = [[image.getpixel((x, y)) >= 128 for x in range(width)] for y in range(height)]
+    rows = [y for y in range(height) if any(on[y])]
+    if not rows or width < 2:
+        return image
+    # Split the inked rows into the two dots at the first gap.
+    groups: list[list[int]] = [[rows[0]]]
+    for y in rows[1:]:
+        if y == groups[-1][-1] + 1:
+            groups[-1].append(y)
+        else:
+            groups.append([y])
+    if len(groups) != 2:
+        return image
+    result = image.copy()
+    for index, group in enumerate(groups):
+        cols = [x for y in group for x in range(width) if on[y][x]]
+        if len(group) >= 2 and max(cols) - min(cols) >= 1 and \
+                sum(on[y][x] for y in group for x in range(width)) >= 4:
+            continue  # already a solid dot
+        x0 = min(min(cols), width - 2)
+        y0 = group[0] if index == 0 else min(group[-1], height - 1) - 1
+        y0 = max(0, min(y0, height - 2))
+        for y in range(height):
+            if y in group:
+                for x in range(width):
+                    result.putpixel((x, y), 0)
+        for y in (y0, y0 + 1):
+            for x in (x0, x0 + 1):
+                result.putpixel((x, y), 255)
+    return result
+
+
 def render_font(symbol: str, filename: str, size: int):
     font = ImageFont.truetype(str(FONT_DIR / filename), size)
     ascent, descent = font.getmetrics()
@@ -97,6 +135,8 @@ def render_font(symbol: str, filename: str, size: int):
             ImageDraw.Draw(image).text(
                 (-left, -top), character, font=font, fill=255, anchor="ls"
             )
+            if character == ":":
+                image = solid_colon_dots(image)
             bitmap.extend(pack_image(image))
         advance = max(1, round(font.getlength(character)))
         glyphs.append((offset, width, height, left, top, advance))
