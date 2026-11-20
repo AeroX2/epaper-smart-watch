@@ -1500,6 +1500,7 @@ void WatchUi::drawClassicClock(const WatchUiModel& model) {
 }
 
 void WatchUi::drawLauncher(const WatchUiModel& model) {
+  (void)model;
   int16_t current = static_cast<int16_t>(screen_);
   if (current < static_cast<int16_t>(WatchScreen::Notifications) ||
       current >= static_cast<int16_t>(WatchScreen::Count)) {
@@ -1507,85 +1508,68 @@ void WatchUi::drawLauncher(const WatchUiModel& model) {
     current = static_cast<int16_t>(screen_);
   }
 
-  // The settled e-paper frame implies a rolling cylinder: distant entries are
-  // small and deliberately clipped by the round panel, while the selected app
-  // is large and centered. There is no animation on the panel.
-  const WatchScreen two_before = launcherScreen(current - 2);
-  const WatchScreen before = launcherScreen(current - 1);
-  const WatchScreen after = launcherScreen(current + 1);
-  const WatchScreen two_after = launcherScreen(current + 2);
-  const BitmapFont& small = WatchAssets::Ui16;
-  textAt(small, SCREEN_LABELS[static_cast<uint8_t>(two_before)], 120, 8);
-  textAt(small, SCREEN_LABELS[static_cast<uint8_t>(before)], 120, 34);
-  textAt(small, SCREEN_LABELS[static_cast<uint8_t>(after)], 120, 178);
-  textAt(small, SCREEN_LABELS[static_cast<uint8_t>(two_after)], 120, 206);
+  // A grid of app tiles, three across and two down: the top buttons step
+  // through them, and stepping past either end of a page lands on the
+  // neighbouring page. The selected tile is filled; its name is underneath
+  // and dots show the page.
+  constexpr int16_t COLS = 3;
+  constexpr int16_t ROWS = 2;
+  constexpr int16_t PER_PAGE = COLS * ROWS;
+  constexpr int16_t TILE = 52;
+  constexpr int16_t GAP = 8;
+  constexpr int16_t TOP = 52;
+  constexpr int16_t RADIUS = 10;
+  const int16_t first = static_cast<int16_t>(WatchScreen::Notifications);
+  const int16_t apps = static_cast<int16_t>(WatchScreen::Count) - first;
+  const int16_t pages = (apps + PER_PAGE - 1) / PER_PAGE;
+  const int16_t selected = current - first;
+  const int16_t page = selected / PER_PAGE;
+  const int16_t on_page =
+      apps - page * PER_PAGE < PER_PAGE ? apps - page * PER_PAGE : PER_PAGE;
 
-  canvas_.icon(SCREEN_ICONS[static_cast<uint8_t>(screen_)], 120, 76, 28);
-  const char* selected = SCREEN_LABELS[static_cast<uint8_t>(screen_)];
-  // Long names drop to the smaller bold font, centred on the same line,
-  // rather than running into the round edge.
-  if (canvas_.fontTextWidth(WatchAssets::Bold36, selected) <= 200) {
-    textAt(WatchAssets::Bold36, selected, 120, 98);
-  } else {
-    // Long names ("FIND PHONE"): a little smaller, on the same middle line.
-    textAt(WatchAssets::Bold30, selected, 120,
-           static_cast<int16_t>(98 + (peek::capHeight(WatchAssets::Bold36) -
-                                      peek::capHeight(WatchAssets::Bold30)) /
-                                         2));
+  auto tile = [this](int16_t x, int16_t y, int16_t size, int16_t r,
+                     bool black) {
+    canvas_.fillRect(x + r, y, size - 2 * r, size, black);
+    canvas_.fillRect(x, y + r, size, size - 2 * r, black);
+    canvas_.fillCircle(x + r, y + r, r, black);
+    canvas_.fillCircle(x + size - r - 1, y + r, r, black);
+    canvas_.fillCircle(x + r, y + size - r - 1, r, black);
+    canvas_.fillCircle(x + size - r - 1, y + size - r - 1, r, black);
+  };
+
+  for (int16_t i = 0; i < on_page; ++i) {
+    const int16_t index = page * PER_PAGE + i;
+    const int16_t row = i / COLS;
+    const int16_t col = i % COLS;
+    // A part-filled row is centred.
+    const int16_t in_row =
+        on_page - row * COLS < COLS ? on_page - row * COLS : COLS;
+    const int16_t row_left = static_cast<int16_t>(
+        120 - (in_row * TILE + (in_row - 1) * GAP) / 2);
+    const int16_t x = static_cast<int16_t>(row_left + col * (TILE + GAP));
+    const int16_t y = static_cast<int16_t>(TOP + row * (TILE + GAP));
+    const bool on = index == selected;
+    tile(x, y, TILE, RADIUS, true);
+    if (!on) {
+      tile(x + 2, y + 2, TILE - 4, RADIUS - 2, false);
+    }
+    canvas_.icon(SCREEN_ICONS[first + index], x + TILE / 2, y + TILE / 2, 28,
+                 !on);
   }
 
-  char status[32] = {};
-  switch (screen_) {
-    case WatchScreen::Notifications:
-      if (model.notification_count > 0) {
-        snprintf(status, sizeof(status), "%u NEW", model.notification_count);
-      } else {
-        snprintf(status, sizeof(status), "ALL CLEAR");
-      }
-      break;
-    case WatchScreen::Timer:
-      snprintf(status, sizeof(status), "%lu MIN%s",
-               static_cast<unsigned long>(model.timer_remaining_seconds / 60),
-               model.timer_running ? " RUNNING" : "");
-      break;
-    case WatchScreen::Alarms:
-      snprintf(status, sizeof(status), "%02u:%02u  %s", model.alarm_hour,
-               model.alarm_minute, model.weekday_alarm_on ? "ON" : "OFF");
-      break;
-    case WatchScreen::Music:
-      snprintf(status, sizeof(status), "%s",
-               model.music_state == MusicState::Playing  ? "PLAYING"
-               : model.music_state == MusicState::Paused ? "PAUSED"
-                                                         : "NOTHING PLAYING");
-      break;
-    case WatchScreen::Activity:
-      snprintf(status, sizeof(status), "%lu STEPS",
-               static_cast<unsigned long>(model.steps));
-      break;
-    case WatchScreen::FindPhone:
-      snprintf(status, sizeof(status), "%s",
-               model.find_phone_active      ? "RINGING"
-               : model.bluetooth_connected ? "RING YOUR PHONE"
-                                           : "NOT CONNECTED");
-      break;
-    case WatchScreen::Camera:
-      snprintf(status, sizeof(status), "%s",
-               model.bluetooth_connected ? "PHONE SHUTTER" : "NOT CONNECTED");
-      break;
-    case WatchScreen::Settings:
-      if (model.bluetooth_connected && model.phone_status_valid) {
-        snprintf(status, sizeof(status), "PHONE %u%%",
-                 model.phone_battery_percent);
-      } else {
-        snprintf(status, sizeof(status), "WATCH OPTIONS");
-      }
-      break;
-    default:
-      break;
+  const int16_t bottom = TOP + ROWS * TILE + (ROWS - 1) * GAP;
+  textAt(WatchAssets::LakeDate20, SCREEN_LABELS[current], 120, bottom + 10);
+
+  constexpr int16_t DOT_GAP = 12;
+  const int16_t dots_left =
+      static_cast<int16_t>(120 - (pages - 1) * DOT_GAP / 2);
+  for (int16_t p = 0; p < pages; ++p) {
+    const int16_t cx = static_cast<int16_t>(dots_left + p * DOT_GAP);
+    canvas_.fillCircle(cx, bottom + 42, 4);
+    if (p != page) {
+      canvas_.fillCircle(cx, bottom + 42, 2, false);
+    }
   }
-  canvas_.centeredFittedFontText(WatchAssets::Ui16, status, 120,
-                                 140 - peek::capOffset(WatchAssets::Ui16),
-                                 180);
 }
 
 // ---- Shore theme pieces ------------------------------------------------
