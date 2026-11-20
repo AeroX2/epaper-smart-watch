@@ -639,6 +639,12 @@ void WatchApplication::printStorageStatus() {
   Serial.println(ble_.encrypted() ? F("yes") : F("no"));
 }
 
+void WatchApplication::misoHook(bool held) {
+  if (instance_ != nullptr) {
+    instance_->buttons_.setSharedHeld(held);
+  }
+}
+
 void WatchApplication::displayWaitHook() {
   WatchWatchdog::feed();
   backgroundHook();
@@ -1619,6 +1625,8 @@ void WatchApplication::setup() {
   display_.setWaitHook(displayWaitHook);
   display_.setIdleBusPins(BoardPins::DISPLAY_SCK, BoardPins::DISPLAY_MOSI);
   display_.setUnusedMisoPin(BoardPins::DISPLAY_DUMMY_MISO);
+  display_.setMisoHook(misoHook);
+  WatchPower::setButtonEdgeHook(WatchButtons::onEdge);
   i2c_.begin();
   WatchWatchdog::bootStage(2);
 

@@ -311,7 +311,7 @@ below describes the roles, wherever they sit:
 | 4 | SW5 | Top-left | Home: inside: back to card. Browse: return to clock. Clock: press twice within 0.6 s to switch the LED ring on or off |
 | 1 | SW2 | Bottom-left | Select: clock: open the app launcher at once (the double tap gesture shows the newest notification). Browse: enter card. Inside: activate |
 
-Each press acts when the button is released. There are no long presses and no two-button gestures.
+Each press acts when the button goes down. There are no long presses and no two-button gestures.
 
 Motion gestures (BMA400 on INT1, latched; tap sensing needs the 200 Hz data rate, a few uA
 more than 100 Hz; the step counter has its own fixed path): a **double tap** on the face (Z axis, sensitivity 1 of 0-7 where 0 is the most
@@ -323,8 +323,10 @@ PCB button 1 (SW2, bottom-left) during reset for DFU is a bootloader feature and
 layout.
 
 Console equivalents are `[` for previous, `]` for next, `m` for home, `o` for select, and `u` to
-redraw the current screen. Button inputs use a 35 ms debounce interval, and are also sampled
-every 20 ms while the display refreshes, so presses made then are queued rather than lost. PB4 is
+redraw the current screen. Presses are counted in the button pin interrupt, so none is missed
+however busy the watch is (a refresh, a flash write, Bluetooth); an edge within 35 ms of the last
+accepted one on the same button is contact bounce. Presses made during a refresh are queued and
+handled together, with one redraw. PB4 is
 named as the display SPI's MISO (the Arduino core needs one; the panel sends nothing back), and the
 display driver hands it straight back to the button after setting SPI up.
 

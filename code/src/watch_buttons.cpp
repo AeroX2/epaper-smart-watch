@@ -41,52 +41,82 @@ bool WatchButtons::setLayout(const uint8_t roles[BUTTON_COUNT]) {
   return true;
 }
 
+WatchButtons* WatchButtons::instance_ = nullptr;
+
 void WatchButtons::begin() {
   const uint32_t now = millis();
   for (uint8_t index = 0; index < BUTTON_COUNT; ++index) {
     pinMode(BUTTON_PINS[index], INPUT_PULLUP);
-    raw_state_[index] = digitalRead(BUTTON_PINS[index]) == LOW;
-    stable_state_[index] = raw_state_[index];
-    changed_at_[index] = now;
+    down_[index] = digitalRead(BUTTON_PINS[index]) == LOW;
+    edge_ms_[index] = now;
+  }
+  instance_ = this;
+}
+
+void WatchButtons::onEdge() {
+  if (instance_ != nullptr) {
+    instance_->edge();
   }
 }
 
-void WatchButtons::restoreSharedSpiButton() {
-  pinMode(BUTTON_PINS[SHARED_SPI_INDEX], INPUT_PULLUP);
-}
-
-void WatchButtons::sample() {
+// Interrupt context. One handler serves all four pins, so look at each.
+void WatchButtons::edge() {
   const uint32_t now = millis();
   for (uint8_t index = 0; index < BUTTON_COUNT; ++index) {
-    const bool pressed = digitalRead(BUTTON_PINS[index]) == LOW;
-    if (pressed != raw_state_[index]) {
-      raw_state_[index] = pressed;
-      changed_at_[index] = now;
-    }
-    if (pressed == stable_state_[index] ||
-        now - changed_at_[index] < DEBOUNCE_MS) {
+    if (index == SHARED_SPI_INDEX &&
+        (shared_held_ ||
+         static_cast<int32_t>(now - shared_ignore_until_ms_) < 0)) {
       continue;
     }
-    stable_state_[index] = pressed;
-    if (!pressed && queue_count_ < QUEUE_CAPACITY) {
+    const bool low = digitalRead(BUTTON_PINS[index]) == LOW;
+    if (low == down_[index]) {
+      continue;  // nothing new on this pin (or a held button)
+    }
+    if (now - edge_ms_[index] < DEBOUNCE_MS) {
+      continue;  // contact bounce
+    }
+    down_[index] = low;
+    edge_ms_[index] = now;
+    if (low && queue_count_ < QUEUE_CAPACITY) {
       WatchButtonEvent& event =
           queue_[(queue_head_ + queue_count_) % QUEUE_CAPACITY];
       event.button_index = roles_[index];
       event.at_ms = now;
-      ++queue_count_;
+      queue_count_ = static_cast<uint8_t>(queue_count_ + 1);
     }
+  }
+}
+
+void WatchButtons::sample() {
+  // A release inside the bounce lockout is ignored by the interrupt; notice
+  // it here so the button is ready for its next press.
+  const uint32_t now = millis();
+  for (uint8_t index = 0; index < BUTTON_COUNT; ++index) {
+    if (index == SHARED_SPI_INDEX && shared_held_) {
+      continue;
+    }
+    noInterrupts();
+    if (down_[index] && digitalRead(BUTTON_PINS[index]) == HIGH &&
+        now - edge_ms_[index] >= DEBOUNCE_MS) {
+      down_[index] = false;
+      edge_ms_[index] = now;
+    }
+    interrupts();
   }
 }
 
 bool WatchButtons::poll(WatchButtonEvent& event) {
   sample();
+  noInterrupts();
   if (queue_count_ == 0) {
+    interrupts();
     event = {};
     return false;
   }
   event = queue_[queue_head_];
   queue_head_ = static_cast<uint8_t>((queue_head_ + 1) % QUEUE_CAPACITY);
-  --queue_count_;
+  queue_count_ = static_cast<uint8_t>(queue_count_ - 1);
+  interrupts();
   return true;
 }
 
@@ -95,9 +125,27 @@ bool WatchButtons::needsService() const {
     return true;
   }
   for (uint8_t index = 0; index < BUTTON_COUNT; ++index) {
-    if (raw_state_[index] || stable_state_[index]) {
+    if (down_[index]) {
       return true;
     }
   }
   return false;
+}
+
+void WatchButtons::setSharedHeld(bool held) {
+  constexpr uint8_t index = SHARED_SPI_INDEX;
+  if (held) {
+    shared_held_ = true;
+    return;
+  }
+  // The switch back to an input can itself raise an edge: ignore it.
+  noInterrupts();
+  shared_ignore_until_ms_ = millis() + 3;
+  down_[index] = false;
+  shared_held_ = false;
+  interrupts();
+}
+
+void WatchButtons::restoreSharedSpiButton() {
+  pinMode(BUTTON_PINS[SHARED_SPI_INDEX], INPUT_PULLUP);
 }

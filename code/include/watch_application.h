@@ -57,6 +57,7 @@ class WatchApplication {
   // Display wait hook: feeds the watchdog and, about every 20 ms, keeps the
   // BLE link and the actuator timing alive during an e-paper refresh.
   static void displayWaitHook();
+  static void misoHook(bool held);
   static void backgroundHook();
   void backgroundService();
   static void otaDataThunk(const uint8_t* data, size_t length);

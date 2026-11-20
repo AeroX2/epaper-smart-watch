@@ -135,6 +135,11 @@ class WatchPower {
   };
 
   static void onButtonInterrupt();
+ public:
+  // Called from the button interrupt before the wake event is set.
+  static void setButtonEdgeHook(void (*hook)()) { button_edge_hook_ = hook; }
+ private:
+  static void (*button_edge_hook_)();
   static void onAccelerometerInterrupt();
   static void onBatteryInterrupt();
   static void setEvent(uint8_t event);

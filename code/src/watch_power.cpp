@@ -645,7 +645,12 @@ void WatchPower::setEvent(uint8_t event) {
   }
 }
 
+void (*WatchPower::button_edge_hook_)() = nullptr;
+
 void WatchPower::onButtonInterrupt() {
+  if (button_edge_hook_ != nullptr) {
+    button_edge_hook_();
+  }
   setEvent(WATCH_WAKE_BUTTON);
 }
 

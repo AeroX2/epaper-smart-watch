@@ -141,6 +141,9 @@ void ET011TJ1::prepare() {
   // plain begin() after holdInReset() would therefore leave SPI1 without its
   // clock, and the first transfer would wait for ever. Asking for a different
   // speed first forces a real initialisation with the wanted settings.
+  if (miso_hook_ != nullptr) {
+    miso_hook_(true);
+  }
   spi_.beginTransaction(SPISettings(SPI_HZ / 2, MSBFIRST, SPI_MODE0));
   spi_.endTransaction();
   spi_.beginTransaction(spi_settings_);
@@ -150,6 +153,9 @@ void ET011TJ1::prepare() {
   // works the same: received bits are thrown away.
   if (unused_miso_set_) {
     pinMode(unused_miso_pin_, INPUT_PULLUP);
+  }
+  if (miso_hook_ != nullptr) {
+    miso_hook_(false);
   }
   prepared_ = true;
   controller_awake_ = false;
@@ -554,6 +560,10 @@ void ET011TJ1::safeShutdown(Print& out) {
   booster_on_ = false;
   holdInReset();
   out.println(F("Safety shutdown: POF sent and ET011TJ1 held in reset"));
+}
+
+void ET011TJ1::setMisoHook(void (*hook)(bool held)) {
+  miso_hook_ = hook;
 }
 
 void ET011TJ1::setUnusedMisoPin(uint32_t pin) {

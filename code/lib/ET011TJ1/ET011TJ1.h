@@ -37,6 +37,9 @@ class ET011TJ1 {
   // here and it is handed back as a pulled-up input straight afterwards, so
   // whatever else uses it (a button) keeps working through a refresh.
   void setUnusedMisoPin(uint32_t pin);
+  // Called with true just before SPI set-up takes that pin, false once it
+  // has been handed back.
+  void setMisoHook(void (*hook)(bool held));
 
   // Resets the controller and verifies that active-low BUSY_N returns high.
   // This deliberately leaves the high-voltage booster off and returns the
@@ -86,6 +89,7 @@ class ET011TJ1 {
   uint32_t idle_sck_pin_ = 0;
   uint32_t unused_miso_pin_ = 0;
   bool unused_miso_set_ = false;
+  void (*miso_hook_)(bool held) = nullptr;
   uint32_t idle_mosi_pin_ = 0;
 
   int hardwareReset();
