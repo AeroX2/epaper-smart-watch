@@ -257,8 +257,8 @@ uint32_t WatchApplication::sleepBudgetMs() {
   if (previous_press_armed_) {
     consider(remaining(DOUBLE_PRESS_MS + 1, now - previous_press_ms_));
   }
-  if (usb_restart_pending_) {
-    consider(remaining(USB_SETTLE_MS, now - usb_restart_ms_));
+  if (usb_power_seen_ && !usb_started_) {
+    consider(remaining(USB_SETTLE_MS, now - usb_power_since_ms_));
   }
   if (!screenTimeoutHeld()) {
     consider(remaining(SCREEN_TIMEOUT_MS, now - last_input_ms_));
@@ -1156,17 +1156,27 @@ void WatchApplication::servicePreviousPress() {
 
 // Plugging USB into a running watch: the nPM1100 probes the port first
 // (BC1.2), and with the USB device already attached the host never sees
-// it. Detach when the cable goes, attach again USB_SETTLE_MS after it
-// comes back, as setup() does at boot.
-void WatchApplication::serviceUsbRestart(uint8_t wake_events) {
-  if ((wake_events & WATCH_WAKE_USB_POWER) != 0) {
-    Serial.end();
-    usb_restart_pending_ = power_.usbPowered();
-    usb_restart_ms_ = millis();
+// it. So USB is detached whenever there is no USB power and attached once
+// power has been present for USB_SETTLE_MS, as setup() does at boot. This
+// looks at the level on every pass, so a missed or bouncing plug event
+// cannot leave USB off.
+void WatchApplication::serviceUsb() {
+  const uint32_t now = millis();
+  if (!power_.usbPowered()) {
+    usb_power_seen_ = false;
+    if (usb_started_) {
+      Serial.end();
+      usb_started_ = false;
+    }
+    return;
   }
-  if (usb_restart_pending_ && millis() - usb_restart_ms_ >= USB_SETTLE_MS) {
-    usb_restart_pending_ = false;
+  if (!usb_power_seen_) {
+    usb_power_seen_ = true;
+    usb_power_since_ms_ = now;
+  }
+  if (!usb_started_ && now - usb_power_since_ms_ >= USB_SETTLE_MS) {
     Serial.begin(115200);
+    usb_started_ = true;
   }
 }
 
@@ -1580,6 +1590,7 @@ void WatchApplication::setup() {
   // Let the nPM1100 finish port detection before attaching the USB console.
   delay(750);
   Serial.begin(115200);
+  usb_started_ = true;
   const uint32_t console_started = millis();
   while (!Serial && millis() - console_started < 3000) {
     delay(10);
@@ -1682,7 +1693,7 @@ void WatchApplication::loop() {
       renderUi();
     }
   }
-  serviceUsbRestart(wake_events);
+  serviceUsb();
   if ((wake_events & WATCH_WAKE_BATTERY) != 0) {
     updateUiSensors();
   }

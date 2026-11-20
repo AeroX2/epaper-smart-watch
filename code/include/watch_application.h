@@ -177,9 +177,10 @@ class WatchApplication {
   // (as at boot): stopped when the cable is pulled, restarted this long
   // after it is plugged in.
   static constexpr uint32_t USB_SETTLE_MS = 750;
-  bool usb_restart_pending_ = false;
-  uint32_t usb_restart_ms_ = 0;
-  void serviceUsbRestart(uint8_t wake_events);
+  bool usb_started_ = false;       // Serial (USB CDC) attached
+  bool usb_power_seen_ = false;    // USB power present at the last look
+  uint32_t usb_power_since_ms_ = 0;
+  void serviceUsb();
   uint32_t select_press_ms_ = 0;
   void serviceSelectPress();
   uint32_t environment_read_ms_ = 0;
