@@ -24,11 +24,6 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Optional features; requested at runtime only when enabled in the app. -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- Android 10+: weather by phone location while the app is closed. Asked for separately,
-         after an explanation; declining keeps weather working with foreground-only fixes. -->
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- Health Connect: write the watch step counts (only when the sync option is on). -->
     <uses-permission android:name="android.permission.health.WRITE_STEPS" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />

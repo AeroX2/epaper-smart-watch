@@ -72,7 +72,7 @@ a new auto-connect is issued.
   is replaced in place if a newer one arrives before it is sent.
 - `TIME` is built at the moment of each transmission attempt, so a queued or retried `TIME` is
   never stale.
-- State messages (`TIME`, `SETTINGS`, `PHONE`, `NEXT_ALARM`, `EVENT`, `WEATHER`, `MUSIC`) count as
+- State messages (`TIME`, `SETTINGS`, `PHONE`, `NEXT_ALARM`, `EVENT`, `MUSIC`) count as
   delivered only when the watch ACKed them. If one is dropped (NAK, retries exhausted, queue
   overflow) the then-current value is sent again after 5 s, doubling up to 5 min while resends keep
   being dropped. After three `PARSE`/`UNKNOWN` NAKs in a
@@ -86,7 +86,7 @@ a new auto-connect is issued.
 ### Session
 
 After `HELLO` is ACKed the phone sends `TIME` (UTC + zone offset incl. DST, and the next DST change),
-`SETTINGS` (the phone's stored copy), `PHONE`, `NEXT_ALARM`, `EVENT`, `WEATHER` (if known), `MUSIC`,
+`SETTINGS` (the phone's stored copy), `PHONE`, `NEXT_ALARM`, `EVENT`, `MUSIC`,
 `NOTIFY_CLEAR|0`, the newest five notifications (oldest first, `alert` 0), a ringing `CALL` if there
 is one, and `REQUEST|HISTORY`. If the watch never ACKs `HELLO`, the app drops the link and
 reconnects with backoff; after eight failed connections in a row it stops (see *Battery*).
@@ -110,7 +110,7 @@ bonding, after which discovery, the CCC write and `HELLO` are redone.
 
 ### Periodic work
 
-Weather refresh (60 min), calendar re-evaluation (60 min and at the start of the reported event)
+Calendar re-evaluation (60 min and at the start of the reported event)
 and the time resync (24 h) are driven by `AlarmManager.setAndAllowWhileIdle` (inexact, no
 exact-alarm permission), so they keep running in Doze. The alarms are cancelled on disconnect and
 when the service stops. A partial wake lock covers the work an alarm starts and is released as soon
@@ -126,25 +126,16 @@ as the download and the resulting messages are done (30 s at most). See *Battery
 | One-time codes | When enabled (on by default), a 4–8 digit group (also `123 456` / `123-456`) is replaced with `*` only if a code word (code, OTP, verification, PIN, password, login, …) stands in the same sentence within about 48 characters, in the text or at the adjoining edge of the other field. Never masked: money (currency symbol/code next to it, or decimals), a year 1900–2099 next to a month or inside a date, and digit groups that are part of a phone-number-shaped run (9+ digits, or 7+ after a `+`). Prefixed codes such as `G-123456` are masked even without a code word. |
 | Calls | `CATEGORY_CALL` notifications: ringing → `CALL\|RING\|caller`, answered or removed → `CALL\|END`. `CALL_REJECT` uses `TelecomManager.endCall()` when *Reject calls from the watch* is on and the permission is granted (Android 9+). Otherwise it presses the notification's Decline button if there is one. |
 | Media | `MediaSessionManager` active-session listener plus `MediaController.Callback`. `MUSIC` is sent only when the state or track changes or the position jumps by more than 3 s (a seek; such corrections are at most 15 s apart), never periodically; `MUSIC\|0\|0\|0\|\|` means nothing is playing. Watch `MEDIA` actions control the active session. |
-| Weather | Open-Meteo (no key). Modes: off, approximate phone location, fixed coordinates, or manual values. Refreshes every 60 min while connected, and on connect if the cached forecast is older than 50 min; `WEATHER` is sent only when the values change. WMO codes map to short text. See *Weather by phone location* below. |
 | Next alarm | `AlarmManager.getNextAlarmClock()`, resent on `NEXT_ALARM_CLOCK_CHANGED`. |
 | Calendar | Optional. The next visible, non-all-day, non-declined event that starts within 24 h, from `CalendarContract.Instances`. Updates when the calendar changes and when that event starts. |
 | Phone status | Battery %, charging and Do Not Disturb. Charging and DND changes are sent at once, the battery level in steps of 5 points (and at 100 %). |
 | Find phone | `FIND_PHONE\|1` rings the default alarm sound on the alarm stream and vibrates, with a Stop notification. While it rings the alarm volume is raised to at least 70 % and put back afterwards (unless you changed it meanwhile). It stops on `FIND_PHONE\|0`, on Stop, after 2 min, or when the service stops. **Find watch** sends `FIND_WATCH`. |
+| Test notification | **Send test notification** sends a made-up `NOTIFY` (id 65535, alert on) so the pop-up, alert tone and Messages app can be checked without waiting for a real message. |
 | Camera remote | The watch's Camera app. `CAMERA\|OPEN` opens a CameraX screen with the back camera (`CameraActivity`), also over the lock screen; the companion-device association is what lets it start from the background. If it has not appeared after 3 s a "Tap to open" notification is posted and the watch shows `TAP THE PHONE`. `CAMERA\|SHUTTER\|delay` beeps through the countdown and saves a JPEG to Pictures/E-Paper Watch; `CAMERA\|CLOSE` closes it. The screen reports `CAMERA\|state` back (opening, ready, countdown, saved count, error). The camera permission is asked for the first time it opens. CameraX adds AndroidX Activity, Camera and Guava to the dependencies. **Use Pixel Camera** (off by default) instead opens Pixel Camera (`INTENT_ACTION_STILL_IMAGE_CAMERA`, the `_SECURE` variant while locked) and presses its shutter through the optional `PixelCameraShutter` accessibility service, which its config limits to Pixel Camera's windows. It clicks the shutter by view id or description, else taps where it was last found; the countdown and beeps are this app's. Without the service enabled the own camera screen is used. |
 | Watch status | Shows battery %, voltage, charging state, firmware and flags (from `HELLO`), steps today, a 7-day step chart (`REQUEST\|HISTORY`) and the last sync time. |
 | Watch settings | Vibration, quiet mode and the notification alert tone (None/Chirp/Double/Rise/Fall/Triple). A change on the phone sends `SETTINGS`; choosing a tone while connected also sends `TONE_PREVIEW`. A `SETTINGS` from the watch updates the phone's copy. The phone's copy wins at session start; until a tone has been chosen on either side the phone omits the tone field (watch keeps its own). |
 | Health Connect | Optional step sync, see below. |
 | Firmware update | **Update watch firmware**, see below. |
-
-### Weather by phone location
-
-On Android 10+ a `connectedDevice` foreground service counts as background for location. When the
-*phone location* mode is saved the app asks for approximate location and then, after an explanation,
-for background location ("Allow all the time"). If that is declined weather keeps working: every fix
-the app gets is cached (rounded to about 1 km), the cache is refreshed each time the app is opened,
-and the service uses the cached fix. The weather status line says so, shows the age of the fix, and
-an **Allow background location** button stays available.
 
 ### Health Connect step sync
 
@@ -200,7 +191,7 @@ The decisions are pure functions in `link/PowerPolicy.kt` (tested in `PowerPolic
 | `PHONE` | Charging or Do Not Disturb changed; battery level moved 5 points from the value the watch has, or reached 100 %. Other `BATTERY_CHANGED` broadcasts (voltage, temperature) are ignored. |
 | `MUSIC` | Track, duration or play state changed; position off by more than 3 s from where the watch has counted to, at most once per 15 s. Callbacks are debounced for 0.5 s. Never periodic. |
 | `NOTIFY` | A new notification at once; content updates of the same notification at most every 10 s, latest content wins. Identical re-posts never. |
-| `WEATHER`, `EVENT`, `NEXT_ALARM`, `SETTINGS` | Only when the value differs from the one the watch ACKed. |
+| `EVENT`, `NEXT_ALARM`, `SETTINGS` | Only when the value differs from the one the watch ACKed. |
 | `REQUEST` | `HISTORY` once per session; `STATUS`/`HISTORY` otherwise only from the **Refresh status** button. No timer: the watch pushes `STATUS` itself. |
 | Resend of a dropped state message | After 5 s, doubling to 5 min until one gets through. |
 
@@ -210,11 +201,8 @@ session-start burst. When the last queued message has been acknowledged the app 
 milliseconds longer. `CONNECTION_PRIORITY_HIGH` is held only while firmware data is being written and
 is given back on every way out of a transfer.
 
-**Timers.** One alarm every 60 min while connected (weather, calendar window, 24 h time resync), one
-at the start of the reported calendar event, none while disconnected. The weather download is skipped
-while the cached forecast is younger than 50 min, and failures are retried no sooner than 10 min
-later. Location is one coarse fix, at most once per download, and only when the last fix is older
-than 3 h. Health Connect is not called when the step count has not changed. Nothing in the app
+**Timers.** One alarm every 60 min while connected (calendar window, 24 h time resync), one at the start
+of the reported calendar event, none while disconnected. Health Connect is not called when the step count has not changed. Nothing in the app
 polls; the status screen has no refresh timer.
 
 **Wake locks.** `epaperwatch:work`: taken when one of those alarms fires during a session, released
@@ -243,9 +231,6 @@ the link service (reboot, app update) starts again. Just opening the app does no
 | `RECEIVE_BOOT_COMPLETED` | Start on boot. |
 | `VIBRATE` | Find phone. |
 | `WAKE_LOCK` | Firmware transfer; a few seconds of periodic work in Doze. No runtime prompt. |
-| `INTERNET` | Weather. |
-| `ACCESS_COARSE_LOCATION` | Only when weather is set to *phone location*. |
-| `ACCESS_BACKGROUND_LOCATION` (10+) | Optional, only for weather by phone location while the app is closed. Asked after an explanation; may be declined. |
 | `READ_CALENDAR` | Only when the calendar option is turned on. |
 | `ANSWER_PHONE_CALLS` | Only when *Reject calls from the watch* is turned on. |
 | `android.permission.health.WRITE_STEPS` | Only when *Sync steps to Health Connect* is turned on (granted in Health Connect). |
@@ -254,23 +239,6 @@ the link service (reboot, app update) starts again. Just opening the app does no
 No scan or fine-location permission is needed: the Companion Device chooser does the scanning.
 The manifest also declares the Health Connect permission-rationale activity (for Android 9–13 and,
 through an activity alias, for Android 14+) and a `<queries>` entry for the Health Connect package.
-
-## Sleep as Android
-
-The bridge implements connection confirmation, tracking start/stop, pause/suspend, requested batch
-size, alarm start/stop/update, notifications, hints, movement upload, snooze, dismiss, pause and
-resume, using the v2 `SLEEP_*` messages. Movement is calculated on the watch as the largest
-three-axis acceleration change in each interval. The phone converts it from milligravity to m/s²,
-batches it, and sends it as `MAX_RAW_DATA`. Mappings to note:
-
-- `SET_PAUSE` (Sleep gives the end time) → `SLEEP_PAUSE|<seconds remaining>`, `0` = resume.
-  `SET_SUSPENDED` → one year, or `0` when unsuspended.
-- `START_ALARM` / `UPDATE_ALARM` delays are converted from milliseconds to whole seconds
-  (rounded up). A negative `DELAY` sends nothing.
-
-Sleep as Android requires third-party wearable packages to be whitelisted on modern Android; the
-package is `com.james.epaperwatch`. This hardware has no heart-rate, HRV or SpO2 sensor, so the
-companion never fabricates those data.
 
 ## Limitations
 

@@ -17,10 +17,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
-import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -29,7 +26,6 @@ import com.james.epaperwatch.R
 import com.james.epaperwatch.WatchLinkService
 import com.james.epaperwatch.WatchNotificationListener
 import com.james.epaperwatch.bridge.CalendarBridge
-import com.james.epaperwatch.bridge.PhoneLocation
 import com.james.epaperwatch.bridge.PixelCameraShutter
 import com.james.epaperwatch.data.Prefs
 import com.james.epaperwatch.data.WatchState
@@ -64,8 +60,6 @@ class MainActivity : Activity() {
     private lateinit var toneButton: Button
     private lateinit var healthSwitch: Switch
     private lateinit var healthStatus: TextView
-    private lateinit var sleepStatus: TextView
-    private lateinit var backgroundLocationButton: Button
     private lateinit var accessButton: Button
     private lateinit var forwardSwitch: Switch
     private lateinit var redactSwitch: Switch
@@ -75,17 +69,6 @@ class MainActivity : Activity() {
     private lateinit var callsSwitch: Switch
     private lateinit var rejectSwitch: Switch
     private lateinit var calendarSwitch: Switch
-
-    private lateinit var weatherModes: RadioGroup
-    private lateinit var weatherStatus: TextView
-    private lateinit var latInput: EditText
-    private lateinit var lonInput: EditText
-    private lateinit var coordsBlock: View
-    private lateinit var manualBlock: View
-    private lateinit var tempInput: EditText
-    private lateinit var highInput: EditText
-    private lateinit var lowInput: EditText
-    private lateinit var conditionInput: EditText
 
     /** Set while render() updates widgets so their listeners don't act. */
     private var rendering = false
@@ -112,7 +95,6 @@ class MainActivity : Activity() {
         super.onResume()
         // Returning from system settings (notification access, permissions) may change things.
         if (WatchNotificationListener.isEnabled(this)) WatchLinkService.instance?.onNotificationAccessGranted()
-        refreshLocationFix()
         render()
     }
 
@@ -162,23 +144,8 @@ class MainActivity : Activity() {
                 prefs.rejectCalls = granted
                 if (!granted) toast("Without this permission the watch uses the call's Decline button")
             }
-            REQ_LOCATION -> {
-                if (granted) {
-                    askBackgroundLocation(force = false)
-                    refreshLocationFix()
-                } else {
-                    toast("Location denied: use fixed coordinates or manual values instead")
-                }
-                WatchLinkService.instance?.refreshWeather()
-            }
             REQ_HEALTH_RUNTIME -> {
                 if (granted) enableHealthSync() else healthPermissionRefused()
-            }
-            REQ_BACKGROUND_LOCATION -> {
-                if (!PhoneLocation.hasBackgroundPermission(this)) {
-                    toast("Without it the weather location is only refreshed while this app is open")
-                }
-                WatchLinkService.instance?.refreshWeather()
             }
         }
         render()
@@ -271,34 +238,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun saveWeather() {
-        val mode = when (weatherModes.checkedRadioButtonId) {
-            ID_LOCATION -> Prefs.WEATHER_LOCATION
-            ID_COORDS -> Prefs.WEATHER_COORDS
-            ID_MANUAL -> Prefs.WEATHER_MANUAL
-            else -> Prefs.WEATHER_OFF
-        }
-        prefs.weatherMode = mode
-        prefs.weatherLat = latInput.text.toString().trim()
-        prefs.weatherLon = lonInput.text.toString().trim()
-        prefs.manualTemp = tempInput.text.toString().toIntOrNull() ?: prefs.manualTemp
-        prefs.manualHigh = highInput.text.toString().toIntOrNull() ?: prefs.manualHigh
-        prefs.manualLow = lowInput.text.toString().toIntOrNull() ?: prefs.manualLow
-        prefs.manualCondition = conditionInput.text.toString()
-        prefs.weatherError = null
-        if (mode == Prefs.WEATHER_LOCATION && !PhoneLocation.hasPermission(this)) {
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), REQ_LOCATION)
-        } else {
-            if (mode == Prefs.WEATHER_LOCATION) {
-                askBackgroundLocation(force = false)
-                refreshLocationFix()
-            }
-            WatchLinkService.instance?.refreshWeather()
-            toast("Weather settings saved")
-        }
-        render()
-    }
-
     // ------------------------------------------------------------------ alert tone
 
     private fun pickTone() {
@@ -319,51 +258,6 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    // ------------------------------------------------------------------ weather location
-
-    /**
-     * Android 10+: the link service counts as "background" for location, so weather by phone
-     * location only keeps working with the app closed if background location is allowed.
-     * Explains that first, then asks. Declining is fine: the service then uses the fix this
-     * screen caches whenever it is opened (see [refreshLocationFix]).
-     */
-    private fun askBackgroundLocation(force: Boolean) {
-        if (Build.VERSION.SDK_INT < 29) return
-        if (!PhoneLocation.hasPermission(this) || PhoneLocation.hasBackgroundPermission(this)) return
-        if (prefs.backgroundLocationAsked && !force) return
-        prefs.backgroundLocationAsked = true
-        val option = if (Build.VERSION.SDK_INT >= 30) {
-            "\"${packageManager.backgroundPermissionOptionLabel}\""
-        } else {
-            "\"Allow all the time\""
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Weather while the app is closed")
-            .setMessage(
-                "The watch link runs in the background. Android only lets it read the " +
-                    "phone's approximate location there if location access is set to $option.\n\n" +
-                    "The location is used for nothing but the weather forecast request. If you " +
-                    "skip this, weather still works, but the location is only refreshed while " +
-                    "this app is open.",
-            )
-            .setPositiveButton("Continue") { _, _ ->
-                requestPermissions(
-                    arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), REQ_BACKGROUND_LOCATION,
-                )
-            }
-            .setNegativeButton("Not now", null)
-            .show()
-    }
-
-    /** The UI is visible, so a location fix is allowed: refresh the cached one. */
-    private fun refreshLocationFix() {
-        if (prefs.weatherMode != Prefs.WEATHER_LOCATION || !PhoneLocation.hasPermission(this)) return
-        PhoneLocation.obtain(this, mainHandler, UI_FIX_MAX_AGE_MS) {
-            WatchLinkService.instance?.refreshWeather(force = false)
-            if (!isDestroyed) render()
-        }
     }
 
     // ------------------------------------------------------------------ Health Connect
@@ -435,14 +329,6 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    private fun sleepSummary(): String = when {
-        !WatchState.sleepTracking -> "Not tracking."
-        WatchState.sleepSamples == 0 ->
-            "Tracking: waiting for the first movement sample from the watch (about 10 seconds)."
-        else -> "Tracking: ${WatchState.sleepSamples} movement samples received, " +
-            "last ${WatchState.sleepLastMg} mg."
     }
 
     private fun healthSummary(): String {
@@ -530,7 +416,6 @@ class MainActivity : Activity() {
             (Protocol.TONE_NAMES.getOrNull(prefs.tone) ?: "watch default")
         healthSwitch.isChecked = prefs.healthSync
         healthStatus.text = healthSummary()
-        sleepStatus.text = sleepSummary()
         val access = WatchNotificationListener.isEnabled(this)
         accessButton.text = if (access) "Notification access: granted" else "Grant notification access"
         accessButton.setTextColor(if (access) Ui.INK else Ui.ALERT)
@@ -551,44 +436,7 @@ class MainActivity : Activity() {
         rejectSwitch.isEnabled = Build.VERSION.SDK_INT >= 28
         calendarSwitch.isChecked = prefs.calendarEnabled && CalendarBridge.hasPermission(this)
 
-        coordsBlock.visibility = if (weatherModes.checkedRadioButtonId == ID_COORDS) View.VISIBLE else View.GONE
-        manualBlock.visibility = if (weatherModes.checkedRadioButtonId == ID_MANUAL) View.VISIBLE else View.GONE
-        weatherStatus.text = weatherSummary()
-        backgroundLocationButton.visibility =
-            if (weatherModes.checkedRadioButtonId == ID_LOCATION && Build.VERSION.SDK_INT >= 29 &&
-                PhoneLocation.hasPermission(this) && !PhoneLocation.hasBackgroundPermission(this)
-            ) View.VISIBLE else View.GONE
         rendering = false
-    }
-
-    private fun weatherSummary(): String {
-        if (prefs.weatherMode == Prefs.WEATHER_OFF) return "Weather is off."
-        if (prefs.weatherMode == Prefs.WEATHER_MANUAL) {
-            return "Manual: ${prefs.manualTemp}°C (${prefs.manualHigh}/${prefs.manualLow}) ${prefs.manualCondition}"
-        }
-        val cache = prefs.weatherCache?.split('|')
-        val base = if (cache != null && cache.size >= 5) {
-            val age = DateUtils.getRelativeTimeSpanString(
-                prefs.weatherCacheTime, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS,
-            )
-            "${cache[0]}°C (${cache[1]}/${cache[2]}) ${cache[4]} · $age"
-        } else {
-            "No weather fetched yet."
-        }
-        var summary = prefs.weatherError?.let { "$base\n$it" } ?: base
-        if (prefs.weatherMode == Prefs.WEATHER_LOCATION && PhoneLocation.hasPermission(this)) {
-            val fix = PhoneLocation.cached(this)
-            if (fix != null) {
-                summary += "\nLocation fix: " + DateUtils.getRelativeTimeSpanString(
-                    fix.timeMs, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS,
-                )
-            }
-            if (!PhoneLocation.hasBackgroundPermission(this)) {
-                summary += "\nBackground location is not allowed: the location is only " +
-                    "refreshed while this app is open."
-            }
-        }
-        return summary
     }
 
     private fun hasCallPermission() = Build.VERSION.SDK_INT >= 28 &&
@@ -660,6 +508,11 @@ class MainActivity : Activity() {
                 },
                 ui.button("Forget watch", primary = false) { forget() },
             ))
+            addView(ui.actionButton("Send test notification", primary = false) { button ->
+                watchAction(button, "Sending…", "Test notification sent") { service, done ->
+                    service.sendTestNotification(done)
+                }
+            })
             addView(ui.button("Update watch firmware", primary = false) {
                 startActivity(Intent(this@MainActivity, FirmwareUpdateActivity::class.java))
             })
@@ -777,72 +630,6 @@ class MainActivity : Activity() {
         }
         root.addView(calendarSwitch)
 
-        // ---- Weather ----
-        root.addView(ui.section("WEATHER", "Open-Meteo forecast"))
-        weatherModes = RadioGroup(this).apply {
-            orientation = RadioGroup.VERTICAL
-            addView(radio(ID_OFF, "Off"))
-            addView(radio(ID_LOCATION, "Use phone location (approximate)"))
-            addView(radio(ID_COORDS, "Fixed coordinates"))
-            addView(radio(ID_MANUAL, "Manual values (no internet)"))
-            check(
-                when (prefs.weatherMode) {
-                    Prefs.WEATHER_LOCATION -> ID_LOCATION
-                    Prefs.WEATHER_COORDS -> ID_COORDS
-                    Prefs.WEATHER_MANUAL -> ID_MANUAL
-                    else -> ID_OFF
-                },
-            )
-            setOnCheckedChangeListener { _, _ -> if (!rendering) render() }
-        }
-        root.addView(weatherModes)
-        latInput = ui.textInput(prefs.weatherLat, numeric = true, decimal = true)
-        lonInput = ui.textInput(prefs.weatherLon, numeric = true, decimal = true)
-        coordsBlock = ui.row(ui.field("LATITUDE", latInput), ui.field("LONGITUDE", lonInput))
-        root.addView(coordsBlock)
-        tempInput = ui.textInput(prefs.manualTemp.toString(), numeric = true)
-        highInput = ui.textInput(prefs.manualHigh.toString(), numeric = true)
-        lowInput = ui.textInput(prefs.manualLow.toString(), numeric = true)
-        conditionInput = ui.textInput(prefs.manualCondition)
-        manualBlock = ui.column().apply {
-            addView(ui.row(
-                ui.field("NOW °C", tempInput),
-                ui.field("HIGH °C", highInput),
-                ui.field("LOW °C", lowInput),
-            ))
-            addView(ui.field("CONDITION", conditionInput))
-        }
-        root.addView(manualBlock)
-        weatherStatus = ui.note("")
-        root.addView(weatherStatus)
-        backgroundLocationButton = ui.button("Allow background location", primary = false) {
-            askBackgroundLocation(force = true)
-        }
-        root.addView(backgroundLocationButton)
-        root.addView(ui.button("Save and update weather") { saveWeather() })
-
-        // ---- Sleep as Android ----
-        root.addView(ui.section("SLEEP AS ANDROID", "Movement-only wearable bridge"))
-        root.addView(ui.note(
-            "Sleep as Android starts and stops tracking automatically through its wearable " +
-                "intents. It must whitelist com.james.epaperwatch. These buttons exercise the " +
-                "watch's movement sampler without a real session.",
-        ))
-        root.addView(ui.row(
-            ui.actionButton("Test tracking", primary = false) { button ->
-                watchAction(button, "Starting…", "Tracking started: move the watch") { service, done ->
-                    service.startSleepTest(done)
-                }
-            },
-            ui.actionButton("Stop test", primary = false) { button ->
-                watchAction(button, "Stopping…", "Tracking stopped") { service, done ->
-                    service.stopSleepTest(done)
-                }
-            },
-        ))
-        sleepStatus = ui.note("")
-        root.addView(sleepStatus)
-
         return ScrollView(this).apply {
             isFillViewport = true
             setBackgroundColor(Ui.PAPER)
@@ -850,26 +637,11 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun radio(id: Int, text: String) = RadioButton(this).apply {
-        this.id = id
-        this.text = text
-        textSize = 15f
-        setTextColor(Ui.INK)
-    }
-
     companion object {
         private const val REQ_PAIR = 1
         private const val REQ_CALENDAR = 2
         private const val REQ_CALLS = 3
-        private const val REQ_LOCATION = 4
-        private const val REQ_BACKGROUND_LOCATION = 5
         private const val REQ_HEALTH_RUNTIME = 6
         private const val REQ_HEALTH = 7101
-        private const val UI_FIX_MAX_AGE_MS = 10L * 60 * 1000
-
-        private val ID_OFF = R.id.weather_off
-        private val ID_LOCATION = R.id.weather_location
-        private val ID_COORDS = R.id.weather_coords
-        private val ID_MANUAL = R.id.weather_manual
     }
 }

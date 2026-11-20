@@ -24,8 +24,6 @@ import com.james.epaperwatch.bridge.FindPhoneRinger
 import com.james.epaperwatch.bridge.MediaBridge
 import com.james.epaperwatch.bridge.NotificationRelay
 import com.james.epaperwatch.bridge.PhoneStateBridge
-import com.james.epaperwatch.bridge.SleepApiBridge
-import com.james.epaperwatch.bridge.WeatherBridge
 import com.james.epaperwatch.data.Prefs
 import com.james.epaperwatch.data.WatchState
 import com.james.epaperwatch.health.StepSync
@@ -47,7 +45,7 @@ import com.james.epaperwatch.ui.MainActivity
  * the feature bridges, pushes state changes from the bridges to the watch, and hosts the
  * firmware transfer ([OtaManager]).
  *
- * State messages (TIME, SETTINGS, PHONE, NEXT_ALARM, EVENT, WEATHER, MUSIC) are tracked per
+ * State messages (TIME, SETTINGS, PHONE, NEXT_ALARM, EVENT, MUSIC) are tracked per
  * key: a value counts as delivered only when the watch ACKed it, and a value that was dropped
  * (NAK, retries exhausted, queue overflow) is rebuilt from its source and sent again.
  */
@@ -59,9 +57,7 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
     private lateinit var alarms: WakeAlarms
     private lateinit var phone: PhoneStateBridge
     private lateinit var calendar: CalendarBridge
-    private lateinit var weather: WeatherBridge
     private lateinit var media: MediaBridge
-    private lateinit var sleep: SleepApiBridge
     private lateinit var ringer: FindPhoneRinger
     private lateinit var ota: OtaManager
 
@@ -133,13 +129,11 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
             cancelWake = { alarms.cancel(ALARM_CALENDAR) },
         ) { sendCalendar() }
         calendar.refreshRegistration()
-        weather = WeatherBridge(this, handler, onSettled = ::releaseWorkLockIfIdle) { sendState(it) }
         media = MediaBridge(this, handler) {
             // The bridge already decided that the watch's copy is wrong: always send.
             if (sessionActive) media.messageIfChanged()?.let { msg -> sendState(msg, force = true) }
         }
         media.start()
-        sleep = SleepApiBridge(this, { sessionActive }, ::send).also { it.register() }
         ringer = FindPhoneRinger(
             this, handler,
             Intent(this, WatchLinkService::class.java).setAction(ACTION_STOP_FIND_PHONE),
@@ -180,10 +174,8 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         alarms.shutdown()
         ringer.stop()
         phone.unregister()
-        sleep.unregister()
         calendar.stop()
         media.stop()
-        weather.shutdown()
         releaseWakeLock(otaWakeLock)
         releaseWakeLock(workWakeLock)
         WatchState.update(
@@ -235,18 +227,17 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
     fun findWatch(onDone: (Boolean, String?) -> Unit = { _, _ -> }) =
         sendWithResult(Out.findWatch(), onDone)
 
-    /** Movement sampling without a Sleep as Android session (the app's test buttons). */
-    fun startSleepTest(onDone: (Boolean, String?) -> Unit) =
-        sendWithResult(Out.sleepStart()) { ok, why ->
-            if (ok) WatchState.sleepStarted()
-            onDone(ok, why)
-        }
-
-    fun stopSleepTest(onDone: (Boolean, String?) -> Unit) =
-        sendWithResult(Out.sleepStop()) { ok, why ->
-            if (ok) WatchState.sleepStopped()
-            onDone(ok, why)
-        }
+    /** A made-up notification with an alert, to check the pop-up, tone and Messages app. */
+    fun sendTestNotification(onDone: (Boolean, String?) -> Unit) {
+        val time = android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date())
+        sendWithResult(
+            Out.notify(
+                TEST_NOTIFICATION_ID, "Watch companion", "Test notification",
+                "Sent from the phone at $time.", alert = true,
+            ),
+            onDone,
+        )
+    }
 
     /** The phone's copy of the watch settings changed. */
     fun sendSettings() = sendState(settingsMessage(), force = true)
@@ -265,11 +256,6 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
     fun resync(onDone: (Boolean, String?) -> Unit = { _, _ -> }) {
         if (sessionActive && !ota.blocksTraffic) sendSessionState()
         sendWithResult(Out.request("STATUS"), onDone)
-    }
-
-    fun refreshWeather(force: Boolean = true) {
-        if (prefs.weatherMode == Prefs.WEATHER_OFF) return
-        weather.refresh(force)
     }
 
     fun onCalendarSettingChanged() {
@@ -483,11 +469,7 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
                 WatchState.notifyChanged()
             }
             "OTA_STATE" -> ota.onOtaState(m)
-            else -> if (m.type.startsWith("SLEEP_")) {
-                sleep.onWatchMessage(m)
-            } else {
-                Log.w(TAG, "Unknown watch message: $m")
-            }
+            else -> Log.w(TAG, "Unknown watch message: $m")
         }
     }
 
@@ -501,7 +483,6 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         markSynced(force = true)
         media.start()
         alarms.schedule(ALARM_TICK, PowerPolicy.TICK_MS)
-        weather.refresh(force = false) // fetches only if the cached forecast is stale
         ota.onSessionStarted()
     }
 
@@ -526,7 +507,6 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         KEY_PHONE -> phone.phoneMessage()
         "NEXT_ALARM" -> phone.alarmMessage()
         "EVENT" -> calendar.eventMessage()
-        "WEATHER" -> weather.currentMessage()
         KEY_MUSIC -> media.currentMessage()
         else -> null
     }
@@ -561,8 +541,8 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
             return
         }
         if (!sessionActive) return
-        // The alarm's own wake lock ends when this returns; the weather download and the BLE
-        // writes this leads to need a little longer. Released as soon as both are done.
+        // The alarm's own wake lock ends when this returns; the BLE writes this leads to
+        // need a little longer. Released as soon as both are done.
         try {
             workWakeLock?.acquire(WORK_WAKE_MS)
         } catch (e: RuntimeException) {
@@ -571,7 +551,6 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         when (tag) {
             ALARM_TICK -> {
                 alarms.schedule(ALARM_TICK, PowerPolicy.TICK_MS)
-                weather.refresh(force = false)
                 sendCalendar()
                 if (System.currentTimeMillis() - lastTimeSyncMs > PowerPolicy.TIME_RESYNC_MS) {
                     sendState(phone.timeMessage(), force = true)
@@ -582,9 +561,9 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         releaseWorkLockIfIdle()
     }
 
-    /** Let the CPU sleep again once the alarm's work (download, BLE writes) is finished. */
+    /** Let the CPU sleep again once the alarm's BLE writes are finished. */
     private fun releaseWorkLockIfIdle() {
-        if (channel.pendingCount == 0 && !weather.isBusy) releaseWakeLock(workWakeLock)
+        if (channel.pendingCount == 0) releaseWakeLock(workWakeLock)
     }
 
     /** Non-state messages: sent once, dropped if there is no session or a transfer runs. */
@@ -771,13 +750,16 @@ class WatchLinkService : Service(), GattLink.Listener, OtaManager.Host {
         private const val KEY_TIME = "TIME"
         private const val KEY_PHONE = "PHONE"
         private const val KEY_MUSIC = "MUSIC"
+
+        /** Far above the ids the notification relay hands out in practice. */
+        private const val TEST_NOTIFICATION_ID = 65535
         private const val ACTION_STOP = "com.james.epaperwatch.STOP"
         private const val ACTION_RECONNECT = "com.james.epaperwatch.RECONNECT"
         private const val ACTION_STOP_FIND_PHONE = "com.james.epaperwatch.STOP_FIND_PHONE"
 
         /** State keys in PROTOCOL.md session-start order. */
         private val STATE_KEYS =
-            listOf(KEY_TIME, "SETTINGS", "PHONE", "NEXT_ALARM", "EVENT", "WEATHER", KEY_MUSIC)
+            listOf(KEY_TIME, "SETTINGS", "PHONE", "NEXT_ALARM", "EVENT", KEY_MUSIC)
 
         /** The running service, if any. Only touched on the main thread. */
         @SuppressLint("StaticFieldLeak")

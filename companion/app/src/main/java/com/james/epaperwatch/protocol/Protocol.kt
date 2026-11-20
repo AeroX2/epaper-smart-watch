@@ -130,29 +130,6 @@ object Out {
     fun callRing(caller: CharSequence?) = OutMessage("CALL", listOf("RING", t(caller, 28)), "CALL")
     fun callEnd() = OutMessage("CALL", listOf("END", ""), "CALL")
 
-    /**
-     * [seaLevelTenthsHpa] is the sea-level pressure in tenths of a hectopascal (10132 =
-     * 1013.2 hPa); the watch uses it to turn its own pressure reading into an altitude.
-     * Anything outside 8000..11000 is sent as an empty field, meaning unknown.
-     */
-    fun weather(
-        temp: Int, high: Int, low: Int, code: Int, condition: CharSequence?,
-        seaLevelTenthsHpa: Int = 0,
-    ) =
-        OutMessage(
-            "WEATHER",
-            // The watch NAKs temperatures outside +-99 and codes outside -1..255.
-            listOf(
-                temp.coerceIn(-99, 99).toString(),
-                high.coerceIn(-99, 99).toString(),
-                low.coerceIn(-99, 99).toString(),
-                (if (code in 0..255) code else -1).toString(),
-                t(condition, 20),
-                if (seaLevelTenthsHpa in 8000..11000) seaLevelTenthsHpa.toString() else "",
-            ),
-            "WEATHER",
-        )
-
     /** state: 0 none, 1 playing, 2 paused. */
     fun music(state: Int, position: Long, duration: Long, title: CharSequence?, artist: CharSequence?) =
         if (state == 0) {
@@ -215,15 +192,6 @@ object Out {
     fun request(what: String) = OutMessage("REQUEST", listOf(what), "REQUEST:$what")
     fun stepsReset() = OutMessage("STEPS_RESET")
 
-    fun sleepStart() = OutMessage("SLEEP_START")
-    fun sleepStop() = OutMessage("SLEEP_STOP")
-    fun sleepPause(seconds: Long) = OutMessage("SLEEP_PAUSE", listOf(seconds.coerceAtLeast(0).toString()))
-    fun sleepAlarm(delaySeconds: Long) =
-        OutMessage("SLEEP_ALARM", listOf(delaySeconds.coerceAtLeast(0).toString()))
-    fun sleepAlarmStop() = OutMessage("SLEEP_ALARM_STOP")
-    fun sleepNotify(title: CharSequence?, text: CharSequence?) =
-        OutMessage("SLEEP_NOTIFY", listOf(t(title, 28), t(text, 28)))
-    fun sleepHint(repeats: Int) = OutMessage("SLEEP_HINT", listOf(repeats.toString()))
 
     /** [crc32] is the IEEE CRC-32 of the image, sent as unsigned decimal. */
     fun otaBegin(size: Int, crc32: Long, version: CharSequence?) =

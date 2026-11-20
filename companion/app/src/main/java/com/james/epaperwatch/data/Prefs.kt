@@ -3,7 +3,7 @@ package com.james.epaperwatch.data
 import android.content.Context
 import android.content.SharedPreferences
 
-/** All persisted state: pairing, user settings, filters, weather and the last watch status. */
+/** All persisted state: pairing, user settings, filters and the last watch status. */
 class Prefs(context: Context) {
     private val sp: SharedPreferences =
         context.applicationContext.getSharedPreferences("watch", Context.MODE_PRIVATE)
@@ -87,50 +87,6 @@ class Prefs(context: Context) {
         privateApps = privateApps.toMutableSet().apply { if (private) add(packageName) else remove(packageName) }
     }
 
-    // ---- Weather ----
-    var weatherMode: String
-        get() = sp.getString("weather_mode", WEATHER_OFF) ?: WEATHER_OFF
-        set(value) = sp.edit().putString("weather_mode", value).apply()
-    var weatherLat: String
-        get() = sp.getString("weather_lat", "") ?: ""
-        set(value) = sp.edit().putString("weather_lat", value).apply()
-    var weatherLon: String
-        get() = sp.getString("weather_lon", "") ?: ""
-        set(value) = sp.edit().putString("weather_lon", value).apply()
-    var manualTemp: Int
-        get() = sp.getInt("manual_temp", 18)
-        set(value) = sp.edit().putInt("manual_temp", value).apply()
-    var manualHigh: Int
-        get() = sp.getInt("manual_high", 22)
-        set(value) = sp.edit().putInt("manual_high", value).apply()
-    var manualLow: Int
-        get() = sp.getInt("manual_low", 12)
-        set(value) = sp.edit().putInt("manual_low", value).apply()
-    var manualCondition: String
-        get() = sp.getString("manual_condition", "Partly cloudy") ?: ""
-        set(value) = sp.edit().putString("manual_condition", value).apply()
-
-    /** Last fetched weather as "temp|high|low|code|condition". */
-    var weatherCache: String?
-        get() = sp.getString("weather_cache", null)
-        set(value) = sp.edit().putString("weather_cache", value).apply()
-    var weatherCacheTime: Long
-        get() = sp.getLong("weather_cache_time", 0L)
-        set(value) = sp.edit().putLong("weather_cache_time", value).apply()
-    var weatherError: String?
-        get() = sp.getString("weather_error", null)
-        set(value) = sp.edit().putString("weather_error", value).apply()
-
-    /** Last approximate phone position as "lat|lon|epochMs" (two decimals). */
-    var weatherFix: String?
-        get() = sp.getString("weather_fix", null)
-        set(value) = sp.edit().putString("weather_fix", value).apply()
-
-    /** The background-location explanation has been shown once (Android 10+). */
-    var backgroundLocationAsked: Boolean
-        get() = sp.getBoolean("bg_location_asked", false)
-        set(value) = sp.edit().putBoolean("bg_location_asked", value).apply()
-
     // ---- Health Connect step sync ----
     var healthSync: Boolean
         get() = sp.getBoolean("health_sync", false)
@@ -210,10 +166,6 @@ class Prefs(context: Context) {
     }
 
     companion object {
-        const val WEATHER_OFF = "off"
-        const val WEATHER_LOCATION = "location"
-        const val WEATHER_COORDS = "coords"
-        const val WEATHER_MANUAL = "manual"
 
         private const val K_ADDRESS = "watch_address"
         private const val K_ASSOCIATION_ID = "association_id"

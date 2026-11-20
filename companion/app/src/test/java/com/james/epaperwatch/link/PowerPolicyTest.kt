@@ -134,34 +134,6 @@ class PowerPolicyTest {
         assertEquals(0L, PowerPolicy.musicSendDelayMs(true, false, 4L, PowerPolicy.MUSIC_POSITION_MIN_INTERVAL_MS))
     }
 
-    // ------------------------------------------------------------------ WEATHER
-
-    @Test
-    fun weatherIsNotFetchedWhileTheForecastIsFresh() {
-        val minute = 60_000L
-        assertTrue(PowerPolicy.weatherFetchDue(null, Long.MAX_VALUE)) // no forecast yet
-        assertFalse(PowerPolicy.weatherFetchDue(null, 5 * minute)) // reconnect shortly after a fetch
-        assertFalse(PowerPolicy.weatherFetchDue(20 * minute, 20 * minute))
-        assertTrue(PowerPolicy.weatherFetchDue(60 * minute, 60 * minute)) // the hourly tick
-        assertTrue(PowerPolicy.weatherFetchDue(null, 3 * 60 * minute))
-        assertTrue(PowerPolicy.weatherFetchDue(null, -minute)) // clock was set back: stale
-    }
-
-    @Test
-    fun weatherFailuresAreNotRetriedAtOnce() {
-        val minute = 60_000L
-        assertFalse(PowerPolicy.weatherFetchDue(2 * minute, Long.MAX_VALUE))
-        assertFalse(PowerPolicy.weatherFetchDue(0L, 3 * 60 * minute))
-        assertTrue(PowerPolicy.weatherFetchDue(10 * minute, Long.MAX_VALUE))
-    }
-
-    @Test
-    fun theTickOutlastsTheFreshnessWindow() {
-        // Otherwise the hourly tick would find the forecast it fetched an hour ago "fresh".
-        assertTrue(PowerPolicy.TICK_MS > PowerPolicy.WEATHER_FRESH_MS)
-        assertTrue(PowerPolicy.TICK_MS >= PowerPolicy.WEATHER_MIN_ATTEMPT_MS)
-    }
-
     // ------------------------------------------------------------------ reconnect
 
     @Test

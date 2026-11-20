@@ -12,7 +12,7 @@ import kotlin.math.abs
 object PowerPolicy {
     // ------------------------------------------------------------------ periodic work
 
-    /** Weather refresh / calendar re-evaluation while connected. */
+    /** Calendar re-evaluation and time resync while connected. */
     const val TICK_MS = 60L * 60 * 1000
 
     /**
@@ -94,24 +94,6 @@ object PowerPolicy {
         if (nothingPlaying || abs(driftSeconds) <= MUSIC_POSITION_TOLERANCE_S) return MUSIC_NOTHING
         if (sincePositionFixMs < 0L) return 0L
         return (MUSIC_POSITION_MIN_INTERVAL_MS - sincePositionFixMs).coerceAtLeast(0L)
-    }
-
-    // ------------------------------------------------------------------ WEATHER
-
-    /** A forecast younger than this is not fetched again (unless the user asks). */
-    const val WEATHER_FRESH_MS = 50L * 60 * 1000
-
-    /** Failed attempts are at least this far apart. */
-    const val WEATHER_MIN_ATTEMPT_MS = 10L * 60 * 1000
-
-    /**
-     * Whether an automatic (not user-forced) weather refresh should hit the network.
-     * [sinceAttemptMs] is null if this process has not tried yet; [cacheAgeMs] is the age of
-     * the cached forecast (negative after a clock change: treated as stale).
-     */
-    fun weatherFetchDue(sinceAttemptMs: Long?, cacheAgeMs: Long): Boolean {
-        if (sinceAttemptMs != null && sinceAttemptMs in 0 until WEATHER_MIN_ATTEMPT_MS) return false
-        return cacheAgeMs !in 0 until WEATHER_FRESH_MS
     }
 
     // ------------------------------------------------------------------ state resend
