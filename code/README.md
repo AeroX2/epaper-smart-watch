@@ -286,11 +286,8 @@ commands still require `x` before every high-voltage update.
 
 At normal boot the watch clears the panel to white and renders the clock face. Press `u` in the
 console to redraw the current screen using the ordinary UI refresh policy.
-Press uppercase `U` to force a cleaning full refresh of the current UI immediately;
-the same cleaning sequence also runs automatically after ten ordinary UI updates. The cleaning
-waveform drives each pixel by its old and new level, so it is given the image really on the panel
-as the old frame (DTM1), not plain white: told "white", pixels that were black got too little drive
-and old screens (launcher lines, notification text) stayed as ghosts in the dithered hills.
+Press uppercase `U` to force a cleaning full refresh of the current UI (`white -> UI`) immediately;
+the same cleaning sequence also runs automatically after ten ordinary UI updates.
 Once active on the clock screen, it refreshes at minute boundaries. Every refresh returns the
 ET011TJ1 to reset with its booster off.
 

@@ -53,13 +53,7 @@ class ET011TJ1 {
   // Streams a 240x240 one-bit framebuffer, where a set bit is black. The
   // framebuffer is converted to the controller's 2-bpp DTM format while it is
   // transmitted, so no second full-frame allocation is needed.
-  //
-  // The cleaning waveform drives each pixel by its old and new level, so
-  // pass the image actually on the panel as previous_framebuffer. Without
-  // it the controller assumes an all-white panel and pixels that were black
-  // get too little drive: they stay as ghosts.
-  bool showFrame(const uint8_t* framebuffer, size_t stride_bytes, Print& out,
-                 const uint8_t* previous_framebuffer = nullptr);
+  bool showFrame(const uint8_t* framebuffer, size_t stride_bytes, Print& out);
 
   // Performs a GC fast update using the previous image as DTM1 and the new
   // image as DTM2. Epson's DN_EN refresh mode advances the panel history after
