@@ -1,40 +1,57 @@
 start: volume 2628.2
 after freeing sketch attachments: volume 2628.2 (must equal start)
-removed sketch RightStripMasterSketch (RightStripMasterSketch)
-removed sketch RightButtonMasterSketch (RightButtonMasterSketch)
-removed sketch RightHoleMasterSketch (RightHoleMasterSketch)
-removed sketch LeftStripMasterSketch (LeftStripMasterSketch)
-removed sketch LeftButtonMasterSketch (LeftButtonMasterSketch)
-removed sketch LeftHoleMasterSketch (LeftHoleMasterSketch)
-removed sketch Sketch039 (Sketch040)
-removed sketch Sketch071 (Sketch071)
-removed sketch Sketch052 (Sketch053)
-removed sketch Sketch041 (Sketch042)
-removed sketch Sketch042 (Sketch043)
+lid Pocket032 volume 1540.5 (in your v13: 1540.4)
 after editing base steps: volume 3859.4, errors [('Area', ['Touched', 'Invalid'])]
-SculptBottomBevel      Size=0.80 on 8 edges, volume -49.29
+underside curve: level with the caseback (Z -10.58) to X=17.0, then R 11.4 down to the cheek foot at (24.08, -13.06)
 SculptButtonWindow     valid=True volume -59.7, removed above the tongue zone 0.000 (must be 0)
-body before the new end steps: volume 3750.9, shells 1, errors [('Area', ['Touched', 'Invalid'])]
-SculptCeilingDrop      valid=True solids=1 shells=1 volume +74.3
-SculptLugA             valid=True solids=1 shells=1 volume +534.3
-SculptLugB             valid=True solids=1 shells=1 volume +534.3
-SculptLugTrim          valid=True solids=1 shells=1 volume -232.7
-SculptTopCone          valid=True solids=1 shells=1 volume -798.3
-SculptShoulderAndLugs  Radius=1.50 on 18 edges, volume -51.68
-SculptLugBrow          Radius=3.00 on 4 edges did not build
-SculptLugBrow          Radius=2.00 on 4 edges, volume -1.15
-SculptStrapOpening     Radius=1.00 on 11 edges, volume -24.54
-SculptCrest            Radius=0.40 on 1 edges, volume -0.07
+body before the new end steps: volume 3799.7, shells 1
+SculptCeilingStep      valid=True solids=1 shells=1 volume +54.3
+SculptCeilingDrop      valid=True solids=1 shells=1 volume +39.3
+sweep: radius 13.52 mm, from X=19.3 down to (28.8, -8.3)
+SculptEndShell         valid=True solids=1 shells=1 volume +641.1
+SculptCheekA           valid=True solids=1 shells=1 volume +443.4
+SculptCheekB           valid=True solids=1 shells=1 volume +443.4
+SculptEndTrim          valid=True solids=1 shells=1 volume -236.3
+SculptTop              valid=True solids=1 shells=1 volume -707.9
+SculptEndSweep         valid=True solids=1 shells=1 volume -103.2
+SculptShoulderAndCheeks Radius=1.50 on 30 edges, volume -36.75
+SculptCrest            Radius=0.40 on 1 edges, volume -0.04
 SculptBarHoles         valid=True solids=1 shells=1 volume -2.3
+SculptFeet             valid=True volume -13.47 (four small tips only)
+SculptFlapRails        valid=True solids=1 volume +5.75 (two ribs, 1.0 x 0.8, Z -7.80 .. -3.75)
+LidBowl                valid=True solids=1 volume +210.6
+lug roots: from the flank's start (13.92, 15.72) to the lid's end; the scoop between them leaves 0.97 mm of wall inside each screw well
+LidLugRoots            valid=True solids=1 volume +1627.2
+LidLugJoin             valid=True solids=1 volume +431.6
+LidLugSweep            valid=True solids=1 volume -1277.3
+LidFan1..4             valid, 1 solid, volume -9.40 (2.35 each when the cut takes)
+LidScoop1..4, Mid      valid, 1 solid, volume -302.2
+LidLugRound            8 edges, radius 1.50 (cheek edges: 1.50)
+LidGapRound            10 edges, radius 1.50 (cheek edges: 1.50)
+lid lug roots: valid=True solids=1 volume +571.0; cheek gap 0.20 mm; underside at the lid's end Z -12.30, on the cheek's back Z -12.42
+lid screws: in the heads' way 0.000, in the shafts' way 0.000 (both must be 0), seats changed by -0.000, hollow under the caseback changed by 0.000 mm3 (both must be 0); screw wells are 2.2 mm deep
+lid material that was there before and is gone: 0.059 mm3 (round-off at the four screw wells only)
+lid material added in the caseback's hollow or the plate above it: 0.000 mm3 (must be 0)
+lid outside X +-23: 0.000 mm3 (must be 0)
+UsbFlapGrooves         removed 8.13 mm3 (two grooves, 1.24 wide, 0.80 deep, up to Z -3.70)
+UsbFlapSpring          removed 33.36 mm3; strip 0.6 thick, 1.8 tall, 16 long, Z -4.95 .. -3.15
+UsbFlapCatch           ridge 5 wide, reaching to X 22.60 (0.40 under the port's top edge)
 objects with errors: [('Area', ['Touched', 'Invalid'])]
-result: tip=SculptBarHoles solids=1 shells=1 (1 = no enclosed voids) valid=True volume=3783.0
-overlap with PCB      new 0.0000 mm^3   (current case 0.0000 mm^3)
-overlap with display  new 0.6492 mm^3   (current case 0.6492 mm^3)
-overlap with battery  new 0.0000 mm^3   (current case 0.0000 mm^3)
-overlap body / lid       new 0.0000 mm^3   (current case 0.0000 mm^3)
+result: tip=SculptFlapRails solids=1 shells=1 (1 = no enclosed voids) valid=True volume=4327.2
+USB flap: valid=True solids=1 volume 417.0
+overlap with PCB      new 0.0000 mm^3   (current case 0.0000)
+overlap with display, inside the case   new 0.0000 mm^3   (current case 0.0000)
+overlap with display's drawn cable outside the case   new 1.0128 mm^3
+overlap with battery  new 0.0000 mm^3
+overlap body / lid 0.0000,  body / flap 0.0000,  flap / lid 0.0000,  flap / PCB 0.0000 mm^3
+overlap lid / PCB 0.0000,  lid / display 0.0000,  lid / battery 0.0000 mm^3
 glass pocket: material inside R15.38 above the ceiling  new 14.3558 mm^3, current 14.3558 mm^3
-door tongues: old-wall material in the button zone  new 161.662 mm^3, current 219.741 mm^3
-print mesh chord error 0.010 mm
-size: X -29.54..29.54 (59.1 lug to lug)  Y -21.00..21.00  Z -13.50..1.00
-mesh: facets 42472, solid=True, non-manifold=False, self-intersections=True
+flap sliding up and off (catch bowed out of the way): worst overlap with the case 0.0000 mm3 (must be 0)
+flap seated: nearest the case 0.027 mm; pulled 0.4 mm straight off the end it overlaps the ribs by 1.168 mm3 (must be > 0); pushed 0.3 mm up it overlaps the port's edge by 0.2673 mm3 (must be > 0)
+catch spring: bows 0.40 mm going on; force at the catch about 1.8 N, strain 1.1 % (PLA is safe to roughly 1.5 %)
+strip under the USB port: new 7.050 mm^3, current 7.050 mm^3
+thinnest deck over the cavity: 0.75 mm at X=4.0 Y=18.5
+least air above any display corner: 0.20 mm at (-18.35, 8.53, -1.10)
+size: X -28.80..28.80 (57.6 end to end)  Y -21.00..21.00  Z -13.00..1.00
+print mesh: chord error 0.020, facets 17270, solid=True, non-manifold=False, self-intersections=False
 done

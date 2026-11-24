@@ -69,7 +69,7 @@ dd { margin: 0; }
 <div class="wrap">
   <header>
     <h1>Watch Lug Studies</h1>
-    <p class="lede">The proposal keeps the board, display and USB where they are and reshapes the outside. The current case and last round's flat-topped version are here for comparison. Drag to orbit, scroll to zoom.</p>
+    <p class="lede">The proposal keeps the board, display and USB where they are and reshapes the outside. Three directions for the lugs and band, next to the current case and what is in FreeCAD now. Drag to orbit, scroll to zoom.</p>
   </header>
 
   <div class="tabs" id="tabs" role="group" aria-label="Design"></div>
@@ -202,9 +202,115 @@ dd { margin: 0; }
     return smax(d, -slotCut(x, y, z), 0.3);
   }
 
+  // ---- November studies: the real 42 mm body with the glass, and different lug / band arrangements
+  function segDist(px, py, a, b) {
+    var ex = b[0] - a[0], ey = b[1] - a[1];
+    var u = Math.min(Math.max(((px - a[0]) * ex + (py - a[1]) * ey) / (ex * ex + ey * ey), 0), 1);
+    return Math.hypot(px - a[0] - ex * u, py - a[1] - ey * u) - (a[2] + (b[2] - a[2]) * u);
+  }
+  function makeCase(o) {
+    return function (x, y, z) {
+      var ax = Math.abs(x), az = Math.abs(z), r = Math.hypot(x, z);
+      var flankY = 14.293 - 0.1187 * (ax - 26.218);
+      var plan = smin(r - 21, Math.max(ax - 23, az - flankY), 2.5);
+      // top: flat land out to R17.4, then a slope that can differ across the wrist and along the strap
+      var c = r > 0.01 ? ax / r : 1, s = o.slopeX * c * c + o.slopeY * (1 - c * c);
+      var top = 1.0 - Math.max(0, r - 17.4) * s;
+      var d = smax(plan, (y - top) * 0.92, 1.4);
+      d = smax(d, (plan - 7.3 - y) * 0.707, 0.5);
+      d = smax(d, -9.08 - y, 0.5);
+      // lugs: a chain of round-ended slabs in side view, between the strap gap and the case flank
+      var lug = 99, i;
+      if (ax > 15) {
+        for (i = 0; i < o.lug.length - 1; i++) lug = Math.min(lug, segDist(ax, y, o.lug[i], o.lug[i + 1]));
+        lug = smax(lug, az - flankY, 1.3);
+        lug = smax(lug, o.gap - az, 0.35);
+        if (o.flat) lug = smax(lug, o.flat - y, 0.15);
+      }
+      d = smin(d, lug, 1.6);
+      // bridge between the lugs (the USB end is left open in the middle for the plug)
+      if (o.bridgeX) {
+        var under = -3.0 - (ax - 22.5) * o.bridgeDrop;
+        var br = Math.max(az - o.gap - 0.2, ax - o.bridgeX, 22.5 - ax, under - y);
+        if (x > 0) br = Math.max(br, 6.7 - az);
+        d = smin(d, br, 0.6);
+      }
+      d = smax(d, (y - top) * 0.92, 0.7);
+      d = smax(d, -Math.max(r - 15.0, 0.7 - y), 0.15);
+      return smax(d, -slotCut(x, y, z), 0.3);
+    };
+  }
+  var STUDY = {
+    face: makeCase({ slopeX: 0.13, slopeY: 0.40, gap: 10.0, lug: [[21.5, -4.6, 3.7], [24.9, -2.6, 1.9]] }),
+    hood: makeCase({ slopeX: 0.40, slopeY: 0.40, gap: 10.0, flat: -13.0, bridgeX: 28.0, bridgeDrop: 0.40,
+                     lug: [[22, -5, 3.5], [27, -6, 3.2], [27, -11.3, 2.2]] }),
+    swept: makeCase({ slopeX: 0.40, slopeY: 0.40, gap: 10.0, flat: -12.9, bridgeX: 27.0, bridgeDrop: 0.42,
+                      lug: [[22, -5, 3.4], [26.5, -7, 3.0], [31, -11.2, 2.2]] })
+  };
+
+  // ---- hooded ends: the case top runs out over the band root and stops in a straight edge
+  var HOOD_X = 28.8, HOOD_T = 1.8, HOOD_R = 1.5;   // hood reaches past the band where it wraps the bar (out to X = 28)
+  var HOOD_LUG_N = [[22, -4.8, 3.6], [25.4, -6.6, 2.3]];                    // far end: bar high and close
+  var HOOD_LUG_P = [[22, -5, 3.5], [25.4, -7, 3.0], [25.4, -11.3, 2.2]];    // USB end: bar below the plug
+  function hoodedTop(r) { return 1.0 - Math.max(0, r - 17.4) * 0.40; }
+  function hoodNose(ax, y, top, side) {
+    var q1 = ax - HOOD_X + HOOD_R, q2 = y - top + HOOD_R, q3 = side + HOOD_R;
+    return Math.hypot(Math.max(q1, 0), Math.max(q2, 0), Math.max(q3, 0)) + Math.min(Math.max(q1, q2, q3), 0) - HOOD_R;
+  }
+  var SWEEP_R = 5.6, SWEEP_END = -8.3;
+  var HOOD_RAMP = [[20.6, -6.9, 2.2], [25.4, -11.3, 2.2]];
+  function hoodSweep(ax, y, top) {
+    var q1 = ax - HOOD_X + SWEEP_R, q2 = y - top + SWEEP_R;
+    return Math.hypot(Math.max(q1, 0), Math.max(q2, 0)) + Math.min(Math.max(q1, q2), 0) - SWEEP_R;
+  }
+  function sweepShell(ax, y, top) { var s = hoodSweep(ax, y, top); return Math.max(s, -s - HOOD_T, SWEEP_END - y, 22.5 - ax); }
+  // mode "low": bar under the plug at both ends, a front skirt at both ends (fixed at the far end, the flap at the USB end)
+  // mode "high": bar high and close at both ends, no skirt; the band lies across the port
+  function makeHooded(mode) {
+    return function (x, y, z) {
+      var ax = Math.abs(x), az = Math.abs(z), r = Math.hypot(x, z);
+      var flankY = 14.293 - 0.1187 * (ax - 26.218), top = hoodedTop(r), gap = 10.0, i;
+      var plan = smin(r - 21, Math.max(ax - 23, az - flankY), 2.5);
+      var d = smax(plan, (y - top) * 0.92, 1.4);
+      d = smax(d, (plan - 7.3 - y) * 0.707, 0.5);
+      d = smax(d, -9.08 - y, 0.5);
+      if (ax > 15) {
+        var ch = mode === "low" ? HOOD_LUG_P : HOOD_LUG_N, lug = 99;
+        for (i = 0; i < ch.length - 1; i++) lug = Math.min(lug, segDist(ax, y, ch[i], ch[i + 1]));
+        if (mode === "low") lug = smin(lug, segDist(ax, y, HOOD_RAMP[0], HOOD_RAMP[1]), 1.2);   // before the width cuts below
+        lug = smax(lug, az - flankY, 1.3);
+        lug = smax(lug, gap - az, 0.35);
+        if (mode === "low") {
+          // (the underside ramp from the caseback out to the nose is part of the chain above)
+          lug = smax(lug, -13.0 - y, 0.6);
+          lug = smax(lug, hoodSweep(ax, y, top), 0.8);
+        }
+        d = smin(d, lug, mode === "low" ? 2.6 : 1.6);
+        var nose = hoodNose(ax, y, top, az - flankY);
+        var hood = smax(Math.max(nose, 22.5 - ax), top - HOOD_T - y, 0.5);
+        if (mode === "low") {
+          // the top sweeps down in one curve to where the band comes out; between the cheeks it is a shell
+          hood = smax(sweepShell(ax, y, top), az - flankY, 1.3);
+          if (x > 0) hood = Math.max(hood, gap - 0.05 - az);              // USB end: the middle is the flap
+        }
+        d = smin(d, hood, 0.6);
+      }
+      d = smax(d, (y - top) * 0.92, 0.7);
+      d = smax(d, -Math.max(r - 15.0, 0.7 - y), 0.15);
+      return smax(d, -slotCut(x, y, z), 0.3);
+    };
+  }
+  var hoodedCase = makeHooded("low"), hoodedHigh = makeHooded("high");
+  // the USB flap: a plate in the opening of the hood plus a curtain down the front, over the port
+  function hoodedFlap(x, y, z) {
+    if (x < 20) return 9;
+    var az = Math.abs(z), top = hoodedTop(Math.hypot(x, z)) - 0.05;
+    return Math.max(sweepShell(x, y, top), az - 9.8, 23.15 - x);
+  }
+
   // surface nets: turns a distance field into a smooth mesh
   function meshField(sdf, h) {
-    var b = [-34, 34, -15, 2.6, -25.6, 25.6];
+    var b = [-36, 36, -15, 2.6, -25.6, 25.6];
     var nx = Math.ceil((b[1] - b[0]) / h) + 1, ny = Math.ceil((b[3] - b[2]) / h) + 1, nz = Math.ceil((b[5] - b[4]) / h) + 1;
     var f = new Float32Array(nx * ny * nz), i, j, k, n = 0;
     for (k = 0; k < nz; k++) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) f[n++] = sdf(b[0] + i * h, b[2] + j * h, b[4] + k * h);
@@ -258,34 +364,54 @@ dd { margin: 0; }
       print: 'Open rim on the bed, no supports.',
       band: 'Any 20 mm band.',
       verdict: 'Reference for the others.' },
-    { id: "d", tag: "Last round", name: "Swept lugs, flat top", small: true,
-      sdf: sdfD, bar: { x: 27, y: -11.3 }, l2l: 58, width: 40, portX: 23,
-      what: "The body, bezel and display stay exactly as they are now. Only the lugs change: they grow out of the case shoulders, curve down past the caseback and end 4 mm below it, the way they do on Study A.",
-      usb: "Plug goes in between the lugs, over the bar. Open at all times.",
-      print: "Lug tips hang below the rim, so supports under the tips or a split line.",
-      band: "Any 20 mm band.",
-      verdict: "The smallest change that gets the Study A strap line. The lugs are slim, 3 mm each, because the body is only 27 mm wide at the ends." },
-    { id: "g", tag: "Proposal", name: "Sculpted case, swept lugs", small: true, sculpt: true,
-      sdf: sdfG, bar: { x: 27, y: -11.3 }, l2l: 58, width: 42, portX: 23,
-      what: "The display stays where it is, 1.1 mm below the old top face. Around it the top is a shallow dish that rises from the display to a rounded crest 2.2 mm further out, then falls away to the edge at about 27 degrees. The crest is 0.9 mm above the old top face, slightly lower than today's bezel lip. The side wall is rounded at the top and cut back underneath, and the lugs carry the outer slope down past the caseback, with their outer edges and tips rounded at 1.6 mm.",
-      usb: "Plug goes in between the lugs, over the bar. Open at all times.",
-      print: "Face up as today. The slope is 27 degrees across the wrist and 24 along the strap, steep enough to print cleanly; anything flatter than about 20 degrees shows layer steps. Supports only under the four lug tips.",
-      band: "Any 20 mm band, attached 9 mm lower than today.",
-      verdict: "Costs 2 mm of diameter (42 mm) and no height. Checked against the display and PCB from the CAD: nothing pokes through and the display has at least 0.9 mm of material over it. Tick Internals to see them." }
-,
-    { id: "cad", tag: "Built in FreeCAD", name: "Sculpted case, CAD result", small: true, sculpt: true, cad: true,
-      bar: { x: 27, y: -11.3 }, l2l: 59.1, width: 42, portX: 23, glass: true,
-      what: "The real body, rebuilt by editing its own base steps. The wall is 1 mm further out all the way down (42 mm), the deck sits at the glass lip height and falls away as the cone, and the rim has a 45 degree bevel that carries on down the lid. The lugs are flush with the case flanks, their tops are cut by the same cone, and the shoulder and lug edges share one 1.5 mm rounding. The outside wall is whole over the buttons: the thinning that lets each door tongue bend is a 4.7 mm wide groove on the inside face, leaving 1 mm of wall. The finger pads are 1 mm longer. The strap opening and the lug tops are rounded.",
-      usb: "Unchanged slot. Plug goes in between the lugs, over the bar.",
-      print: "Face up. Lug noses end 5.4 mm below the rim, so supports under the four lugs.",
-      band: "Any 20 mm band. 1.6 mm of material round each bar hole.",
-      verdict: "Valid single solid with no enclosed voids. No overlap with the PCB, battery or lid. The glass pocket is unchanged. The buttons should be roughly twice as stiff as now by a simple beam estimate, so they need a test print. Tick Internals to see inside." }
+    { id: "hooded", tag: "Symmetrical A", name: "Swept ends, flap at the USB", small: true, sculpt: true, glass: true,
+      sdf: hoodedCase, flapSdf: hoodedFlap, bar: { x: 25.4, y: -11.3 }, l2l: 57.6, width: 42, portX: 23,
+      what: "Both ends are the same shape. Past the end wall the top sweeps down in one curve to the point where the band comes out, instead of running level and then dropping. Both bars sit low, under the level of the USB plug, so the band leaves close to the wrist. At the far end the curved piece is part of the case. At the USB end the same piece, between the cheeks, is the removable flap (orange).",
+      usb: "Pull the flap off to plug in. The plug goes in over the band and its bar.",
+      print: "All four cheeks end 3.9 mm below the rim with flats, so it stands level on them, lugs down. The curved ends are 20 mm bridges. On the underside each cheek now ramps out from the caseback instead of dropping as a step; in CAD that ramp crosses the last 2 mm of the lid at its four corners, so the lid corners would need trimming to match.",
+      band: "Any 20 mm band, 20 mm gap, held at the same height at both ends.",
+      verdict: "Symmetrical, port hidden, and the top now runs into the band the way you drew it. The band still leaves about 9 mm below the face; the curve is what hides that." },
+    { id: "hoodedhigh", tag: "Symmetrical B", name: "Hooded, band high, no flap", small: true, sculpt: true, glass: true,
+      sdf: hoodedHigh, bar: { x: 25.4, y: -6.6 }, l2l: 57.6, width: 42, portX: 23,
+      what: "Both ends are the same shape, with the band as high and as close as the hood allows: the bar is 2.4 mm from the end wall and the band sits right under the hood. There is no skirt and no flap, because the band itself lies across the USB port.",
+      usb: "The bar crosses the port, so the band has to come off that end to charge. A quick-release spring bar makes that a few seconds. Tick USB plug to see the clash.",
+      print: "Cheeks end 0.8 mm below the rim, so close to flat. The hoods are 20 mm bridges.",
+      band: "20 mm band with quick-release bars at the USB end.",
+      verdict: "The closest to the Sinn: symmetrical, band tight under the hood, nothing extra to lose. The price is taking the band off to charge, and the band leaves 5 mm higher than in A, so more of a gap at the wrist." },
+    { id: "face", tag: "Direction 1", name: "Band at the face", small: true, sculpt: true, glass: true,
+      sdf: STUDY.face, bar: { x: 24.9, y: -2.6 }, l2l: 53.6, width: 42, portX: 23,
+      what: "Your original idea with the new body. Short lugs, with the spring bar about where it is today, right under the top surface, so the band leaves at the face and its top carries straight on from the case. To keep material over the bar the top can only fall away gently along the strap (7 degrees) while it still falls 22 degrees across the wrist. The flat land round the glass stays circular.",
+      usb: "The band lies over the port, as on the current case. Lift the band to plug in.",
+      print: "No lugs below the rim, so it prints as today with no supports.",
+      band: "Any 20 mm band, 20 mm gap.",
+      verdict: "The most integrated look and the shortest case. It is also the arrangement that gave you the half-hexagon gap at the wrist, softened a little by the slope." },
+    { id: "hood", tag: "Direction 2", name: "Low bar, long hood", small: true, sculpt: true, glass: true,
+      sdf: STUDY.hood, bar: { x: 27, y: -11.3 }, l2l: 60.4, width: 42, portX: 23,
+      what: "The low bar from the CAD, with the bridge between the lugs carried out past the bar so the band comes out from under one continuous top. Covering that much means the lugs stay level to the end and then drop straight down.",
+      usb: "The middle of the bridge is open at the USB end for the plug, so it needs a flap or stays open. The other end is whole.",
+      print: "Lugs 4.9 mm below the rim; stands on four flats. The bridge underside is a 20 mm span.",
+      band: "Any 20 mm band, 20 mm gap.",
+      verdict: "Hides the band gap best with a low bar. The lugs read as blocks, which is what you said you did not like, and the two ends differ." },
+    { id: "swept", tag: "Direction 3", name: "Low bar, lugs follow the case", small: true, sculpt: true, glass: true,
+      sdf: STUDY.swept, bar: { x: 31, y: -11.2 }, l2l: 66.4, width: 42, portX: 23,
+      what: "The lugs carry on down the slope of the case instead of dropping, so they sweep out to a bar that still sits below the plug. A shorter bridge covers the root of the gap.",
+      usb: "Open in the middle at the USB end, as in Direction 2.",
+      print: "Lugs 4.8 mm below the rim; stands on four flats.",
+      band: "Any 20 mm band, 20 mm gap.",
+      verdict: "The most flowing lug line. To stay under the plug at that angle the bar ends up 31 mm out, so the case is 66 mm lug to lug, which will overhang most wrists." },
+    { id: "cad", tag: "In FreeCAD now (v30)", name: "Swept ends, CAD result", small: true, sculpt: true, cad: true, glass: true,
+      bar: { x: 25.4, y: -11.3 }, l2l: 57.6, width: 42, portX: 23,
+      what: "The real body from FreeCAD with the swept ends. The top has a circular land and falls 27 degrees across the wrist and 14 along the strap. The sweep leaves the top 3.7 mm inside each end wall and comes down in one 13.5 mm curve to just above the band, and the four corners of the ends are rounded in plan. The far end's curved piece is part of the case; at the USB end the same piece is the separate flap (orange), with a stub that presses into the port. Bars sit under the level of the plug, 20 mm apart.",
+      usb: "Pull the flap off; the plug goes in over the band and its bar.",
+      print: "Stands on four flats under the cheeks, 4.9 mm below the rim. The far end's shell is a 20 mm bridge.",
+      band: "Any 20 mm band, 20 mm gap, 1.6 mm of material round each bar hole.",
+      verdict: "Valid single solid, no enclosed voids. No overlap with the PCB, battery, lid or the display inside the case. Deck over the cavity is at least 0.75 mm. The case wall runs straight down to the rim and the lid carries one curve from there to the caseback all round, with no bevel or steps. The lid also carries a lug root at each corner, growing out of that curve from a point: its outer face is the flank of the case carried straight down, its underside runs level out of the raised caseback and then down one curve that the cheek continues to its foot, and its inner face flares in from the cheek to the caseback. A well goes through each for the screw." }
   ];
 
   var stage = document.getElementById('stage');
   var tabs = document.getElementById('tabs');
   var info = document.getElementById('info');
-  var state = { v: 3, wrist: 170 };
+  var state = { v: 6, wrist: 170 };
 
   VARIANTS.forEach(function (v, i) {
     var b = document.createElement('button');
@@ -323,7 +449,8 @@ dd { margin: 0; }
     skin: new THREE.MeshStandardMaterial({ color: 0xd8a68b, roughness: 0.95, side: THREE.DoubleSide }),
     gap: new THREE.MeshBasicMaterial({ color: 0xdd3333, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }),
     port: new THREE.MeshBasicMaterial({ color: 0x0c0c0e }),
-    plug: new THREE.MeshStandardMaterial({ color: 0xf1f1ee, roughness: 0.6 })
+    plug: new THREE.MeshStandardMaterial({ color: 0xf1f1ee, roughness: 0.6 }),
+    hot: new THREE.MeshStandardMaterial({ color: 0xe0661a, roughness: 0.65, side: THREE.DoubleSide })
   };
 
   function faceTexture() {
@@ -416,11 +543,16 @@ dd { margin: 0; }
     return { path: path, poly: poly, area: Math.abs(area) / 2, clear: near - BAR_R - STRAP_T };
   }
 
-  var cadGeo = null, lidGeo = null;
+  var cadGeo = null, lidGeo = null, flapGeo = null;
   fetch("cad-body.json").then(function (r) { return r.json(); }).then(function (data) {
     cadGeo = new THREE.BufferGeometry();
     cadGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.p), 3));
     cadGeo.setIndex(data.i); cadGeo = cadGeo.toNonIndexed(); cadGeo.computeVertexNormals(); cadGeo.userData.keep = true;
+    if (data.flap) {
+      flapGeo = new THREE.BufferGeometry();
+      flapGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.flap.p), 3));
+      flapGeo.setIndex(data.flap.i); flapGeo = flapGeo.toNonIndexed(); flapGeo.computeVertexNormals(); flapGeo.userData.keep = true;
+    }
     if (data.lid) {
       lidGeo = new THREE.BufferGeometry();
       lidGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.lid.p), 3));
@@ -451,8 +583,9 @@ dd { margin: 0; }
     if (v.cad) {
       if (cadGeo) root.add(new THREE.Mesh(cadGeo, M.flat));
       if (lidGeo) root.add(new THREE.Mesh(lidGeo, M.lid));
+      if (flapGeo) root.add(new THREE.Mesh(flapGeo, M.hot));
     } else if (v.sdf) {
-      root.add(new THREE.Mesh(cached(v.sdf === sdfD ? 'd' : v.id, v.sdf), M.caseM));
+      root.add(new THREE.Mesh(cached(v.id, v.sdf), M.caseM));
       var ring = new THREE.Mesh(new THREE.RingGeometry(14.5, v.ringR || 16, 128), new THREE.MeshStandardMaterial({ map: TEX.ring, color: 0xb8b8b8, roughness: 0.45 }));
       ring.rotation.set(-Math.PI / 2, 0, Math.PI / 2); ring.position.y = 0.06; root.add(ring);
       faceY = 0.08;
@@ -469,6 +602,7 @@ dd { margin: 0; }
     var face = new THREE.Mesh(new THREE.CircleGeometry(v.sculpt ? 14.7 : 14.5, 96), new THREE.MeshStandardMaterial({ map: TEX.face, roughness: 0.9 }));
     face.rotation.set(-Math.PI / 2, 0, Math.PI / 2); face.position.y = v.glass ? 0.7 : (v.sculpt ? -1.09 : faceY); root.add(face);
 
+    if (v.flapSdf) { parts.flap = new THREE.Mesh(cached('flap' + v.id, v.flapSdf), M.hot); root.add(parts.flap); }
     var port = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 10), M.port); port.position.set(v.portX + 0.06, USB_Y, 0); root.add(port);
     var plug = new THREE.Group();
     var pb = new THREE.Mesh(new THREE.BoxGeometry(PLUG.len, PLUG.h, PLUG.w), M.plug); pb.position.set(v.portX + 0.3 + PLUG.len / 2, USB_Y, 0); plug.add(pb);
@@ -478,21 +612,22 @@ dd { margin: 0; }
     var straps = new THREE.Group(), gaps = new THREE.Group();
     if (v.head) straps.add(new THREE.Mesh(cached('head' + v.id, v.head), M.strap));
     [1, -1].forEach(function (sx) {
+      var vv = (sx < 0 && v.barN) ? Object.assign({}, v, { bar: v.barN }) : v, SS = vv === v ? S : solve(vv, W);
       var end = new THREE.Group(); end.scale.x = sx;
       if (v.lug) {
         end.add(extrudeProfile(v.lug.prof, v.lug.z0, v.lug.z1, M.flat));
         end.add(extrudeProfile(v.lug.prof, -v.lug.z1, -v.lug.z0, M.flat));
       }
-      end.add(barZ(v.bar.x, v.bar.y, -10.5, 10.5, BAR_R, M.steel));
+      end.add(barZ(vv.bar.x, vv.bar.y, -10.5, 10.5, BAR_R, M.steel));
       root.add(end);
 
       var st = new THREE.Group(); st.scale.x = sx;
-      st.add(ribbon(S.path, STRAP_T, -10, 10, M.strap));
-      if (!v.head) st.add(barZ(v.bar.x, v.bar.y, -10, 10, BAR_R + STRAP_T * 0.8, M.strap));
+      st.add(ribbon(SS.path, STRAP_T, -10, 10, M.strap));
+      if (!v.head) st.add(barZ(vv.bar.x, vv.bar.y, -10, 10, BAR_R + STRAP_T * 0.8, M.strap));
       straps.add(st);
 
       var gp = new THREE.Group(); gp.scale.x = sx;
-      if (S.area > 0.5) gp.add(extrudeProfile(S.poly, 10.6, 10.8, M.gap)); gaps.add(gp);
+      if (SS.area > 0.5) gp.add(extrudeProfile(SS.poly, 10.6, 10.8, M.gap)); gaps.add(gp);
     });
     root.add(straps); root.add(gaps); parts.strap = straps; parts.gap = gaps;
 
@@ -510,6 +645,7 @@ dd { margin: 0; }
     parts.strap.visible = document.getElementById('t-strap').checked;
     parts.gap.visible = document.getElementById('t-gap').checked;
     parts.plug.visible = document.getElementById('t-plug').checked;
+    if (parts.flap) parts.flap.visible = !document.getElementById('t-plug').checked;
     var see = document.getElementById('t-int').checked;
     if (parts.int) parts.int.visible = see;
     [M.caseM, M.flat, M.lid].forEach(function (m) { m.transparent = see; m.opacity = see ? 0.28 : 1; m.depthWrite = !see; m.needsUpdate = true; });
