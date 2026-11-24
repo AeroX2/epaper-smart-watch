@@ -49,7 +49,10 @@ bool WatchDisplayController::renderImpl(Print& out,
   }
 
   const bool frame_shown = clean_refresh
-      ? display_.showFrame(ui_.framebuffer(), WatchUi::framebufferStride(), out)
+      // The panel's real old image, so ghosts of it are driven out too.
+      ? display_.showFrame(ui_.framebuffer(), WatchUi::framebufferStride(),
+                           out,
+                           history_valid_ ? previous_framebuffer_ : nullptr)
       : kw_mode_
             ? display_.showFrameKw(ui_.framebuffer(), previous_framebuffer_,
                                    WatchUi::framebufferStride(), out)
