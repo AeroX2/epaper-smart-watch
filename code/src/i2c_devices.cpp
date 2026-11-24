@@ -4,7 +4,18 @@
 
 I2cBus::I2cBus(TwoWire& wire) : wire_(wire) {}
 
+// The bus (I2C1) is clocked from the 16 MHz HSI, not the CPU clock, so its
+// timing never depends on how the system clock is set up. The timing words
+// for 16 MHz are fixed in platformio.ini (I2C_TIMING_SM/FM/FMP, from the
+// reference manual's table). Without them the Arduino core searches
+// millions of candidate timings in i2c_computeTiming() at every begin(): it
+// took 16 s at start-up when the CPU came up slow and ran into the
+// watchdog.
 void I2cBus::begin() {
+  LL_RCC_HSI_Enable();
+  while (!LL_RCC_HSI_IsReady()) {
+  }
+  __HAL_RCC_I2C1_CONFIG(RCC_I2C1CLKSOURCE_HSI);
   wire_.begin();
   wire_.setClock(400000);
 }
