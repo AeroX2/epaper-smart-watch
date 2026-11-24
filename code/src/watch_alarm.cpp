@@ -144,12 +144,17 @@ void WatchAlarm::notifyAlert(bool vibrate, uint8_t tone_number) {
 
 void WatchAlarm::dismiss(Print& out) {
   model_.alarm_ringing = false;
+  model_.timer_ringing = false;
   snooze_until_ = 0;
   stopOutput();
   out.println(F("Alarm dismissed."));
 }
 
 void WatchAlarm::snooze(Print& out) {
+  if (model_.timer_ringing) {
+    dismiss(out);  // a finished timer has nothing to snooze
+    return;
+  }
   model_.alarm_ringing = false;
   snooze_until_ = rtc_.epoch() + 5 * 60;
   stopOutput();
@@ -208,13 +213,13 @@ bool WatchAlarm::findAlertActive() const {
   return find_alert_;
 }
 
-bool WatchAlarm::start(const __FlashStringHelper* reason, WatchScreen screen,
+bool WatchAlarm::start(const __FlashStringHelper* reason, bool timer,
                        Print& out) {
   if (model_.alarm_ringing) {
     return false;
   }
   model_.alarm_ringing = true;
-  ui_.showScreen(screen);
+  model_.timer_ringing = timer;
   alarm_feedback_at_ = 0;
   out.print(F("Alarm started: "));
   out.println(reason);
@@ -315,7 +320,7 @@ bool WatchAlarm::service(Print& out) {
       if (elapsed_seconds >= model_.timer_remaining_seconds) {
         model_.timer_remaining_seconds = 0;
         model_.timer_running = false;
-        ui_changed |= start(F("timer complete"), WatchScreen::Timer, out);
+        ui_changed |= start(F("timer complete"), true, out);
       } else {
         model_.timer_remaining_seconds -= elapsed_seconds;
         const uint32_t step = (model_.timer_remaining_seconds +
@@ -332,7 +337,7 @@ bool WatchAlarm::service(Print& out) {
   const time_t current_epoch = rtc_.epoch();
   if (snooze_until_ != 0 && current_epoch >= snooze_until_) {
     snooze_until_ = 0;
-    ui_changed |= start(F("snooze complete"), WatchScreen::Alarms, out);
+    ui_changed |= start(F("snooze complete"), false, out);
   }
 
   const uint32_t minute_key = static_cast<uint32_t>(current_epoch / 60);
@@ -344,7 +349,7 @@ bool WatchAlarm::service(Print& out) {
       model_.minute == model_.alarm_minute &&
       minute_key != last_alarm_minute_key_) {
     last_alarm_minute_key_ = minute_key;
-    ui_changed |= start(F("scheduled alarm"), WatchScreen::Alarms, out);
+    ui_changed |= start(F("scheduled alarm"), false, out);
   }
   serviceOutput();
   return ui_changed;

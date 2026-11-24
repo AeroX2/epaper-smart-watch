@@ -52,7 +52,8 @@ class WatchAlarm {
   void serviceOutput();
 
  private:
-  bool start(const __FlashStringHelper* reason, WatchScreen screen, Print& out);
+  // Rings over whatever is on screen (WatchUi draws the ringing screen).
+  bool start(const __FlashStringHelper* reason, bool timer, Print& out);
   void stopOutput();
   void startNote();
 

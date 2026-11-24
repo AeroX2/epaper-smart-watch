@@ -102,6 +102,7 @@ struct WatchUiModel {
   uint8_t alarm_hour = 7;
   uint8_t alarm_minute = 30;
   bool alarm_ringing = false;
+  bool timer_ringing = false;  // the ringing is the timer, not the alarm
   bool quiet_mode = false;
   bool vibration_on = true;
   // Notification alert tone: 0 none, 1 Chirp, 2 Double, 3 Rise, 4 Fall,
@@ -157,6 +158,8 @@ struct WatchUiModel {
   // 1 top-right, 2 bottom-left, 3 bottom-right), for on-screen hints.
   uint8_t next_corner = 3;
   uint8_t previous_corner = 1;
+  uint8_t home_corner = 0;
+  uint8_t select_corner = 2;
   char camera_detail[21]{};
 };
 
@@ -274,6 +277,7 @@ class WatchUi {
   void drawCamera(const WatchUiModel& model);
   void drawCall(const WatchUiModel& model);
   void drawNotificationPeek(const WatchUiModel& model);
+  void drawRinging(const WatchUiModel& model);
   void drawNotification(const WatchNotification& notification,
                         int16_t bottom, const char* counter = nullptr);
   void drawOta(const WatchUiModel& model);

@@ -598,10 +598,12 @@ void WatchApplication::loadStoredSettings() {
 void WatchApplication::syncButtonCorners() {
   const uint8_t* roles = buttons_.layout();
   for (uint8_t corner = 0; corner < WatchButtons::BUTTON_COUNT; ++corner) {
-    if (roles[corner] == 1) {
-      model_.next_corner = corner;
-    } else if (roles[corner] == 2) {
-      model_.previous_corner = corner;
+    switch (roles[corner]) {
+      case 0: model_.home_corner = corner; break;
+      case 1: model_.next_corner = corner; break;
+      case 2: model_.previous_corner = corner; break;
+      case 3: model_.select_corner = corner; break;
+      default: break;
     }
   }
 }
@@ -1532,17 +1534,23 @@ void WatchApplication::handleButton(size_t index, uint32_t at_ms) {
     Serial.println(F("Find my watch: stopped by button."));
     return;
   }
-  // Any button just closes a notification that is being shown briefly.
-  if (endNotificationPeek()) {
-    return;
-  }
+  // Ringing comes first: its screen covers everything else. Alarm: home
+  // stops, select snoozes, the others do nothing (no stopping it by
+  // accident). Timer: any button stops it.
   if (model_.alarm_ringing) {
-    if (index == 0) {
+    if (model_.timer_ringing || index == 0) {
       alarm_.dismiss(Serial);
     } else if (index == 3) {
       alarm_.snooze(Serial);
+    } else {
+      return;
     }
+    endNotificationPeek();
     renderUi();
+    return;
+  }
+  // Any button just closes a notification that is being shown briefly.
+  if (endNotificationPeek()) {
     return;
   }
   if (model_.call_active) {

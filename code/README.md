@@ -320,7 +320,9 @@ more than 100 Hz; the step counter has its own fixed path): a **double tap** on 
 sensitive, taps 40-500 ms apart) shows the newest notification as the pop-up (or closes it); **turning the wrist to look** (an orientation change
 of at least 640 mg, steady for 300 ms, ending face up within about 30° of flat, z ≤ -0.85 g) lights the front light for 5 s between 19:00
 and 06:00. A button press while it is lit gives it the normal 30 s.
-While an alarm rings, home dismisses it and select snoozes it. Holding
+An alarm or finished timer rings over whatever is on screen with its own white-on-black screen,
+which prints STOP and SNOOZE next to the buttons that do them. Alarm: home stops it, select snoozes it
+for 5 minutes, the other two buttons do nothing. Timer: any button stops it (a timer never snoozes). Holding
 PCB button 1 (SW2, bottom-left) during reset for DFU is a bootloader feature and does not move with the
 layout.
 

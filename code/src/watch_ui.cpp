@@ -1013,6 +1013,9 @@ WatchUiAction WatchUi::select(WatchUiModel& model) {
 
 uint16_t WatchUi::view(const WatchUiModel& model) const {
   // Same order as render().
+  if (model.alarm_ringing) {
+    return model.timer_ringing ? 0x105 : 0x104;
+  }
   if (model.call_active && !model.alarm_ringing) {
     return 0x100;
   }
@@ -1031,6 +1034,11 @@ uint16_t WatchUi::view(const WatchUiModel& model) const {
 
 void WatchUi::render(const WatchUiModel& model) {
   canvas_.clear();
+  // A ringing alarm or timer covers everything, calls included.
+  if (model.alarm_ringing) {
+    drawRinging(model);
+    return;
+  }
   // An incoming call overlays whatever screen is current; when it ends the
   // previous screen is simply drawn again. A ringing alarm takes precedence.
   if (model.call_active && !model.alarm_ringing) {
@@ -1967,6 +1975,36 @@ void WatchUi::drawAlarms(const WatchUiModel& model) {
           WatchAssets::Ui16, line, 120,
           184 - peek::capOffset(WatchAssets::Ui16), 160);
     }
+  }
+}
+
+// Alarm or timer going off: white on black so it reads as an alert at a
+// glance, the time big in the middle, and what each button does printed by
+// that button.
+void WatchUi::drawRinging(const WatchUiModel& model) {
+  canvas_.clear(true);
+  const bool timer = model.timer_ringing;
+  textAt(WatchAssets::LakeReading18, timer ? "TIMER" : "ALARM", 120, 24,
+         false);
+  char buffer[8];
+  if (timer) {
+    snprintf(buffer, sizeof(buffer), "00:00");
+  } else {
+    snprintf(buffer, sizeof(buffer), "%02u:%02u", model.hour, model.minute);
+  }
+  textAt(WatchAssets::LakeClock62, buffer, 120, 96, false);
+  textAt(WatchAssets::Ui16, timer ? "TIME'S UP" : "WAKE UP", 120, 152, false);
+
+  // Labels by the buttons (corners as in ButtonCorner).
+  const auto label = [this](const char* text, uint8_t corner) {
+    textAt(WatchAssets::LakeReading18, text, (corner & 1U) != 0 ? 166 : 74,
+           corner >= 2 ? 186 : 58, false);
+  };
+  if (timer) {
+    textAt(WatchAssets::Ui16, "ANY BUTTON STOPS", 120, 186, false);
+  } else {
+    label("STOP", model.home_corner);
+    label("SNOOZE", model.select_corner);
   }
 }
 
