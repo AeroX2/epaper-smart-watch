@@ -219,7 +219,7 @@ bool ET011TJ1::show(ET011TJ1Pattern pattern, Print& out) {
 }
 
 bool ET011TJ1::showFrame(const uint8_t* framebuffer, size_t stride_bytes,
-                        Print& out) {
+                        Print& out, const uint8_t* history_framebuffer) {
   if (framebuffer == nullptr || stride_bytes < WIDTH / 8) {
     out.println(F("[FAIL] Invalid ET011TJ1 framebuffer"));
     return false;
@@ -229,7 +229,7 @@ bool ET011TJ1::showFrame(const uint8_t* framebuffer, size_t stride_bytes,
   out.println(F("Display driver: supplied ET011TJ2 ZIP / ET011TT6 sketch"));
   out.println(F("Display UI: high-voltage booster will be enabled."));
 
-  if (!initializeVendorUpdate(out)) {
+  if (!initializeVendorUpdate(out, history_framebuffer, stride_bytes)) {
     safeShutdown(out);
     return false;
   }
