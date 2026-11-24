@@ -366,13 +366,14 @@ void WatchApplication::renderUi() {
   }
   updateUiSensors();
   const uint32_t started = millis();
-  // Quick refreshes leave faint ghosts: a new screen or overlay (app,
-  // launcher, clock, notification pop-up, call) gets a full refresh, changes
-  // within one screen a quick one.
+  // Trial: the quick refresh everywhere, screen changes included (the full
+  // one is 1.2 s with a flash, and still left ghosts). Set to true to give
+  // each new screen or overlay the full cleaning refresh again.
+  constexpr bool FULL_REFRESH_ON_NEW_SCREEN = false;
   const uint16_t view = ui_.view(model_);
   const bool new_view = view != last_render_view_;
   last_render_view_ = view;
-  if (new_view) {
+  if (FULL_REFRESH_ON_NEW_SCREEN && new_view) {
     display_controller_.renderFull(Serial);
   } else {
     display_controller_.render(Serial);

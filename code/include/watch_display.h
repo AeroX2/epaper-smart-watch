@@ -23,7 +23,9 @@ class WatchDisplayController {
   bool clockMinuteChanged() const;
 
  private:
-  static constexpr uint8_t CLEAN_REFRESH_INTERVAL = 10;
+  // A full cleaning refresh after this many quick ones; 0 = never (trial:
+  // quick refreshes everywhere; console U still forces one).
+  static constexpr uint8_t CLEAN_REFRESH_INTERVAL = 0;
 
   ET011TJ1& display_;
   WatchUi& ui_;
