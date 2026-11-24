@@ -41,8 +41,7 @@ bool WatchDisplayController::renderImpl(Print& out,
 
   const bool clean_refresh =
       force_clean_refresh || !history_valid_ ||
-      (CLEAN_REFRESH_INTERVAL != 0 &&
-       updates_since_clean_refresh_ >= CLEAN_REFRESH_INTERVAL);
+      updates_since_clean_refresh_ >= CLEAN_REFRESH_INTERVAL;
   if (clean_refresh) {
     out.println(force_clean_refresh
                     ? F("Forced full UI cleaning refresh")
