@@ -48,7 +48,28 @@ bool WatchDisplayController::renderImpl(Print& out,
                     : F("Periodic full UI cleaning refresh"));
   }
 
-  const bool frame_shown = clean_refresh
+  // The cleaning refresh: two quick refreshes, the old screen to plain white
+  // and white to the new screen. Every pixel that was black is driven to
+  // white and every pixel of the new screen is driven from white, with the
+  // quick waveform, which drives hard. Measured with the webcam: the vendor
+  // cleaning waveform (showFrame) under-drives this panel (washed-out
+  // blacks, a black panel needs two passes to turn white) and left ghosts of
+  // the launcher in the dithered hills; this left none. 1.45 s against
+  // 1.2 s. The vendor waveform stays for when the old screen is not known.
+  bool quick_clean = false;
+  if (clean_refresh && history_valid_ && kw_mode_) {
+    static uint8_t white[sizeof(previous_framebuffer_)];  // all zero: white
+    out.println(F("Cleaning: old screen -> white -> new screen (quick)"));
+    if (display_.showFrameKw(white, previous_framebuffer_,
+                             WatchUi::framebufferStride(), out)) {
+      memset(previous_framebuffer_, 0, sizeof(previous_framebuffer_));
+      quick_clean = true;
+    } else {
+      history_valid_ = false;
+    }
+  }
+
+  const bool frame_shown = clean_refresh && !quick_clean
       ? display_.showFrame(ui_.framebuffer(), WatchUi::framebufferStride(), out)
       : kw_mode_
             ? display_.showFrameKw(ui_.framebuffer(), previous_framebuffer_,

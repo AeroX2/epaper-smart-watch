@@ -286,8 +286,13 @@ commands still require `x` before every high-voltage update.
 
 At normal boot the watch clears the panel to white and renders the clock face. Press `u` in the
 console to redraw the current screen using the ordinary UI refresh policy.
-Press uppercase `U` to force a cleaning full refresh of the current UI (`white -> UI`) immediately;
-the same cleaning sequence also runs automatically after ten ordinary UI updates.
+Press uppercase `U` to force a cleaning refresh of the current UI immediately; the same cleaning
+sequence also runs automatically after ten ordinary UI updates. Cleaning is two quick refreshes, the
+old screen to plain white and white to the new screen (1.45 s): every black pixel is driven to
+white and every new pixel from white with the quick waveform, which drives hard. The vendor
+cleaning waveform (`ET011TJ1::showFrame`, 1.2 s) under-drives this panel (photographed: washed-out
+blacks, a black panel needs two passes to turn white, launcher ghosts left in the dithered hills),
+so it is only used when the old screen is not known (boot, after a failed refresh).
 Once active on the clock screen, it refreshes at minute boundaries. Every refresh returns the
 ET011TJ1 to reset with its booster off.
 
@@ -298,7 +303,7 @@ a bus capture of a product that drives this panel once a second; the source dire
 gate driver settings stay at this board's values, otherwise the image is flipped. The refresh
 command uses mode `0x00`: measured here, mode `0x01` (the datasheet's black/white mode) ignores the
 table's length and runs 1.9 s. A change of screen (clock, launcher, an app, the notification pop-up, a call or the update prompt) gets
-the full cleaning refresh to clear the quick refresh's ghosting; changes within a screen (the launcher
+the cleaning refresh to clear the quick refresh's ghosting; changes within a screen (the launcher
 selection, the minute, values) use the quick one. Console `y` switches ordinary updates back to the older GC fast
 update (1.1 s: it powers the controller up twice and runs a 31-frame waveform) for comparison.
 
