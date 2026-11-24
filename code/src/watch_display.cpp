@@ -48,18 +48,8 @@ bool WatchDisplayController::renderImpl(Print& out,
                     : F("Periodic full UI cleaning refresh"));
   }
 
-  // Trial: the cleaning refresh is told the old screen was the INVERSE of
-  // what was really there (DTM1). The real old screen made ghosting worse
-  // (20c8095), so the controller may read DTM1 the other way round.
-  static uint8_t history[sizeof(previous_framebuffer_)];
-  if (clean_refresh && history_valid_) {
-    for (size_t i = 0; i < sizeof(history); ++i) {
-      history[i] = static_cast<uint8_t>(~previous_framebuffer_[i]);
-    }
-  }
   const bool frame_shown = clean_refresh
-      ? display_.showFrame(ui_.framebuffer(), WatchUi::framebufferStride(),
-                           out, history_valid_ ? history : nullptr)
+      ? display_.showFrame(ui_.framebuffer(), WatchUi::framebufferStride(), out)
       : kw_mode_
             ? display_.showFrameKw(ui_.framebuffer(), previous_framebuffer_,
                                    WatchUi::framebufferStride(), out)
