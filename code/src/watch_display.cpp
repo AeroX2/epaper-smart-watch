@@ -48,6 +48,22 @@ bool WatchDisplayController::renderImpl(Print& out,
                     : F("Periodic full UI cleaning refresh"));
   }
 
+  // On a change of screen, first take the old screen to its exact inverse
+  // with a quick refresh. Every pixel changes, so the quick waveform drives
+  // each one the opposite way to how it sat, which cancels the old screen's
+  // ghost before the cleaning refresh draws the new one.
+  if (force_clean_refresh && history_valid_ && kw_mode_) {
+    static uint8_t inverse[sizeof(previous_framebuffer_)];
+    for (size_t i = 0; i < sizeof(inverse); ++i) {
+      inverse[i] = static_cast<uint8_t>(~previous_framebuffer_[i]);
+    }
+    out.println(F("Cleaning pass 1: the old screen inverted (quick)"));
+    if (!display_.showFrameKw(inverse, previous_framebuffer_,
+                              WatchUi::framebufferStride(), out)) {
+      history_valid_ = false;
+    }
+  }
+
   const bool frame_shown = clean_refresh
       ? display_.showFrame(ui_.framebuffer(), WatchUi::framebufferStride(), out)
       : kw_mode_
