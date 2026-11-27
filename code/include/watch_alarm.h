@@ -17,7 +17,6 @@ class WatchAlarm {
 
   void dismiss(Print& out);
   void snooze(Print& out);
-  void pulseHaptic(uint8_t strength, uint32_t duration_ms);
   bool needsFastService() const;
   // Milliseconds until the next thing service() has to act on: timer expiry,
   // snooze end, today's scheduled alarm, or local
@@ -40,7 +39,14 @@ class WatchAlarm {
   bool stopFindAlert();
   bool findAlertActive() const;
 
-  // Notification alert: one short vibration pulse and/or alert tone 1-5
+  // A vibration pattern: steps of (motor drive 0-255, milliseconds), ended
+  // by a step of 0 ms.
+  struct HapticStep {
+    uint8_t strength;
+    uint16_t ms;
+  };
+
+  // Notification alert: a double buzz and/or alert tone 1-5
   // (0 = no tone). The caller applies the vibration/quiet settings. Ignored
   // while an alarm, find-my-watch or call alert owns the actuators, and cut
   // short if one of those starts.
@@ -56,6 +62,8 @@ class WatchAlarm {
   bool start(const __FlashStringHelper* reason, bool timer, Print& out);
   void stopOutput();
   void startNote();
+  void startHaptic(const HapticStep* pattern);
+  void hapticOff();
 
   WatchRtc& rtc_;
   WatchBle& ble_;
@@ -81,6 +89,10 @@ class WatchAlarm {
   uint8_t tone_sequence_ = 0xFF;
   uint8_t tone_note_ = 0;
   uint32_t tone_note_until_ = 0;
+
+  // Vibration pattern being played (nullptr = none), runs alongside a tone.
+  const HapticStep* haptic_ = nullptr;
+  uint32_t haptic_step_until_ = 0;
 
   static constexpr uint32_t FIND_ALERT_MS = 10000;
   static constexpr uint32_t CALL_ALERT_MAX_MS = 60000;

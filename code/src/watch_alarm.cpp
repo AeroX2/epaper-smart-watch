@@ -34,7 +34,20 @@ constexpr ToneSequence TONE_SEQUENCES[WatchAlarm::TONE_COUNT] = {
 };
 
 constexpr uint8_t NO_TONE_SEQUENCE = 0xFF;
-constexpr uint32_t NOTIFY_VIBRATION_MS = 180;
+
+// Vibration patterns. The motor is a small ERM: from rest it takes a few
+// tens of ms to spin up, so each buzz starts with a short full-drive kick
+// and then holds at a lower drive. Two or more buzzes with a gap are far
+// easier to feel than one: the change is what the wrist notices. The
+// holds stay below full drive and the kicks short because the 130 mAh cell
+// is rated 65 mA continuous.
+using Step = WatchAlarm::HapticStep;
+constexpr Step NOTIFY_HAPTIC[] = {
+    {255, 40}, {200, 150}, {0, 120}, {255, 40}, {200, 150}, {0, 0}};
+constexpr Step ALARM_HAPTIC[] = {
+    {255, 40}, {220, 220}, {0, 130}, {255, 40}, {220, 220}, {0, 0}};
+constexpr Step CALL_HAPTIC[] = {{255, 40}, {220, 420}, {0, 0}};
+constexpr Step FIND_HAPTIC[] = {{255, 40}, {230, 260}, {0, 0}};
 
 }  // namespace
 
@@ -105,8 +118,19 @@ uint32_t WatchAlarm::msUntilNextEvent(uint32_t now) {
   return best;
 }
 
-void WatchAlarm::stopOutput() {
+void WatchAlarm::startHaptic(const HapticStep* pattern) {
+  haptic_ = pattern;
+  analogWrite(BoardPins::VIBRATION, pattern->strength);
+  haptic_step_until_ = millis() + pattern->ms;
+}
+
+void WatchAlarm::hapticOff() {
+  haptic_ = nullptr;
   vibrationOff();
+}
+
+void WatchAlarm::stopOutput() {
+  hapticOff();
   buzzerOff();
   actuator_off_at_ = 0;
   tone_sequence_ = NO_TONE_SEQUENCE;
@@ -129,11 +153,7 @@ void WatchAlarm::notifyAlert(bool vibrate, uint8_t tone_number) {
     return;  // alarm / find / call keep the actuators
   }
   if (vibrate) {
-    analogWrite(BoardPins::VIBRATION, 160);
-    actuator_off_at_ = millis() + NOTIFY_VIBRATION_MS;
-    if (actuator_off_at_ == 0) {
-      actuator_off_at_ = 1;
-    }
+    startHaptic(NOTIFY_HAPTIC);
   }
   if (tone_number >= 1 && tone_number <= TONE_COUNT) {
     tone_sequence_ = static_cast<uint8_t>(tone_number - 1);
@@ -161,16 +181,8 @@ void WatchAlarm::snooze(Print& out) {
   out.println(F("Alarm snoozed for 5 minutes."));
 }
 
-void WatchAlarm::pulseHaptic(uint8_t strength, uint32_t duration_ms) {
-  if (alerting()) {
-    return;
-  }
-  analogWrite(BoardPins::VIBRATION, strength);
-  actuator_off_at_ = millis() + duration_ms;
-}
-
 bool WatchAlarm::needsFastService() const {
-  return alerting() || actuator_off_at_ != 0 ||
+  return alerting() || actuator_off_at_ != 0 || haptic_ != nullptr ||
          tone_sequence_ != NO_TONE_SEQUENCE;
 }
 
@@ -243,14 +255,22 @@ void WatchAlarm::serviceOutput() {
       }
     }
   }
+  if (haptic_ != nullptr &&
+      static_cast<int32_t>(now - haptic_step_until_) >= 0) {
+    ++haptic_;
+    if (haptic_->ms == 0) {
+      hapticOff();
+    } else {
+      analogWrite(BoardPins::VIBRATION, haptic_->strength);
+      haptic_step_until_ = now + haptic_->ms;
+    }
+  }
+  // An alert's beep ended (the vibration pattern ends by itself).
   if (actuator_off_at_ != 0 &&
       static_cast<int32_t>(now - actuator_off_at_) >= 0) {
-    if (tone_sequence_ != NO_TONE_SEQUENCE) {
-      // Only the notification's vibration pulse ended; the tone goes on.
-      vibrationOff();
-      actuator_off_at_ = 0;
-    } else {
-      stopOutput();
+    actuator_off_at_ = 0;
+    if (tone_sequence_ == NO_TONE_SEQUENCE) {
+      buzzerOff();
     }
   }
   if (find_alert_ && now - find_alert_started_ >= FIND_ALERT_MS) {
@@ -270,6 +290,7 @@ void WatchAlarm::serviceOutput() {
   uint32_t period_ms = 1400;
   uint16_t frequency = 2200;
   uint32_t on_ms = 220;
+  const HapticStep* haptic = ALARM_HAPTIC;
   if (model_.alarm_ringing) {
     vibrate = model_.vibration_on;
     buzz = !model_.quiet_mode;
@@ -279,12 +300,14 @@ void WatchAlarm::serviceOutput() {
     period_ms = 600;
     frequency = 4000;  // LS1 (CPT-9019B) resonance: loudest for finding
     on_ms = 300;
+    haptic = FIND_HAPTIC;
   } else if (call_alert_) {
     vibrate = model_.vibration_on;
     buzz = true;
     period_ms = 1200;
     frequency = 1800;
     on_ms = 400;
+    haptic = CALL_HAPTIC;
   } else {
     return;
   }
@@ -293,12 +316,10 @@ void WatchAlarm::serviceOutput() {
   }
   alarm_feedback_at_ = now;
   if (vibrate) {
-    analogWrite(BoardPins::VIBRATION, 160);
+    startHaptic(haptic);
   }
   if (buzz) {
     tone(BoardPins::BUZZER, frequency, on_ms - 40);
-  }
-  if (vibrate || buzz) {
     actuator_off_at_ = now + on_ms;
   }
 }

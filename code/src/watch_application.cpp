@@ -91,7 +91,7 @@ void WatchApplication::printHelp() {
   Serial.println(F("  s  read accelerometer, environment, and battery sensors"));
   Serial.println(F("  i  scan the I2C bus"));
   Serial.println(F("  g  read buttons and interrupt/control GPIOs"));
-  Serial.println(F("  v  run the vibration motor for 300 ms"));
+  Serial.println(F("  v  vibrate: the notification double buzz"));
   Serial.println(F("  b  chirp the buzzer"));
   Serial.println(F("  e  reset/probe display logic (booster stays off)"));
   Serial.println(F("  x  arm one display update for 10 seconds"));
@@ -129,10 +129,8 @@ void WatchApplication::printHelp() {
 }
 
 void WatchApplication::runVibrationTest() {
-  Serial.println(F("Vibration motor: 300 ms at 50% drive"));
-  analogWrite(BoardPins::VIBRATION, 128);
-  delay(300);
-  WatchAlarm::vibrationOff();
+  Serial.println(F("Vibration motor: the notification double buzz"));
+  alarm_.notifyAlert(true, 0);
 }
 
 void WatchApplication::runBuzzerTest() {
