@@ -1,4 +1,6 @@
-﻿plugins {
+import java.util.Properties
+
+plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
@@ -15,9 +17,37 @@ android {
         versionName = "0.1-test"
     }
 
+    // Release signing key. CI passes it in environment variables (from the
+    // repository secrets); on a PC it is read from
+    // ~/.android/epaper-watch-release/keystore.properties. Without either,
+    // release builds come out unsigned. Keep the keystore backed up: an app
+    // signed with a different key cannot be installed over this one.
+    val releaseSigning = run {
+        val env = System.getenv()
+        val local = Properties().apply {
+            val file = File(System.getProperty("user.home"),
+                ".android/epaper-watch-release/keystore.properties")
+            if (file.isFile) file.inputStream().use { load(it) }
+        }
+        val store = env["ANDROID_KEYSTORE_FILE"] ?: local.getProperty("storeFile")
+        val password = env["ANDROID_KEYSTORE_PASSWORD"] ?: local.getProperty("storePassword")
+        val alias = env["ANDROID_KEY_ALIAS"] ?: local.getProperty("keyAlias")
+        if (store != null && password != null && alias != null && File(store).isFile) {
+            signingConfigs.create("release") {
+                storeFile = File(store)
+                storePassword = password
+                keyAlias = alias
+                keyPassword = password
+            }
+        } else {
+            null
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = releaseSigning
         }
     }
 
